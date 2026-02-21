@@ -90,6 +90,7 @@ echo "  Deployment URL: $BASE_URL"
 SENSOR_EVENT_URL="${BASE_URL}/api/sensor-event"
 HVAC_EVENT_URL="${BASE_URL}/api/hvac-event"
 CHECK_STATE_URL="${BASE_URL}/api/check-state"
+TURN_OFF_URL="${BASE_URL}/api/hvac-turn-off"
 YOLINK_BASE_URL="https://api.yosmart.com/open/yolink/v2/api"
 
 pause
@@ -323,7 +324,8 @@ config = {
     'yolink': {
         'baseUrl': 'https://api.yosmart.com/open/yolink/v2/api'
     },
-    'checkStateUrl': '${CHECK_STATE_URL}'
+    'checkStateUrl': '${CHECK_STATE_URL}',
+    'turnOffUrl': '${TURN_OFF_URL}'
 }
 
 for i in range(len(sensor_names)):
