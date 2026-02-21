@@ -1,16 +1,29 @@
 export interface YoLinkTokenResponse {
+  access_token: string;
+  token_type: string;
+  expires_in: number;
+  refresh_token: string;
+}
+
+export interface YoLinkDeviceListResponse {
   code: string;
-  msg: string;
+  msg?: string;
+  desc?: string;
   data: {
-    access_token: string;
-    expires_in: number;
-    token_type: string;
+    devices: Array<{
+      deviceId: string;
+      deviceUDID: string;
+      name: string;
+      token: string;
+      type: string;
+    }>;
   };
 }
 
 export interface YoLinkDeviceStateResponse {
   code: string;
-  msg: string;
+  msg?: string;
+  desc?: string;
   data: {
     state: {
       state: string; // "open" | "closed" | ...
