@@ -33,9 +33,7 @@
 
   "forwardPorts": [8081, 19000, 19001, 19002, 3000],
 
-  "mounts": [
-    "source=claude-code-config,target=/home/node/.claude,type=volume"
-  ],
+  "mounts": ["source=claude-code-config,target=/home/node/.claude,type=volume"],
 
   "remoteUser": "node"
 }
