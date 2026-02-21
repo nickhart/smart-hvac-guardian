@@ -68,8 +68,16 @@ describe("hvac-event handler", () => {
     expect(res.status).toBe(200);
     expect(body.action).toBe("scheduled");
     expect(body.checksScheduled).toBe(2);
-    expect(deps.scheduler.scheduleDelayedCheck).toHaveBeenCalledWith("sensor1", 90);
-    expect(deps.scheduler.scheduleDelayedCheck).toHaveBeenCalledWith("sensor2", 120);
+    expect(deps.scheduler.scheduleDelayedCheck).toHaveBeenCalledWith(
+      "sensor1",
+      90,
+      expect.stringContaining("check-sensor-sensor1-"),
+    );
+    expect(deps.scheduler.scheduleDelayedCheck).toHaveBeenCalledWith(
+      "sensor2",
+      120,
+      expect.stringContaining("check-sensor-sensor2-"),
+    );
   });
 
   it("returns 404 for unknown hvacId", async () => {

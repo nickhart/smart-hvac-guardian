@@ -24,16 +24,37 @@ describe("YoLinkClient", () => {
     vi.restoreAllMocks();
   });
 
-  it("fetches token and device state", async () => {
+  it("fetches token, device list, and device state", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
 
-    // Token response
+    // Token response (OAuth format — access_token at top level)
+    fetchSpy.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          access_token: "tok123",
+          expires_in: 7200,
+          token_type: "Bearer",
+        }),
+      ),
+    );
+
+    // Device list response
     fetchSpy.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
           code: "000000",
           msg: "Success",
-          data: { access_token: "tok123", expires_in: 7200, token_type: "Bearer" },
+          data: {
+            devices: [
+              {
+                deviceId: "device1",
+                deviceUDID: "u1",
+                name: "Sensor 1",
+                token: "dtok1",
+                type: "DoorSensor",
+              },
+            ],
+          },
         }),
       ),
     );
@@ -53,19 +74,47 @@ describe("YoLinkClient", () => {
     const state = await client.getDeviceState("device1");
 
     expect(state).toBe("open");
-    expect(fetchSpy).toHaveBeenCalledTimes(2);
+    expect(fetchSpy).toHaveBeenCalledTimes(3);
   });
 
-  it("reuses cached token", async () => {
+  it("reuses cached token and device tokens", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
 
     // Token response
     fetchSpy.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
+          access_token: "tok123",
+          expires_in: 7200,
+          token_type: "Bearer",
+        }),
+      ),
+    );
+
+    // Device list response (contains both devices)
+    fetchSpy.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
           code: "000000",
           msg: "Success",
-          data: { access_token: "tok123", expires_in: 7200, token_type: "Bearer" },
+          data: {
+            devices: [
+              {
+                deviceId: "device1",
+                deviceUDID: "u1",
+                name: "Sensor 1",
+                token: "dtok1",
+                type: "DoorSensor",
+              },
+              {
+                deviceId: "device2",
+                deviceUDID: "u2",
+                name: "Sensor 2",
+                token: "dtok2",
+                type: "DoorSensor",
+              },
+            ],
+          },
         }),
       ),
     );
@@ -94,8 +143,8 @@ describe("YoLinkClient", () => {
     await client.getDeviceState("device1");
     await client.getDeviceState("device2");
 
-    // Only 1 token call + 2 state calls = 3 total
-    expect(fetchSpy).toHaveBeenCalledTimes(3);
+    // 1 token + 1 device list + 2 state calls = 4 total
+    expect(fetchSpy).toHaveBeenCalledTimes(4);
   });
 
   it("throws on token error", async () => {
@@ -108,16 +157,39 @@ describe("YoLinkClient", () => {
   it("throws on device state error code", async () => {
     const fetchSpy = vi.spyOn(globalThis, "fetch");
 
+    // Token response
+    fetchSpy.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          access_token: "tok123",
+          expires_in: 7200,
+          token_type: "Bearer",
+        }),
+      ),
+    );
+
+    // Device list response
     fetchSpy.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
           code: "000000",
           msg: "Success",
-          data: { access_token: "tok123", expires_in: 7200, token_type: "Bearer" },
+          data: {
+            devices: [
+              {
+                deviceId: "baddevice",
+                deviceUDID: "u1",
+                name: "Sensor",
+                token: "dtok1",
+                type: "DoorSensor",
+              },
+            ],
+          },
         }),
       ),
     );
 
+    // Device state response with error code
     fetchSpy.mockResolvedValueOnce(
       new Response(JSON.stringify({ code: "000001", msg: "Device not found", data: {} })),
     );

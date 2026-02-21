@@ -65,7 +65,11 @@ describe("sensor-event handler", () => {
     expect(res.status).toBe(200);
     expect(body.action).toBe("scheduled");
     expect(body.delaySeconds).toBe(90);
-    expect(deps.scheduler.scheduleDelayedCheck).toHaveBeenCalledWith("sensor1", 90);
+    expect(deps.scheduler.scheduleDelayedCheck).toHaveBeenCalledWith(
+      "sensor1",
+      90,
+      expect.stringContaining("check-sensor-sensor1-"),
+    );
   });
 
   it("returns 404 for unknown sensor", async () => {
