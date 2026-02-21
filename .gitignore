@@ -127,6 +127,7 @@ dist
 
 # yarn v3
 .pnp.*
+.pnpm-store/
 .yarn/*
 !.yarn/patches
 !.yarn/plugins
