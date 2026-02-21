@@ -51,7 +51,7 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
     });
 
     for (const sensor of d.config.sensors) {
-      const dedupId = `hvac-on-${hvacId}-${sensor.id}-${window}`;
+      const dedupId = `check-sensor-${sensor.id}-${window}`;
       await d.scheduler.scheduleDelayedCheck(sensor.id, sensor.delaySeconds, dedupId);
       logger.info("Delayed check scheduled", {
         requestId, sensorId: sensor.id, delaySeconds: sensor.delaySeconds, dedupId,

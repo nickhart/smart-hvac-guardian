@@ -46,7 +46,7 @@ export async function handleSensorEvent(request: Request, deps?: Dependencies): 
     }
 
     const window = Math.floor(Date.now() / (10 * 60 * 1000)); // 10-min window
-    const dedupId = `sensor-open-${sensorId}-${window}`;
+    const dedupId = `check-sensor-${sensorId}-${window}`;
     await d.scheduler.scheduleDelayedCheck(sensorId, sensorConfig.delaySeconds, dedupId);
 
     logger.info("Delayed check scheduled", {
