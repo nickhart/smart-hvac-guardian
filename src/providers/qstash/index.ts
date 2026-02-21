@@ -20,7 +20,11 @@ export class QStashScheduler implements SchedulerProvider {
     this.logger = options.logger;
   }
 
-  async scheduleDelayedCheck(sensorId: string, delaySeconds: number, deduplicationId?: string): Promise<void> {
+  async scheduleDelayedCheck(
+    sensorId: string,
+    delaySeconds: number,
+    deduplicationId?: string,
+  ): Promise<void> {
     this.logger.info("Scheduling delayed state check", { sensorId, delaySeconds, deduplicationId });
 
     try {

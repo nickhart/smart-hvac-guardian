@@ -9,5 +9,9 @@ export interface HVACProvider {
 }
 
 export interface SchedulerProvider {
-  scheduleDelayedCheck(sensorId: string, delaySeconds: number, deduplicationId?: string): Promise<void>;
+  scheduleDelayedCheck(
+    sensorId: string,
+    delaySeconds: number,
+    deduplicationId?: string,
+  ): Promise<void>;
 }

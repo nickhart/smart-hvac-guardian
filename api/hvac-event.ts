@@ -47,14 +47,20 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
 
     const window = Math.floor(Date.now() / (10 * 60 * 1000)); // 10-min window
     logger.info("Scheduling delayed checks for sensors", {
-      requestId, hvacId, sensorCount: d.config.sensors.length, dedupWindow: window,
+      requestId,
+      hvacId,
+      sensorCount: d.config.sensors.length,
+      dedupWindow: window,
     });
 
     for (const sensor of d.config.sensors) {
       const dedupId = `check-sensor-${sensor.id}-${window}`;
       await d.scheduler.scheduleDelayedCheck(sensor.id, sensor.delaySeconds, dedupId);
       logger.info("Delayed check scheduled", {
-        requestId, sensorId: sensor.id, delaySeconds: sensor.delaySeconds, dedupId,
+        requestId,
+        sensorId: sensor.id,
+        delaySeconds: sensor.delaySeconds,
+        dedupId,
       });
     }
 

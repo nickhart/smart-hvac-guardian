@@ -50,7 +50,10 @@ export async function handleSensorEvent(request: Request, deps?: Dependencies): 
     await d.scheduler.scheduleDelayedCheck(sensorId, sensorConfig.delaySeconds, dedupId);
 
     logger.info("Delayed check scheduled", {
-      requestId, sensorId, delaySeconds: sensorConfig.delaySeconds, dedupId,
+      requestId,
+      sensorId,
+      delaySeconds: sensorConfig.delaySeconds,
+      dedupId,
     });
 
     return jsonResponse({

@@ -51,7 +51,10 @@ export async function handleCheckState(request: Request, deps?: Dependencies): P
     // Sensor still open — turn off all HVAC units
     const iftttEvents = d.config.hvacUnits.map((u) => u.iftttEvent);
     logger.info("Sensor still open, turning off HVAC units", {
-      requestId, sensorId, unitCount: d.config.hvacUnits.length, iftttEvents,
+      requestId,
+      sensorId,
+      unitCount: d.config.hvacUnits.length,
+      iftttEvents,
     });
 
     const results = await Promise.allSettled(
@@ -68,7 +71,10 @@ export async function handleCheckState(request: Request, deps?: Dependencies): P
     }
 
     logger.info("HVAC turnoff complete", {
-      requestId, sensorId, successes: results.length - failures.length, failures: failures.length,
+      requestId,
+      sensorId,
+      successes: results.length - failures.length,
+      failures: failures.length,
     });
 
     return jsonResponse({
