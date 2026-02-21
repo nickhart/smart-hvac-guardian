@@ -14,6 +14,7 @@ const SensorEventPayload = z.object({
 
 export async function handleSensorEvent(request: Request, deps?: Dependencies): Promise<Response> {
   const logger = deps?.logger ?? createLogger();
+  const requestId = crypto.randomUUID().slice(0, 8);
 
   try {
     if (request.method !== "POST") {
@@ -24,12 +25,12 @@ export async function handleSensorEvent(request: Request, deps?: Dependencies): 
     const parsed = SensorEventPayload.safeParse(body);
 
     if (!parsed.success) {
-      logger.warn("Invalid sensor event payload", { errors: parsed.error.flatten() });
+      logger.warn("Invalid sensor event payload", { requestId, errors: parsed.error.flatten() });
       return errorResponse("Invalid payload", 400);
     }
 
     const { sensorId, event } = parsed.data;
-    logger.info("Received sensor event", { sensorId, event });
+    logger.info("Received sensor event", { requestId, sensorId, event });
 
     if (event === "close") {
       return jsonResponse({ status: "ok", action: "none" });
@@ -40,13 +41,17 @@ export async function handleSensorEvent(request: Request, deps?: Dependencies): 
     const sensorConfig = d.config.sensors.find((s) => s.id === sensorId);
 
     if (!sensorConfig) {
-      logger.warn("Unknown sensor ID", { sensorId });
+      logger.warn("Unknown sensor ID", { requestId, sensorId });
       return errorResponse("Unknown sensor", 404);
     }
 
-    await d.scheduler.scheduleDelayedCheck(sensorId, sensorConfig.delaySeconds);
+    const window = Math.floor(Date.now() / (10 * 60 * 1000)); // 10-min window
+    const dedupId = `sensor-open-${sensorId}-${window}`;
+    await d.scheduler.scheduleDelayedCheck(sensorId, sensorConfig.delaySeconds, dedupId);
 
-    logger.info("Delayed check scheduled", { sensorId, delaySeconds: sensorConfig.delaySeconds });
+    logger.info("Delayed check scheduled", {
+      requestId, sensorId, delaySeconds: sensorConfig.delaySeconds, dedupId,
+    });
 
     return jsonResponse({
       status: "ok",
@@ -55,6 +60,7 @@ export async function handleSensorEvent(request: Request, deps?: Dependencies): 
     });
   } catch (error) {
     logger.error("sensor-event handler error", {
+      requestId,
       error: error instanceof Error ? error.message : String(error),
     });
     return errorResponse("Internal server error", 500);

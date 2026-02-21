@@ -14,6 +14,7 @@ const HvacEventPayload = z.object({
 
 export async function handleHvacEvent(request: Request, deps?: Dependencies): Promise<Response> {
   const logger = deps?.logger ?? createLogger();
+  const requestId = crypto.randomUUID().slice(0, 8);
 
   try {
     if (request.method !== "POST") {
@@ -24,12 +25,12 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
     const parsed = HvacEventPayload.safeParse(body);
 
     if (!parsed.success) {
-      logger.warn("Invalid HVAC event payload", { errors: parsed.error.flatten() });
+      logger.warn("Invalid HVAC event payload", { requestId, errors: parsed.error.flatten() });
       return errorResponse("Invalid payload", 400);
     }
 
     const { hvacId, event } = parsed.data;
-    logger.info("Received HVAC event", { hvacId, event });
+    logger.info("Received HVAC event", { requestId, hvacId, event });
 
     if (event === "off") {
       return jsonResponse({ status: "ok", action: "none" });
@@ -40,13 +41,21 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
     const hvacUnit = d.config.hvacUnits.find((u) => u.id === hvacId);
 
     if (!hvacUnit) {
-      logger.warn("Unknown HVAC unit ID", { hvacId });
+      logger.warn("Unknown HVAC unit ID", { requestId, hvacId });
       return errorResponse("Unknown HVAC unit", 404);
     }
 
+    const window = Math.floor(Date.now() / (10 * 60 * 1000)); // 10-min window
+    logger.info("Scheduling delayed checks for sensors", {
+      requestId, hvacId, sensorCount: d.config.sensors.length, dedupWindow: window,
+    });
+
     for (const sensor of d.config.sensors) {
-      await d.scheduler.scheduleDelayedCheck(sensor.id, sensor.delaySeconds);
-      logger.info("Delayed check scheduled", { sensorId: sensor.id, delaySeconds: sensor.delaySeconds });
+      const dedupId = `hvac-on-${hvacId}-${sensor.id}-${window}`;
+      await d.scheduler.scheduleDelayedCheck(sensor.id, sensor.delaySeconds, dedupId);
+      logger.info("Delayed check scheduled", {
+        requestId, sensorId: sensor.id, delaySeconds: sensor.delaySeconds, dedupId,
+      });
     }
 
     return jsonResponse({
@@ -56,6 +65,7 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
     });
   } catch (error) {
     logger.error("hvac-event handler error", {
+      requestId,
       error: error instanceof Error ? error.message : String(error),
     });
     return errorResponse("Internal server error", 500);

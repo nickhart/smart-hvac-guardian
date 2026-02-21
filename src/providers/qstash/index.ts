@@ -20,17 +20,18 @@ export class QStashScheduler implements SchedulerProvider {
     this.logger = options.logger;
   }
 
-  async scheduleDelayedCheck(sensorId: string, delaySeconds: number): Promise<void> {
-    this.logger.info("Scheduling delayed state check", { sensorId, delaySeconds });
+  async scheduleDelayedCheck(sensorId: string, delaySeconds: number, deduplicationId?: string): Promise<void> {
+    this.logger.info("Scheduling delayed state check", { sensorId, delaySeconds, deduplicationId });
 
     try {
       await this.client.publishJSON({
         url: this.checkStateUrl,
         body: { sensorId },
         delay: delaySeconds,
+        ...(deduplicationId ? { deduplicationId } : {}),
       });
 
-      this.logger.info("Delayed check scheduled successfully", { sensorId });
+      this.logger.info("Delayed check scheduled successfully", { sensorId, deduplicationId });
     } catch (error) {
       throw new ProviderError(
         "QStash",
