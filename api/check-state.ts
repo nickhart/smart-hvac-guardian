@@ -1,3 +1,5 @@
+export const config = { runtime: "edge" };
+
 import { z } from "zod";
 import { loadConfig, loadEnvSecrets } from "../src/config/index.js";
 import { createDependencies } from "../src/handlers/dependencies.js";

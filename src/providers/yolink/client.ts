@@ -75,6 +75,7 @@ export class YoLinkClient {
       body: JSON.stringify({
         method: "DoorSensor.getState",
         targetDevice: deviceId,
+        time: Date.now(),
       }),
     });
 
