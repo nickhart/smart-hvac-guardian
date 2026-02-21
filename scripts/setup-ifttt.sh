@@ -195,42 +195,110 @@ pause
 
 header "Step 3: Enter HVAC units (Cielo Home devices)"
 
+PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+HVAC_DEVICES_FILE="$PROJECT_ROOT/.hvac-devices.json"
+
 HVAC_NAMES=()
 HVAC_IDS=()
 HVAC_EVENTS=()
 
-echo "  Enter your Cielo AC device names one at a time."
-echo "  Type 'done' when finished."
-echo ""
-
-while true; do
-  read -rp "  HVAC device name (or 'done'): " hvac_name
-  if [[ "$hvac_name" == "done" || -z "$hvac_name" ]]; then
-    if [[ ${#HVAC_NAMES[@]} -eq 0 ]]; then
-      echo "  You must enter at least one HVAC unit."
-      continue
-    fi
-    break
-  fi
-
-  # Generate snake_case id
-  hvac_id=$(python3 -c "
-import re
-name = '$hvac_name'
-s = name.lower().strip()
+# Helper: populate IDs and events from HVAC_NAMES
+populate_hvac_ids() {
+  HVAC_IDS=()
+  HVAC_EVENTS=()
+  for name in "${HVAC_NAMES[@]}"; do
+    hvac_id=$(python3 -c "
+import re, sys
+s = sys.argv[1].lower().strip()
 s = re.sub(r'[^a-z0-9]+', '_', s)
 s = s.strip('_')
 print(s)
-")
-  hvac_event="turn_off_${hvac_id}"
+" "$name")
+    HVAC_IDS+=("$hvac_id")
+    HVAC_EVENTS+=("turn_off_${hvac_id}")
+  done
+}
 
-  echo "    ID:    $hvac_id"
-  echo "    Event: $hvac_event"
+SKIP_ENTRY=false
 
-  HVAC_NAMES+=("$hvac_name")
-  HVAC_IDS+=("$hvac_id")
-  HVAC_EVENTS+=("$hvac_event")
+# Check for saved devices
+if [[ -f "$HVAC_DEVICES_FILE" ]]; then
+  SAVED_NAMES=()
+  while IFS= read -r line; do
+    SAVED_NAMES+=("$line")
+  done < <(python3 -c "
+import json, sys
+with open(sys.argv[1]) as f:
+    for name in json.load(f):
+        print(name)
+" "$HVAC_DEVICES_FILE")
+
+  if [[ ${#SAVED_NAMES[@]} -gt 0 ]]; then
+    echo ""
+    echo "  Found saved HVAC units:"
+    for name in "${SAVED_NAMES[@]}"; do
+      echo "    - $name"
+    done
+    echo ""
+    read -rp "  Use existing HVAC units? [Y/n] " use_existing
+    if [[ ! "$use_existing" =~ ^[Nn]$ ]]; then
+      HVAC_NAMES=("${SAVED_NAMES[@]}")
+      populate_hvac_ids
+      SKIP_ENTRY=true
+    fi
+  fi
+fi
+
+if [[ "$SKIP_ENTRY" == "false" ]]; then
+  echo "  Enter your Cielo AC device names one at a time."
   echo ""
+
+  while true; do
+    read -rp "  HVAC device name (Enter to finish): " hvac_name
+
+    # Strip whitespace; treat whitespace-only as empty
+    hvac_name=$(echo "$hvac_name" | xargs)
+
+    if [[ -z "$hvac_name" ]]; then
+      if [[ ${#HVAC_NAMES[@]} -eq 0 ]]; then
+        echo "  You must enter at least one HVAC unit."
+        continue
+      fi
+      break
+    fi
+
+    # Generate snake_case id
+    hvac_id=$(python3 -c "
+import re, sys
+s = sys.argv[1].lower().strip()
+s = re.sub(r'[^a-z0-9]+', '_', s)
+s = s.strip('_')
+print(s)
+" "$hvac_name")
+    hvac_event="turn_off_${hvac_id}"
+
+    echo "    ID:    $hvac_id"
+    echo "    Event: $hvac_event"
+
+    HVAC_NAMES+=("$hvac_name")
+    HVAC_IDS+=("$hvac_id")
+    HVAC_EVENTS+=("$hvac_event")
+    echo ""
+  done
+fi
+
+# Save device names for next run
+python3 -c "
+import json, sys
+names = sys.argv[1:]
+with open('$HVAC_DEVICES_FILE', 'w') as f:
+    json.dump(names, f, indent=2)
+" "${HVAC_NAMES[@]}"
+
+echo ""
+echo "  HVAC units:"
+for i in "${!HVAC_NAMES[@]}"; do
+  echo "    - ${HVAC_NAMES[$i]}  (id: ${HVAC_IDS[$i]}, event: ${HVAC_EVENTS[$i]})"
 done
 
 pause
