@@ -56,6 +56,18 @@ if [[ -z "${IFTTT_WEBHOOK_KEY:-}" ]]; then
 fi
 echo "  IFTTT_WEBHOOK_KEY: found"
 
+if [[ -z "${QSTASH_TOKEN:-}" || -z "${QSTASH_CURRENT_SIGNING_KEY:-}" || -z "${QSTASH_NEXT_SIGNING_KEY:-}" ]]; then
+  err "QSTASH_TOKEN, QSTASH_CURRENT_SIGNING_KEY, and QSTASH_NEXT_SIGNING_KEY must be set in .env.local"
+  exit 1
+fi
+echo "  QSTASH credentials: found"
+
+if [[ -z "${UPSTASH_REDIS_REST_URL:-}" || -z "${UPSTASH_REDIS_REST_TOKEN:-}" ]]; then
+  err "UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set in .env.local"
+  exit 1
+fi
+echo "  Upstash Redis credentials: found"
+
 # Determine base URL
 BASE_URL=""
 if [[ -n "${APP_CONFIG:-}" ]]; then
