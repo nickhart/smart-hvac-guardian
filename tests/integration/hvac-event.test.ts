@@ -14,7 +14,10 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
   return {
     sensor: { getState: vi.fn() },
     hvac: { turnOff: vi.fn() },
-    scheduler: { scheduleDelayedCheck: vi.fn().mockResolvedValue(undefined) },
+    scheduler: {
+      scheduleDelayedCheck: vi.fn().mockResolvedValue(undefined),
+      scheduleTurnOff: vi.fn().mockResolvedValue(undefined),
+    },
     qstashReceiver: { verify: vi.fn() } as never,
     config: {
       sensors: [
@@ -24,6 +27,7 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
       hvacUnits: [{ id: "unit1", name: "AC", iftttEvent: "turn_off_ac" }],
       yolink: { baseUrl: "https://api.yosmart.com/open/yolink/v2/api" },
       checkStateUrl: "https://example.com/api/check-state",
+      turnOffUrl: "https://example.com/api/hvac-turn-off",
     },
     logger: mockLogger,
     ...overrides,
@@ -90,6 +94,7 @@ describe("hvac-event handler", () => {
     const deps = createMockDeps({
       scheduler: {
         scheduleDelayedCheck: vi.fn().mockRejectedValue(new Error("QStash down")),
+        scheduleTurnOff: vi.fn(),
       },
     });
     const res = await handleHvacEvent(makeRequest({ hvacId: "unit1", event: "on" }), deps);

@@ -14,4 +14,5 @@ export interface SchedulerProvider {
     delaySeconds: number,
     deduplicationId?: string,
   ): Promise<void>;
+  scheduleTurnOff(deduplicationId: string): Promise<void>;
 }

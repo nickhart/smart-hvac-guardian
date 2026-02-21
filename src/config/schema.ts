@@ -21,6 +21,7 @@ export const AppConfigSchema = z.object({
   hvacUnits: z.array(HVACUnitSchema).min(1),
   yolink: YoLinkConfigSchema,
   checkStateUrl: z.string().url(),
+  turnOffUrl: z.string().url(),
 });
 
 export const EnvSecretsSchema = z.object({

@@ -14,7 +14,10 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
   return {
     sensor: { getState: vi.fn().mockResolvedValue("open") },
     hvac: { turnOff: vi.fn().mockResolvedValue(undefined) },
-    scheduler: { scheduleDelayedCheck: vi.fn() },
+    scheduler: {
+      scheduleDelayedCheck: vi.fn(),
+      scheduleTurnOff: vi.fn().mockResolvedValue(undefined),
+    },
     qstashReceiver: { verify: vi.fn().mockResolvedValue(true) } as never,
     config: {
       sensors: [{ id: "sensor1", name: "Front Door", delaySeconds: 90 }],
@@ -24,6 +27,7 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
       ],
       yolink: { baseUrl: "https://api.yosmart.com/open/yolink/v2/api" },
       checkStateUrl: "https://example.com/api/check-state",
+      turnOffUrl: "https://example.com/api/hvac-turn-off",
     },
     logger: mockLogger,
     ...overrides,
@@ -73,32 +77,29 @@ describe("check-state handler", () => {
     expect(deps.hvac.turnOff).not.toHaveBeenCalled();
   });
 
-  it("turns off all HVAC units when sensor is still open", async () => {
+  it("schedules deduplicated turn-off when sensor is still open", async () => {
     const deps = createMockDeps();
     const res = await handleCheckState(makeRequest({ sensorId: "sensor1" }), deps);
     const body = (await res.json()) as Record<string, unknown>;
 
     expect(res.status).toBe(200);
-    expect(body.action).toBe("hvac_turned_off");
-    expect(body.unitsProcessed).toBe(2);
-    expect(body.failures).toBe(0);
-    expect(deps.hvac.turnOff).toHaveBeenCalledTimes(2);
-    expect(deps.hvac.turnOff).toHaveBeenCalledWith("turn_off_ac");
-    expect(deps.hvac.turnOff).toHaveBeenCalledWith("turn_off_heat");
+    expect(body.action).toBe("turnoff_scheduled");
+    expect(deps.scheduler.scheduleTurnOff).toHaveBeenCalledTimes(1);
+    expect(deps.scheduler.scheduleTurnOff).toHaveBeenCalledWith(
+      expect.stringContaining("turnoff-all-"),
+    );
+    expect(deps.hvac.turnOff).not.toHaveBeenCalled();
   });
 
-  it("reports partial failures", async () => {
-    const turnOff = vi
-      .fn()
-      .mockResolvedValueOnce(undefined)
-      .mockRejectedValueOnce(new Error("IFTTT down"));
-
-    const deps = createMockDeps({ hvac: { turnOff } });
+  it("returns 500 on scheduler turn-off failure", async () => {
+    const deps = createMockDeps({
+      scheduler: {
+        scheduleDelayedCheck: vi.fn(),
+        scheduleTurnOff: vi.fn().mockRejectedValue(new Error("QStash down")),
+      },
+    });
     const res = await handleCheckState(makeRequest({ sensorId: "sensor1" }), deps);
-    const body = (await res.json()) as Record<string, unknown>;
-
-    expect(body.action).toBe("hvac_turned_off");
-    expect(body.failures).toBe(1);
+    expect(res.status).toBe(500);
   });
 
   it("returns 400 for invalid payload", async () => {

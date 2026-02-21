@@ -29,6 +29,7 @@ describe("QStashScheduler", () => {
     const scheduler = new QStashScheduler({
       token: "test-token",
       checkStateUrl: "https://example.com/api/check-state",
+      turnOffUrl: "https://example.com/api/hvac-turn-off",
       logger: mockLogger,
     });
 

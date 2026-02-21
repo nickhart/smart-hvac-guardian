@@ -6,6 +6,7 @@ const validConfig = {
   hvacUnits: [{ id: "unit1", name: "Living Room AC", iftttEvent: "turn_off_ac" }],
   yolink: { baseUrl: "https://api.yosmart.com/open/yolink/v2/api" },
   checkStateUrl: "https://example.vercel.app/api/check-state",
+  turnOffUrl: "https://example.vercel.app/api/hvac-turn-off",
 };
 
 const validSecrets = {

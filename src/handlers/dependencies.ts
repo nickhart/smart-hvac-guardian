@@ -40,6 +40,7 @@ export function createDependencies(
     scheduler: new QStashScheduler({
       token: secrets.qstashToken,
       checkStateUrl: config.checkStateUrl,
+      turnOffUrl: config.turnOffUrl,
       logger,
     }),
     qstashReceiver: createQStashReceiver({
