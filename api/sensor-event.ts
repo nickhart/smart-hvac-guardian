@@ -47,10 +47,18 @@ export async function handleSensorEvent(request: Request, deps?: Dependencies): 
       return errorResponse("Unknown sensor", 404);
     }
 
-    // 1. Write sensor state to Redis
+    // 0. Check if system is enabled
+    const systemEnabled = await d.stateStore.getSystemEnabled();
+
+    // 1. Write sensor state to Redis (always, even when disabled)
     const state: SensorState = event === "open" ? "open" : "closed";
     await d.stateStore.setSensorState(sensorId, state);
     logger.info("Sensor state written to Redis", { requestId, sensorId, state });
+
+    if (!systemEnabled) {
+      logger.info("System disabled, skipping zone evaluation", { requestId });
+      return jsonResponse({ status: "ok", action: "system_disabled" });
+    }
 
     // 2. Read all sensor states from Redis, applying defaults for sensors without state
     const allSensorIds = Object.keys(d.config.sensorDelays);
@@ -59,6 +67,18 @@ export async function handleSensorEvent(request: Request, deps?: Dependencies): 
       if (!sensorStates.has(id)) {
         sensorStates.set(id, defaultState);
       }
+    }
+
+    // 2b. Treat offline/unknown sensors as "closed" (safe default: AC stays on)
+    const offlineSensorIds: string[] = [];
+    for (const id of allSensorIds) {
+      if (!sensorStates.has(id)) {
+        sensorStates.set(id, "closed");
+        offlineSensorIds.push(id);
+      }
+    }
+    if (offlineSensorIds.length > 0) {
+      logger.warn("Sensors offline, defaulting to closed", { requestId, offlineSensorIds });
     }
 
     // 3. Run evaluateZoneGraph

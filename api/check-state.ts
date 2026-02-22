@@ -27,11 +27,21 @@ export async function handleCheckState(request: Request, deps?: Dependencies): P
       }
     }
 
+    // Treat offline/unknown sensors as "closed" (safe default: AC stays on)
+    const offlineSensorIds: string[] = [];
+    for (const id of allSensorIds) {
+      if (!sensorStates.has(id)) {
+        sensorStates.set(id, "closed");
+        offlineSensorIds.push(id);
+      }
+    }
+
     // Evaluate zone graph
     const { exposedUnits, unexposedUnits } = evaluateZoneGraph(d.config.zones, sensorStates);
 
-    // Get active timers
+    // Get active timers and system state
     const activeTimerUnitIds = await d.stateStore.getActiveTimerUnitIds();
+    const systemEnabled = await d.stateStore.getSystemEnabled();
 
     const sensorStateObj: Record<string, string> = {};
     for (const [id, state] of sensorStates) {
@@ -48,10 +58,12 @@ export async function handleCheckState(request: Request, deps?: Dependencies): P
 
     return jsonResponse({
       status: "ok",
+      systemEnabled,
       sensorStates: sensorStateObj,
       exposedUnits: [...exposedUnits],
       unexposedUnits: [...unexposedUnits],
       activeTimers: activeTimerUnitIds,
+      offlineSensors: offlineSensorIds,
     });
   } catch (error) {
     logger.error("check-state handler error", {

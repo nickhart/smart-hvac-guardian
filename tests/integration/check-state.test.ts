@@ -31,6 +31,8 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
       getTimerToken: vi.fn(),
       deleteTimerToken: vi.fn(),
       getActiveTimerUnitIds: vi.fn().mockResolvedValue(["ac_living"]),
+      getSystemEnabled: vi.fn().mockResolvedValue(true),
+      setSystemEnabled: vi.fn().mockResolvedValue(undefined),
     },
     analytics: {
       trackSensorEvent: vi.fn().mockResolvedValue(undefined),
@@ -95,6 +97,8 @@ describe("check-state diagnostic handler", () => {
         getTimerToken: vi.fn(),
         deleteTimerToken: vi.fn(),
         getActiveTimerUnitIds: vi.fn(),
+        getSystemEnabled: vi.fn(),
+        setSystemEnabled: vi.fn(),
       },
     });
     const req = new Request("https://example.com/api/check-state", { method: "GET" });

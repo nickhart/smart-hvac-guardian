@@ -56,6 +56,7 @@ interface TimerEntry {
 export class InMemoryStateStore implements StateStore {
   private sensors = new Map<string, SensorState>();
   private timers = new Map<string, TimerEntry>();
+  private systemEnabled = true;
   private onChange: ((type: string, data: unknown) => void) | undefined;
 
   constructor(onChange?: (type: string, data: unknown) => void) {
@@ -109,6 +110,15 @@ export class InMemoryStateStore implements StateStore {
 
   async getActiveTimerUnitIds(): Promise<string[]> {
     return [...this.timers.keys()];
+  }
+
+  async getSystemEnabled(): Promise<boolean> {
+    return this.systemEnabled;
+  }
+
+  async setSystemEnabled(enabled: boolean): Promise<void> {
+    this.systemEnabled = enabled;
+    this.onChange?.("system-enabled", { enabled });
   }
 
   /** For UI/E2E introspection */

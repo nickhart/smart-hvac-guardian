@@ -45,6 +45,9 @@ export function loadEnvSecrets(env?: Record<string, string | undefined>): EnvSec
     upstashRedisToken: source.UPSTASH_REDIS_REST_TOKEN,
     tinybirdToken: source.TINYBIRD_TOKEN || undefined,
     tinybirdUrl: source.TINYBIRD_URL || undefined,
+    resendApiKey: source.RESEND_API_KEY || undefined,
+    ownerEmail: source.OWNER_EMAIL || undefined,
+    sessionSecret: source.SESSION_SECRET || undefined,
   };
 
   const result = EnvSecretsSchema.safeParse(raw);

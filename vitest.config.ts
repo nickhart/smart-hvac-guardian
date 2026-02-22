@@ -9,6 +9,7 @@ export default defineConfig({
   test: {
     globals: true,
     environment: "node",
+    exclude: ["web/**", "node_modules/**", ".pnpm-store/**"],
     coverage: {
       provider: "v8",
       include: ["src/**/*.ts", "api/**/*.ts"],

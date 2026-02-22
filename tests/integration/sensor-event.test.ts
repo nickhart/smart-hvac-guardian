@@ -32,6 +32,8 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
       getTimerToken: vi.fn().mockResolvedValue(null),
       deleteTimerToken: vi.fn().mockResolvedValue(undefined),
       getActiveTimerUnitIds: vi.fn().mockResolvedValue([]),
+      getSystemEnabled: vi.fn().mockResolvedValue(true),
+      setSystemEnabled: vi.fn().mockResolvedValue(undefined),
     },
     analytics: {
       trackSensorEvent: vi.fn().mockResolvedValue(undefined),
@@ -117,6 +119,8 @@ describe("sensor-event handler", () => {
         getTimerToken: vi.fn().mockResolvedValue(null),
         deleteTimerToken: vi.fn().mockResolvedValue(undefined),
         getActiveTimerUnitIds: vi.fn().mockResolvedValue([]),
+        getSystemEnabled: vi.fn().mockResolvedValue(true),
+        setSystemEnabled: vi.fn().mockResolvedValue(undefined),
       },
     });
 
@@ -157,6 +161,8 @@ describe("sensor-event handler", () => {
         getTimerToken: vi.fn().mockResolvedValue(null),
         deleteTimerToken: vi.fn().mockResolvedValue(undefined),
         getActiveTimerUnitIds: vi.fn().mockResolvedValue(["ac_living"]),
+        getSystemEnabled: vi.fn().mockResolvedValue(true),
+        setSystemEnabled: vi.fn().mockResolvedValue(undefined),
       },
     });
 
@@ -187,6 +193,8 @@ describe("sensor-event handler", () => {
         getTimerToken: vi.fn(),
         deleteTimerToken: vi.fn(),
         getActiveTimerUnitIds: vi.fn(),
+        getSystemEnabled: vi.fn().mockResolvedValue(true),
+        setSystemEnabled: vi.fn(),
       },
     });
     const res = await handleSensorEvent(
@@ -235,6 +243,8 @@ describe("sensor-event handler", () => {
         getTimerToken: vi.fn().mockResolvedValue(null),
         deleteTimerToken: vi.fn().mockResolvedValue(undefined),
         getActiveTimerUnitIds: vi.fn().mockResolvedValue([]),
+        getSystemEnabled: vi.fn().mockResolvedValue(true),
+        setSystemEnabled: vi.fn().mockResolvedValue(undefined),
       },
     });
 
@@ -287,6 +297,8 @@ describe("sensor-event handler", () => {
         getTimerToken: vi.fn().mockResolvedValue(null),
         deleteTimerToken: vi.fn().mockResolvedValue(undefined),
         getActiveTimerUnitIds: vi.fn().mockResolvedValue([]),
+        getSystemEnabled: vi.fn().mockResolvedValue(true),
+        setSystemEnabled: vi.fn().mockResolvedValue(undefined),
       },
     });
 
@@ -299,6 +311,32 @@ describe("sensor-event handler", () => {
     expect(res.status).toBe(200);
     // Only living room — door_bedroom is closed per Redis, overriding the default
     expect(body.scheduled).toEqual(["ac_living"]);
+  });
+
+  it("returns system_disabled when system is disabled but still writes sensor state", async () => {
+    const deps = createMockDeps({
+      stateStore: {
+        setSensorState: vi.fn().mockResolvedValue(undefined),
+        getAllSensorStates: vi.fn().mockResolvedValue(new Map()),
+        setTimerToken: vi.fn(),
+        getTimerToken: vi.fn(),
+        deleteTimerToken: vi.fn(),
+        getActiveTimerUnitIds: vi.fn(),
+        getSystemEnabled: vi.fn().mockResolvedValue(false),
+        setSystemEnabled: vi.fn(),
+      },
+    });
+
+    const res = await handleSensorEvent(
+      makeRequest({ sensorId: "front_door", event: "open" }),
+      deps,
+    );
+    const body = (await res.json()) as Record<string, unknown>;
+
+    expect(res.status).toBe(200);
+    expect(body.action).toBe("system_disabled");
+    expect(deps.stateStore.setSensorState).toHaveBeenCalledWith("front_door", "open");
+    expect(deps.scheduler.scheduleUnitTurnOff).not.toHaveBeenCalled();
   });
 
   it("merges zones when interior door is open", async () => {
@@ -316,6 +354,8 @@ describe("sensor-event handler", () => {
         getTimerToken: vi.fn().mockResolvedValue(null),
         deleteTimerToken: vi.fn().mockResolvedValue(undefined),
         getActiveTimerUnitIds: vi.fn().mockResolvedValue([]),
+        getSystemEnabled: vi.fn().mockResolvedValue(true),
+        setSystemEnabled: vi.fn().mockResolvedValue(undefined),
       },
     });
 

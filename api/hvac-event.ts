@@ -38,8 +38,9 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
     const { hvacId, event } = parsed.data;
     logger.info("Received HVAC event", { requestId, hvacId, event });
 
+    const d = deps ?? createDependencies(loadConfig(), loadEnvSecrets(), logger);
+
     if (event === "off") {
-      const d = deps ?? createDependencies(loadConfig(), loadEnvSecrets(), logger);
       await d.analytics.trackHvacStateEvent({
         requestId,
         hvacId,
@@ -50,8 +51,12 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
       return jsonResponse({ status: "ok", action: "none" });
     }
 
-    // event === "on" — check if this unit is in an exposed zone
-    const d = deps ?? createDependencies(loadConfig(), loadEnvSecrets(), logger);
+    // Check if system is enabled
+    const systemEnabled = await d.stateStore.getSystemEnabled();
+    if (!systemEnabled) {
+      logger.info("System disabled, skipping HVAC evaluation", { requestId });
+      return jsonResponse({ status: "ok", action: "system_disabled" });
+    }
 
     if (!(hvacId in d.config.hvacUnits)) {
       logger.warn("Unknown HVAC unit ID", { requestId, hvacId });
@@ -65,6 +70,18 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
       if (!sensorStates.has(id)) {
         sensorStates.set(id, defaultState);
       }
+    }
+
+    // Treat offline/unknown sensors as "closed" (safe default: AC stays on)
+    const offlineSensorIds: string[] = [];
+    for (const id of allSensorIds) {
+      if (!sensorStates.has(id)) {
+        sensorStates.set(id, "closed");
+        offlineSensorIds.push(id);
+      }
+    }
+    if (offlineSensorIds.length > 0) {
+      logger.warn("Sensors offline, defaulting to closed", { requestId, offlineSensorIds });
     }
 
     // Evaluate zone graph

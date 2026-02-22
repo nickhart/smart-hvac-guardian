@@ -84,6 +84,38 @@ describe("RedisStateStore", () => {
     });
   });
 
+  describe("getSystemEnabled", () => {
+    it("returns true when key is not set", async () => {
+      mockGet.mockResolvedValueOnce(null);
+      const result = await store.getSystemEnabled();
+      expect(result).toBe(true);
+    });
+
+    it("returns true when value is 'true'", async () => {
+      mockGet.mockResolvedValueOnce("true");
+      const result = await store.getSystemEnabled();
+      expect(result).toBe(true);
+    });
+
+    it("returns false when value is 'false'", async () => {
+      mockGet.mockResolvedValueOnce("false");
+      const result = await store.getSystemEnabled();
+      expect(result).toBe(false);
+    });
+  });
+
+  describe("setSystemEnabled", () => {
+    it("sets system:enabled to true", async () => {
+      await store.setSystemEnabled(true);
+      expect(mockSet).toHaveBeenCalledWith("system:enabled", "true");
+    });
+
+    it("sets system:enabled to false", async () => {
+      await store.setSystemEnabled(false);
+      expect(mockSet).toHaveBeenCalledWith("system:enabled", "false");
+    });
+  });
+
   describe("getActiveTimerUnitIds", () => {
     it("scans and returns unit IDs from timer keys", async () => {
       mockScan.mockResolvedValueOnce(["0", ["timer:ac_living", "timer:ac_bedroom"]]);

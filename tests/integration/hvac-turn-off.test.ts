@@ -26,6 +26,8 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
       getTimerToken: vi.fn().mockResolvedValue("valid-token"),
       deleteTimerToken: vi.fn().mockResolvedValue(undefined),
       getActiveTimerUnitIds: vi.fn(),
+      getSystemEnabled: vi.fn().mockResolvedValue(true),
+      setSystemEnabled: vi.fn(),
     },
     analytics: {
       trackSensorEvent: vi.fn().mockResolvedValue(undefined),
@@ -101,6 +103,8 @@ describe("hvac-turn-off handler", () => {
         getTimerToken: vi.fn().mockResolvedValue("valid-token"),
         deleteTimerToken: vi.fn().mockResolvedValue(undefined),
         getActiveTimerUnitIds: vi.fn(),
+        getSystemEnabled: vi.fn().mockResolvedValue(true),
+        setSystemEnabled: vi.fn(),
       },
     });
 
@@ -126,6 +130,8 @@ describe("hvac-turn-off handler", () => {
         getTimerToken: vi.fn().mockResolvedValue(null),
         deleteTimerToken: vi.fn(),
         getActiveTimerUnitIds: vi.fn(),
+        getSystemEnabled: vi.fn().mockResolvedValue(true),
+        setSystemEnabled: vi.fn(),
       },
     });
 
@@ -149,6 +155,8 @@ describe("hvac-turn-off handler", () => {
         getTimerToken: vi.fn().mockResolvedValue("new-token"),
         deleteTimerToken: vi.fn(),
         getActiveTimerUnitIds: vi.fn(),
+        getSystemEnabled: vi.fn().mockResolvedValue(true),
+        setSystemEnabled: vi.fn(),
       },
     });
 
@@ -172,6 +180,8 @@ describe("hvac-turn-off handler", () => {
         getTimerToken: vi.fn().mockResolvedValue("token123"),
         deleteTimerToken: vi.fn(),
         getActiveTimerUnitIds: vi.fn(),
+        getSystemEnabled: vi.fn().mockResolvedValue(true),
+        setSystemEnabled: vi.fn(),
       },
     });
 

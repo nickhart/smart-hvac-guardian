@@ -62,4 +62,6 @@ export interface StateStore {
   getTimerToken(hvacUnitId: string): Promise<string | null>;
   deleteTimerToken(hvacUnitId: string): Promise<void>;
   getActiveTimerUnitIds(): Promise<string[]>;
+  getSystemEnabled(): Promise<boolean>;
+  setSystemEnabled(enabled: boolean): Promise<void>;
 }

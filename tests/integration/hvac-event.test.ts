@@ -32,6 +32,8 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
       getTimerToken: vi.fn().mockResolvedValue(null),
       deleteTimerToken: vi.fn(),
       getActiveTimerUnitIds: vi.fn().mockResolvedValue([]),
+      getSystemEnabled: vi.fn().mockResolvedValue(true),
+      setSystemEnabled: vi.fn().mockResolvedValue(undefined),
     },
     analytics: {
       trackSensorEvent: vi.fn().mockResolvedValue(undefined),
@@ -124,6 +126,8 @@ describe("hvac-event handler", () => {
         getTimerToken: vi.fn().mockResolvedValue(null),
         deleteTimerToken: vi.fn(),
         getActiveTimerUnitIds: vi.fn().mockResolvedValue([]),
+        getSystemEnabled: vi.fn().mockResolvedValue(true),
+        setSystemEnabled: vi.fn().mockResolvedValue(undefined),
       },
     });
 
@@ -147,6 +151,34 @@ describe("hvac-event handler", () => {
     );
   });
 
+  it("returns system_disabled when system is disabled", async () => {
+    const deps = createMockDeps({
+      stateStore: {
+        setSensorState: vi.fn(),
+        getAllSensorStates: vi.fn().mockResolvedValue(
+          new Map([
+            ["front_door", "open"],
+            ["bedroom_window", "closed"],
+            ["door_bedroom", "closed"],
+          ]),
+        ),
+        setTimerToken: vi.fn(),
+        getTimerToken: vi.fn(),
+        deleteTimerToken: vi.fn(),
+        getActiveTimerUnitIds: vi.fn(),
+        getSystemEnabled: vi.fn().mockResolvedValue(false),
+        setSystemEnabled: vi.fn(),
+      },
+    });
+
+    const res = await handleHvacEvent(makeRequest({ hvacId: "ac_living", event: "on" }), deps);
+    const body = (await res.json()) as Record<string, unknown>;
+
+    expect(res.status).toBe(200);
+    expect(body.action).toBe("system_disabled");
+    expect(deps.scheduler.scheduleUnitTurnOff).not.toHaveBeenCalled();
+  });
+
   it("returns 404 for unknown hvacId", async () => {
     const deps = createMockDeps();
     const res = await handleHvacEvent(makeRequest({ hvacId: "unknown", event: "on" }), deps);
@@ -162,6 +194,8 @@ describe("hvac-event handler", () => {
         getTimerToken: vi.fn(),
         deleteTimerToken: vi.fn(),
         getActiveTimerUnitIds: vi.fn(),
+        getSystemEnabled: vi.fn().mockResolvedValue(true),
+        setSystemEnabled: vi.fn(),
       },
     });
     const res = await handleHvacEvent(makeRequest({ hvacId: "ac_living", event: "on" }), deps);

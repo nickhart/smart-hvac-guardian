@@ -47,6 +47,41 @@ export class RedisStateStore implements StateStore {
     await this.redis.del(`timer:${hvacUnitId}`);
   }
 
+  async getSystemEnabled(): Promise<boolean> {
+    const val = await this.redis.get<string>("system:enabled");
+    return val !== "false";
+  }
+
+  async setSystemEnabled(enabled: boolean): Promise<void> {
+    await this.redis.set("system:enabled", enabled ? "true" : "false");
+  }
+
+  // --- Auth helpers (not part of StateStore interface) ---
+
+  async setOtp(email: string, code: string, ttlSeconds: number): Promise<void> {
+    await this.redis.set(`otp:${email}`, code, { ex: ttlSeconds });
+  }
+
+  async getOtp(email: string): Promise<string | null> {
+    return this.redis.get<string>(`otp:${email}`);
+  }
+
+  async deleteOtp(email: string): Promise<void> {
+    await this.redis.del(`otp:${email}`);
+  }
+
+  async setSession(token: string, email: string, ttlSeconds: number): Promise<void> {
+    await this.redis.set(`session:${token}`, email, { ex: ttlSeconds });
+  }
+
+  async getSession(token: string): Promise<string | null> {
+    return this.redis.get<string>(`session:${token}`);
+  }
+
+  async deleteSession(token: string): Promise<void> {
+    await this.redis.del(`session:${token}`);
+  }
+
   async getActiveTimerUnitIds(): Promise<string[]> {
     const keys: string[] = [];
     let cursor = "0";
