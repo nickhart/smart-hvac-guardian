@@ -139,5 +139,6 @@ dist
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-# User-specific HVAC device list
+# User-specific device/zone config
 .hvac-devices.json
+.zone-config.json
