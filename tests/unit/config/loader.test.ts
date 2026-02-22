@@ -175,7 +175,9 @@ describe("loadEnvSecrets", () => {
   });
 
   it("throws on missing Redis secrets", () => {
-    const { UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN, ...partial } = validSecrets;
+    const partial = Object.fromEntries(
+      Object.entries(validSecrets).filter(([k]) => !k.startsWith("UPSTASH_REDIS")),
+    );
     expect(() => loadEnvSecrets(partial)).toThrow("Environment secrets validation failed");
   });
 

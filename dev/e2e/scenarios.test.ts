@@ -4,7 +4,6 @@ import {
   post,
   get,
   waitForHvacState,
-  waitForCondition,
   sleep,
   type DevServer,
 } from "./helpers.js";

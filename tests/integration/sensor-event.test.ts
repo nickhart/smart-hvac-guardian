@@ -96,7 +96,7 @@ describe("sensor-event handler", () => {
       makeRequest({ sensorId: "front_door", event: "close" }),
       deps,
     );
-    const body = (await res.json()) as Record<string, unknown>;
+    await res.json();
 
     expect(res.status).toBe(200);
     expect(deps.stateStore.setSensorState).toHaveBeenCalledWith("front_door", "closed");

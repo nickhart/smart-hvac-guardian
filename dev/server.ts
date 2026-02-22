@@ -146,25 +146,24 @@ export async function createDevServer(
   const logger = createLogger("debug");
   const eventBus = new DevEventBus();
 
-  // Scheduler is declared first so the emit callback can reference it.
-  // It gets assigned before any events can fire (no async gap).
-  let scheduler: LocalScheduler;
+  const ref: { scheduler: LocalScheduler | null } = { scheduler: null };
 
   const emit = (type: string, data: unknown) => {
     eventBus.emit(type, data);
     // When a timer token is deleted, also cancel the scheduler's pending timeout
     // so the UI countdown disappears immediately.
     if (type === "timer-deleted") {
-      scheduler.cancelByUnitId((data as { hvacUnitId: string }).hvacUnitId);
+      ref.scheduler?.cancelByUnitId((data as { hvacUnitId: string }).hvacUnitId);
     }
   };
 
   const stateStore = new InMemoryStateStore(emit);
-  scheduler = new LocalScheduler({
+  const scheduler = new LocalScheduler({
     delayScale,
     baseUrl,
     onChange: emit,
   });
+  ref.scheduler = scheduler;
   const hvacProvider = new MockHVACProvider(config, emit);
 
   const deps: Dependencies = {
