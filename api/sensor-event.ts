@@ -105,7 +105,7 @@ export async function handleSensorEvent(request: Request, deps?: Dependencies): 
     }
 
     // 8. Track analytics
-    d.analytics.trackSensorEvent({
+    await d.analytics.trackSensorEvent({
       requestId,
       sensorId,
       event,

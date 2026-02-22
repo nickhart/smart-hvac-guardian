@@ -143,3 +143,6 @@ vite.config.ts.timestamp-*
 # User-specific device/zone config
 .hvac-devices.json
 .zone-config.json
+
+# Tinybird SDK agent skills
+.agents/

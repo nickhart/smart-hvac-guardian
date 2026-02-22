@@ -51,7 +51,7 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
         expected: storedToken,
         received: cancellationToken,
       });
-      d.analytics.trackHvacCommand({
+      await d.analytics.trackHvacCommand({
         requestId,
         hvacUnitId,
         unitName: d.config.hvacUnits[hvacUnitId]?.name ?? hvacUnitId,
