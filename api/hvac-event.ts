@@ -6,7 +6,11 @@ import { createDependencies } from "../src/handlers/dependencies.js";
 import type { Dependencies } from "../src/handlers/dependencies.js";
 import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
-import { evaluateZoneGraph, getOpenExteriorSensors, getConnectedComponents } from "../src/zone-graph/index.js";
+import {
+  evaluateZoneGraph,
+  getOpenExteriorSensors,
+  getConnectedComponents,
+} from "../src/zone-graph/index.js";
 import type { SensorState } from "../src/zone-graph/index.js";
 
 const HvacEventPayload = z.object({
@@ -82,7 +86,12 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
     }
 
     // Unit is exposed — schedule turn-off timer
-    const delaySeconds = getMinDelayForUnit(hvacId, d.config.zones, d.config.sensorDelays, sensorStates);
+    const delaySeconds = getMinDelayForUnit(
+      hvacId,
+      d.config.zones,
+      d.config.sensorDelays,
+      sensorStates,
+    );
     const token = crypto.randomUUID();
     const ttl = delaySeconds + 60;
 

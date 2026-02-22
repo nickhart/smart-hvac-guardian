@@ -4,9 +4,7 @@ export type { DevServer };
 
 let nextPort = 4100;
 
-export async function startServer(
-  opts?: Partial<DevServerOptions>,
-): Promise<DevServer> {
+export async function startServer(opts?: Partial<DevServerOptions>): Promise<DevServer> {
   const port = nextPort++;
   return createDevServer({
     port,

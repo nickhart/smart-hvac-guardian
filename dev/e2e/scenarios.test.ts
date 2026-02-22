@@ -1,12 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import {
-  startServer,
-  post,
-  get,
-  waitForHvacState,
-  sleep,
-  type DevServer,
-} from "./helpers.js";
+import { startServer, post, get, waitForHvacState, sleep, type DevServer } from "./helpers.js";
 
 /*
  * Test config: 2 zones (living_room + bedroom) with an interior door.
@@ -66,9 +59,7 @@ describe("E2E scenarios", () => {
       event: "open",
     });
     expect(res.status).toBe(200);
-    expect((res.json as Record<string, unknown>).scheduled).toEqual([
-      "ac_living",
-    ]);
+    expect((res.json as Record<string, unknown>).scheduled).toEqual(["ac_living"]);
 
     // Wait for timer to fire (5s * 0.01 = 50ms, give generous margin)
     await waitForHvacState(server, "ac_living", "off", 5_000);

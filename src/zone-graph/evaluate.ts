@@ -109,10 +109,7 @@ export function getOpenExteriorSensors(
 /**
  * Main evaluation: returns which HVAC units are exposed vs unexposed.
  */
-export function evaluateZoneGraph(
-  zones: ZonesConfig,
-  sensorStates: SensorStates,
-): ZoneGraphResult {
+export function evaluateZoneGraph(zones: ZonesConfig, sensorStates: SensorStates): ZoneGraphResult {
   const exposedUnits = new Set<string>();
   const unexposedUnits = new Set<string>();
 

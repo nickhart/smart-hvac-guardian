@@ -13,9 +13,14 @@
     "test:coverage": "vitest run --coverage",
     "dev": "tsx dev/server.ts",
     "dev:fast": "tsx dev/server.ts --delay-scale 0.033",
-    "test:e2e": "vitest run --config dev/vitest.e2e.config.ts"
+    "test:e2e": "vitest run --config dev/vitest.e2e.config.ts",
+    "tinybird:dev": "tinybird dev",
+    "tinybird:build": "tinybird build",
+    "tinybird:deploy": "tinybird deploy",
+    "tinybird:preview": "tinybird preview"
   },
   "dependencies": {
+    "@tinybirdco/sdk": "^0.0.54",
     "@upstash/qstash": "^2.7.0",
     "@upstash/redis": "^1.36.2",
     "zod": "^3.23.0"

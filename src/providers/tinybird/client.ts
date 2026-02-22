@@ -9,7 +9,9 @@ export class TinybirdAnalyticsProvider implements AnalyticsProvider {
     this.token = options.token;
   }
 
-  async trackSensorEvent(data: Parameters<AnalyticsProvider["trackSensorEvent"]>[0]): Promise<void> {
+  async trackSensorEvent(
+    data: Parameters<AnalyticsProvider["trackSensorEvent"]>[0],
+  ): Promise<void> {
     await this.ingest("sensor_events", {
       timestamp: new Date().toISOString(),
       request_id: data.requestId,
@@ -22,7 +24,9 @@ export class TinybirdAnalyticsProvider implements AnalyticsProvider {
     });
   }
 
-  async trackHvacCommand(data: Parameters<AnalyticsProvider["trackHvacCommand"]>[0]): Promise<void> {
+  async trackHvacCommand(
+    data: Parameters<AnalyticsProvider["trackHvacCommand"]>[0],
+  ): Promise<void> {
     await this.ingest("hvac_commands", {
       timestamp: new Date().toISOString(),
       request_id: data.requestId,
@@ -35,7 +39,9 @@ export class TinybirdAnalyticsProvider implements AnalyticsProvider {
     });
   }
 
-  async trackHvacStateEvent(data: Parameters<AnalyticsProvider["trackHvacStateEvent"]>[0]): Promise<void> {
+  async trackHvacStateEvent(
+    data: Parameters<AnalyticsProvider["trackHvacStateEvent"]>[0],
+  ): Promise<void> {
     await this.ingest("hvac_state_events", {
       timestamp: new Date().toISOString(),
       request_id: data.requestId,

@@ -6,7 +6,11 @@ import { createDependencies } from "../src/handlers/dependencies.js";
 import type { Dependencies } from "../src/handlers/dependencies.js";
 import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
-import { evaluateZoneGraph, getOpenExteriorSensors, getConnectedComponents } from "../src/zone-graph/index.js";
+import {
+  evaluateZoneGraph,
+  getOpenExteriorSensors,
+  getConnectedComponents,
+} from "../src/zone-graph/index.js";
 import { computeTimerActions } from "../src/zone-graph/index.js";
 import type { SensorState } from "../src/zone-graph/index.js";
 
@@ -76,7 +80,12 @@ export async function handleSensorEvent(request: Request, deps?: Dependencies): 
     // 6. Schedule new timers for newly exposed units
     for (const unitId of schedule) {
       // Find which component this unit belongs to, get min delay of open exterior sensors
-      const delaySeconds = getMinDelayForUnit(unitId, d.config.zones, d.config.sensorDelays, sensorStates);
+      const delaySeconds = getMinDelayForUnit(
+        unitId,
+        d.config.zones,
+        d.config.sensorDelays,
+        sensorStates,
+      );
       const token = crypto.randomUUID();
       const ttl = delaySeconds + 60; // buffer for QStash delivery
 

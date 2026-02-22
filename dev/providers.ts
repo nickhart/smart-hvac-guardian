@@ -67,9 +67,7 @@ export class InMemoryStateStore implements StateStore {
     this.onChange?.("sensor-state", { sensorId, state });
   }
 
-  async getAllSensorStates(
-    sensorIds: string[],
-  ): Promise<Map<string, SensorState>> {
+  async getAllSensorStates(sensorIds: string[]): Promise<Map<string, SensorState>> {
     const result = new Map<string, SensorState>();
     for (const id of sensorIds) {
       const state = this.sensors.get(id);
@@ -80,11 +78,7 @@ export class InMemoryStateStore implements StateStore {
     return result;
   }
 
-  async setTimerToken(
-    hvacUnitId: string,
-    token: string,
-    ttlSeconds: number,
-  ): Promise<void> {
+  async setTimerToken(hvacUnitId: string, token: string, ttlSeconds: number): Promise<void> {
     // Clear existing timer if any
     const existing = this.timers.get(hvacUnitId);
     if (existing) {
@@ -204,10 +198,7 @@ export class LocalScheduler implements SchedulerProvider {
           body: JSON.stringify({ hvacUnitId, cancellationToken }),
         });
       } catch (err) {
-        console.error(
-          `[LocalScheduler] Failed to POST hvac-turn-off for ${hvacUnitId}:`,
-          err,
-        );
+        console.error(`[LocalScheduler] Failed to POST hvac-turn-off for ${hvacUnitId}:`, err);
       }
     }, scaledDelay * 1000);
 
@@ -277,10 +268,7 @@ export class MockHVACProvider implements HVACProvider {
   private config: AppConfig;
   private onChange: ((type: string, data: unknown) => void) | undefined;
 
-  constructor(
-    config: AppConfig,
-    onChange?: (type: string, data: unknown) => void,
-  ) {
+  constructor(config: AppConfig, onChange?: (type: string, data: unknown) => void) {
     this.config = config;
     this.onChange = onChange;
     // Initialize all units to 'on'

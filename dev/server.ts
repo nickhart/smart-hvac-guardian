@@ -84,11 +84,7 @@ async function readBody(req: IncomingMessage): Promise<string> {
   return Buffer.concat(chunks).toString("utf-8");
 }
 
-function toWebRequest(
-  req: IncomingMessage,
-  body: string,
-  baseUrl: string,
-): Request {
+function toWebRequest(req: IncomingMessage, body: string, baseUrl: string): Request {
   const url = new URL(req.url ?? "/", baseUrl);
   const headers = new Headers();
   for (const [key, value] of Object.entries(req.headers)) {
@@ -103,10 +99,7 @@ function toWebRequest(
   return new Request(url.toString(), init);
 }
 
-async function sendWebResponse(
-  res: ServerResponse,
-  webRes: Response,
-): Promise<void> {
+async function sendWebResponse(res: ServerResponse, webRes: Response): Promise<void> {
   res.writeHead(webRes.status, Object.fromEntries(webRes.headers.entries()));
   const text = await webRes.text();
   res.end(text);
@@ -116,14 +109,8 @@ async function sendWebResponse(
 // createDevServer
 // ---------------------------------------------------------------------------
 
-export async function createDevServer(
-  options: DevServerOptions = {},
-): Promise<DevServer> {
-  const {
-    envName = "dev",
-    delayScale = 1.0,
-    port: requestedPort = 3000,
-  } = options;
+export async function createDevServer(options: DevServerOptions = {}): Promise<DevServer> {
+  const { envName = "dev", delayScale = 1.0, port: requestedPort = 3000 } = options;
 
   // Load config
   resetConfigCache();
@@ -211,23 +198,19 @@ export async function createDevServer(
       // --- Dev state endpoint ---
       if (path === "/api/dev/state" && method === "GET") {
         const state = {
-          sensors: Object.entries(config.sensorDelays).map(
-            ([id, delay]) => ({
-              id,
-              delay,
-              state: stateStore.getSensorSnapshot()[id] ?? "unknown",
-              default: config.sensorDefaults[id] ?? null,
-              type: getSensorType(id, config),
-            }),
-          ),
-          hvacUnits: Object.entries(config.hvacUnits).map(
-            ([id, unit]) => ({
-              id,
-              name: unit.name,
-              iftttEvent: unit.iftttEvent,
-              state: hvacProvider.getUnitStatesSnapshot()[id] ?? "unknown",
-            }),
-          ),
+          sensors: Object.entries(config.sensorDelays).map(([id, delay]) => ({
+            id,
+            delay,
+            state: stateStore.getSensorSnapshot()[id] ?? "unknown",
+            default: config.sensorDefaults[id] ?? null,
+            type: getSensorType(id, config),
+          })),
+          hvacUnits: Object.entries(config.hvacUnits).map(([id, unit]) => ({
+            id,
+            name: unit.name,
+            iftttEvent: unit.iftttEvent,
+            state: hvacProvider.getUnitStatesSnapshot()[id] ?? "unknown",
+          })),
           pendingTimers: scheduler.getPendingTimers(),
           eventLog: hvacProvider.getEventLog(),
           config: {
@@ -323,10 +306,7 @@ export async function createDevServer(
 // Helpers
 // ---------------------------------------------------------------------------
 
-function getSensorType(
-  sensorId: string,
-  config: AppConfig,
-): "exterior" | "interior" | "unknown" {
+function getSensorType(sensorId: string, config: AppConfig): "exterior" | "interior" | "unknown" {
   for (const zone of Object.values(config.zones)) {
     if (zone.exteriorOpenings.includes(sensorId)) return "exterior";
     if (zone.interiorDoors.some((d) => d.id === sensorId)) return "interior";
@@ -360,11 +340,11 @@ async function main(): Promise<void> {
   console.log(`  Env:          .env.${envName}`);
   console.log(`  Delay scale:  ${delayScale}x`);
   console.log(`  Zones:        ${Object.keys(dev.config.zones).join(", ")}`);
+  console.log(`  Sensors:      ${Object.keys(dev.config.sensorDelays).join(", ")}`);
   console.log(
-    `  Sensors:      ${Object.keys(dev.config.sensorDelays).join(", ")}`,
-  );
-  console.log(
-    `  HVAC units:   ${Object.entries(dev.config.hvacUnits).map(([id, u]) => `${id} (${u.name})`).join(", ")}`,
+    `  HVAC units:   ${Object.entries(dev.config.hvacUnits)
+      .map(([id, u]) => `${id} (${u.name})`)
+      .join(", ")}`,
   );
   console.log(`\n  Dashboard:    http://localhost:${dev.port}/`);
   console.log(`  API base:     http://localhost:${dev.port}/api`);
@@ -385,8 +365,7 @@ async function main(): Promise<void> {
 // Run CLI if this is the entrypoint
 const isMain =
   process.argv[1] &&
-  (process.argv[1].endsWith("/dev/server.ts") ||
-    process.argv[1].endsWith("/dev/server.js"));
+  (process.argv[1].endsWith("/dev/server.ts") || process.argv[1].endsWith("/dev/server.js"));
 if (isMain) {
   main().catch((err) => {
     console.error("Failed to start dev server:", err);

@@ -1,5 +1,11 @@
 import type { AppConfig, EnvSecrets } from "../config/index.js";
-import type { SensorProvider, HVACProvider, SchedulerProvider, StateStore, AnalyticsProvider } from "../providers/types.js";
+import type {
+  SensorProvider,
+  HVACProvider,
+  SchedulerProvider,
+  StateStore,
+  AnalyticsProvider,
+} from "../providers/types.js";
 import { YoLinkClient, YoLinkSensorProvider } from "../providers/yolink/index.js";
 import { IFTTTClient } from "../providers/cielo/client.js";
 import { CieloIFTTTProvider } from "../providers/cielo/index.js";
@@ -38,12 +44,13 @@ export function createDependencies(
     logger,
   });
 
-  const analytics = secrets.tinybirdToken && secrets.tinybirdUrl
-    ? new TinybirdAnalyticsProvider({
-        baseUrl: secrets.tinybirdUrl,
-        token: secrets.tinybirdToken,
-      })
-    : new NoopAnalyticsProvider();
+  const analytics =
+    secrets.tinybirdToken && secrets.tinybirdUrl
+      ? new TinybirdAnalyticsProvider({
+          baseUrl: secrets.tinybirdUrl,
+          token: secrets.tinybirdToken,
+        })
+      : new NoopAnalyticsProvider();
 
   return {
     sensor: new YoLinkSensorProvider(yolinkClient, logger),

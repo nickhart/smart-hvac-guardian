@@ -60,9 +60,7 @@ describe("loadConfig", () => {
   });
 
   it("throws on schema validation failure", () => {
-    expect(() => loadConfig(JSON.stringify({ zones: {} }))).toThrow(
-      "APP_CONFIG validation failed",
-    );
+    expect(() => loadConfig(JSON.stringify({ zones: {} }))).toThrow("APP_CONFIG validation failed");
   });
 
   it("caches config across calls", () => {
