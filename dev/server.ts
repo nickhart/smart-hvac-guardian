@@ -298,6 +298,7 @@ export async function createDevServer(
     close: async () => {
       scheduler.cancelAll();
       stateStore.destroy();
+      eventBus.closeAll();
       await new Promise<void>((resolve, reject) => {
         server.close((err) => (err ? reject(err) : resolve()));
       });

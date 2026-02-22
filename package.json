@@ -12,7 +12,7 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "dev": "tsx dev/server.ts",
-    "dev:fast": "tsx dev/server.ts --delay-scale 0.01",
+    "dev:fast": "tsx dev/server.ts --delay-scale 0.033",
     "test:e2e": "vitest run --config dev/vitest.e2e.config.ts"
   },
   "dependencies": {

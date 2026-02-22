@@ -34,6 +34,13 @@ export class DevEventBus {
       client.write(payload);
     }
   }
+
+  closeAll(): void {
+    for (const client of this.clients) {
+      client.end();
+    }
+    this.clients.clear();
+  }
 }
 
 // ---------------------------------------------------------------------------
