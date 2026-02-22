@@ -99,7 +99,6 @@ export const EnvSecretsSchema = z.object({
   tinybirdUrl: z.string().url().optional(),
   resendApiKey: z.string().min(1).optional(),
   ownerEmail: z.string().email().optional(),
-  sessionSecret: z.string().min(16).optional(),
 });
 
 export type ZoneConfig = z.infer<typeof ZoneConfigSchema>;
