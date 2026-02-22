@@ -66,3 +66,38 @@ Add [Resend](https://resend.com) as the transactional email provider for user-fa
 - Sensor open alerts (e.g. "Kitchen window has been open for 10 minutes")
 - HVAC turn-off confirmations
 - System error alerts (provider failures, QStash issues)
+
+## handle offline sensors
+
+- if a sensor is offline treat it as closed
+- if IFTTT, Cielo, or YoLink is down, temporarily disable the AC shutoff system
+- we don't want dead batteries or service outages to result in guests being unable to use the AC
+
+## minimal web UI
+
+- have a basic index with an email login form
+- add OWNER_EMAIL to the environment (eg: OWNER_EMAIL=<nickhart@gmail.com>)
+- add support for email/OTP auth with resend.dev
+- for now we only support the OWNER_EMAIL
+- once logged in show a dashboard with the current state of the sensors and hvac units
+- if possible use the qstash/redis state to show any active timers for the hvac units
+- at some point plan a history view which shows sensor, hvac, timer, and shutoff activity
+- at some point plan a metrics view which shows how often shutoff activity occurs over a time period
+  - over a day, week, month, year?
+  - allow one to choose the exact time period
+  - eg: the past 24 hours, or a previous 24 hour period
+  - eg: over the past week, or a specific 7 day period
+  - etc...
+
+## tracking HVAC state in redis
+
+Your first question — valid concern. The system currently has no concept of HVAC power state. It treats "exposed" as "needs a turn-off timer" regardless of whether the unit is already off. So yes, if you open the front door, the living room AC gets turned off, and then you open the lanai door, it would schedule another turn-off for the already-off AC (which is harmless but wasteful — IFTTT just gets a redundant call).
+
+The system doesn't track HVAC on/off state in Redis today. The hvac-event endpoint receives on/off events but doesn't persist them. To skip unnecessary timers, you'd need to store HVAC power state and check it before scheduling. That's a production code change though — want me to look into it, or are you happy with the current "fire and forget" behavior since the redundant turn-off is a no-op?
+
+concerns:
+
+- potential side effects of firing an "off" to an already off hvac
+  - an extra unwanted "beep" from the hvac if it is already off? (not sure, need to test this!)
+  - race condition: maybe I turned it on locally and the turn off logic on the server fires at the same time, immediately shutting off the hvac that I just turned on. probably an edge case, but could be annoying
+  
