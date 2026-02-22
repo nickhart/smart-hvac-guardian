@@ -10,10 +10,11 @@ const mockLogger: Logger = {
   error: vi.fn(),
 };
 
+const mockPublishJSON = vi.fn().mockResolvedValue({ messageId: "msg123" });
+
 vi.mock("@upstash/qstash", () => {
-  const publishJSON = vi.fn().mockResolvedValue({ messageId: "msg123" });
   return {
-    Client: vi.fn().mockImplementation(() => ({ publishJSON })),
+    Client: vi.fn().mockImplementation(() => ({ publishJSON: mockPublishJSON })),
     Receiver: vi.fn().mockImplementation(() => ({
       verify: vi.fn().mockResolvedValue(true),
     })),
@@ -35,9 +36,41 @@ describe("QStashScheduler", () => {
 
     await scheduler.scheduleDelayedCheck("sensor1", 90);
 
-    // Verify the Client was called with the token
     const { Client } = await import("@upstash/qstash");
     expect(Client).toHaveBeenCalledWith({ token: "test-token" });
+  });
+
+  it("publishes per-unit turn-off with correct params", async () => {
+    const scheduler = new QStashScheduler({
+      token: "test-token",
+      checkStateUrl: "https://example.com/api/check-state",
+      turnOffUrl: "https://example.com/api/hvac-turn-off",
+      logger: mockLogger,
+    });
+
+    await scheduler.scheduleUnitTurnOff("ac_living", "token-abc", 90, "turnoff-ac_living-123");
+
+    expect(mockPublishJSON).toHaveBeenCalledWith({
+      url: "https://example.com/api/hvac-turn-off",
+      body: { hvacUnitId: "ac_living", cancellationToken: "token-abc" },
+      delay: 90,
+      deduplicationId: "turnoff-ac_living-123",
+    });
+  });
+
+  it("throws ProviderError on scheduleUnitTurnOff failure", async () => {
+    mockPublishJSON.mockRejectedValueOnce(new Error("QStash down"));
+
+    const scheduler = new QStashScheduler({
+      token: "test-token",
+      checkStateUrl: "https://example.com/api/check-state",
+      turnOffUrl: "https://example.com/api/hvac-turn-off",
+      logger: mockLogger,
+    });
+
+    await expect(
+      scheduler.scheduleUnitTurnOff("ac_living", "token-abc", 90, "dedup-1"),
+    ).rejects.toThrow("Failed to schedule unit turn-off");
   });
 });
 

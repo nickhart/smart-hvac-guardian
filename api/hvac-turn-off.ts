@@ -1,5 +1,6 @@
 export const config = { runtime: "edge" };
 
+import { z } from "zod";
 import { loadConfig, loadEnvSecrets } from "../src/config/index.js";
 import { createDependencies } from "../src/handlers/dependencies.js";
 import type { Dependencies } from "../src/handlers/dependencies.js";
@@ -7,6 +8,11 @@ import { verifyQStashSignature } from "../src/providers/qstash/verify.js";
 import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
 import { WebhookValidationError } from "../src/utils/errors.js";
+
+const TurnOffPayload = z.object({
+  hvacUnitId: z.string().min(1),
+  cancellationToken: z.string().min(1),
+});
 
 export async function handleHvacTurnOff(request: Request, deps?: Dependencies): Promise<Response> {
   const logger = deps?.logger ?? createLogger();
@@ -24,37 +30,56 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
     const signature = request.headers.get("upstash-signature") ?? "";
     await verifyQStashSignature(d.qstashReceiver, signature, rawBody);
 
-    const iftttEvents = d.config.hvacUnits.map((u) => u.iftttEvent);
-    logger.info("Turning off all HVAC units", {
-      requestId,
-      unitCount: d.config.hvacUnits.length,
-      iftttEvents,
-    });
+    const body = JSON.parse(rawBody);
+    const parsed = TurnOffPayload.safeParse(body);
 
-    const results = await Promise.allSettled(
-      d.config.hvacUnits.map((unit) => d.hvac.turnOff(unit.iftttEvent)),
-    );
+    if (!parsed.success) {
+      logger.warn("Invalid turn-off payload", { requestId, errors: parsed.error.flatten() });
+      return errorResponse("Invalid payload", 400);
+    }
 
-    const failures = results.filter((r) => r.status === "rejected");
-    if (failures.length > 0) {
-      logger.error("Some HVAC turnoff commands failed", {
+    const { hvacUnitId, cancellationToken } = parsed.data;
+    logger.info("Received turn-off request", { requestId, hvacUnitId, cancellationToken });
+
+    // Check cancellation token in Redis
+    const storedToken = await d.stateStore.getTimerToken(hvacUnitId);
+
+    if (!storedToken || storedToken !== cancellationToken) {
+      logger.info("Turn-off cancelled: token mismatch or missing", {
         requestId,
-        failureCount: failures.length,
-        totalUnits: d.config.hvacUnits.length,
+        hvacUnitId,
+        expected: storedToken,
+        received: cancellationToken,
+      });
+      return jsonResponse({
+        status: "ok",
+        action: "cancelled",
+        hvacUnitId,
       });
     }
 
-    logger.info("HVAC turnoff complete", {
+    // Token matches — turn off the unit
+    const unitConfig = d.config.hvacUnits[hvacUnitId];
+    if (!unitConfig) {
+      logger.warn("Unknown HVAC unit in turn-off", { requestId, hvacUnitId });
+      return errorResponse("Unknown HVAC unit", 404);
+    }
+
+    logger.info("Turning off HVAC unit", {
       requestId,
-      successes: results.length - failures.length,
-      failures: failures.length,
+      hvacUnitId,
+      iftttEvent: unitConfig.iftttEvent,
     });
+
+    await d.hvac.turnOff(unitConfig.iftttEvent);
+    await d.stateStore.deleteTimerToken(hvacUnitId);
+
+    logger.info("HVAC unit turned off successfully", { requestId, hvacUnitId });
 
     return jsonResponse({
       status: "ok",
-      action: "hvac_turned_off",
-      unitsProcessed: d.config.hvacUnits.length,
-      failures: failures.length,
+      action: "turned_off",
+      hvacUnitId,
     });
   } catch (error) {
     if (error instanceof WebhookValidationError) {

@@ -65,4 +65,37 @@ export class QStashScheduler implements SchedulerProvider {
       );
     }
   }
+
+  async scheduleUnitTurnOff(
+    hvacUnitId: string,
+    cancellationToken: string,
+    delaySeconds: number,
+    deduplicationId: string,
+  ): Promise<void> {
+    this.logger.info("Scheduling per-unit HVAC turn-off", {
+      hvacUnitId,
+      cancellationToken,
+      delaySeconds,
+      deduplicationId,
+    });
+
+    try {
+      await this.client.publishJSON({
+        url: this.turnOffUrl,
+        body: { hvacUnitId, cancellationToken },
+        delay: delaySeconds,
+        deduplicationId,
+      });
+
+      this.logger.info("Per-unit HVAC turn-off scheduled successfully", {
+        hvacUnitId,
+        deduplicationId,
+      });
+    } catch (error) {
+      throw new ProviderError(
+        "QStash",
+        `Failed to schedule unit turn-off: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
 }

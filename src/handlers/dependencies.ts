@@ -1,10 +1,11 @@
 import type { AppConfig, EnvSecrets } from "../config/index.js";
-import type { SensorProvider, HVACProvider, SchedulerProvider } from "../providers/types.js";
+import type { SensorProvider, HVACProvider, SchedulerProvider, StateStore } from "../providers/types.js";
 import { YoLinkClient, YoLinkSensorProvider } from "../providers/yolink/index.js";
 import { IFTTTClient } from "../providers/cielo/client.js";
 import { CieloIFTTTProvider } from "../providers/cielo/index.js";
 import { QStashScheduler } from "../providers/qstash/index.js";
 import { createQStashReceiver } from "../providers/qstash/verify.js";
+import { RedisStateStore } from "../providers/redis/index.js";
 import type { Receiver } from "@upstash/qstash";
 import type { Logger } from "../utils/logger.js";
 
@@ -12,6 +13,7 @@ export interface Dependencies {
   sensor: SensorProvider;
   hvac: HVACProvider;
   scheduler: SchedulerProvider;
+  stateStore: StateStore;
   qstashReceiver: Receiver;
   config: AppConfig;
   logger: Logger;
@@ -39,9 +41,13 @@ export function createDependencies(
     hvac: new CieloIFTTTProvider(iftttClient),
     scheduler: new QStashScheduler({
       token: secrets.qstashToken,
-      checkStateUrl: config.checkStateUrl,
+      checkStateUrl: "unused", // check-state is no longer in the critical path
       turnOffUrl: config.turnOffUrl,
       logger,
+    }),
+    stateStore: new RedisStateStore({
+      url: secrets.upstashRedisUrl,
+      token: secrets.upstashRedisToken,
     }),
     qstashReceiver: createQStashReceiver({
       currentSigningKey: secrets.qstashCurrentSigningKey,

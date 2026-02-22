@@ -41,6 +41,8 @@ export function loadEnvSecrets(env?: Record<string, string | undefined>): EnvSec
     qstashToken: source.QSTASH_TOKEN,
     qstashCurrentSigningKey: source.QSTASH_CURRENT_SIGNING_KEY,
     qstashNextSigningKey: source.QSTASH_NEXT_SIGNING_KEY,
+    upstashRedisUrl: source.UPSTASH_REDIS_REST_URL,
+    upstashRedisToken: source.UPSTASH_REDIS_REST_TOKEN,
   };
 
   const result = EnvSecretsSchema.safeParse(raw);

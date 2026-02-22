@@ -12,21 +12,47 @@ const mockLogger: Logger = {
 
 function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
   return {
-    sensor: { getState: vi.fn().mockResolvedValue("open") },
-    hvac: { turnOff: vi.fn().mockResolvedValue(undefined) },
+    sensor: { getState: vi.fn() },
+    hvac: { turnOff: vi.fn() },
     scheduler: {
       scheduleDelayedCheck: vi.fn(),
-      scheduleTurnOff: vi.fn().mockResolvedValue(undefined),
+      scheduleTurnOff: vi.fn(),
+      scheduleUnitTurnOff: vi.fn(),
+    },
+    stateStore: {
+      setSensorState: vi.fn(),
+      getAllSensorStates: vi.fn().mockResolvedValue(
+        new Map([
+          ["front_door", "open"],
+          ["bedroom_window", "closed"],
+        ]),
+      ),
+      setTimerToken: vi.fn(),
+      getTimerToken: vi.fn(),
+      deleteTimerToken: vi.fn(),
+      getActiveTimerUnitIds: vi.fn().mockResolvedValue(["ac_living"]),
     },
     qstashReceiver: { verify: vi.fn().mockResolvedValue(true) } as never,
     config: {
-      sensors: [{ id: "sensor1", name: "Front Door", delaySeconds: 90 }],
-      hvacUnits: [
-        { id: "unit1", name: "AC", iftttEvent: "turn_off_ac" },
-        { id: "unit2", name: "Heater", iftttEvent: "turn_off_heat" },
-      ],
+      zones: {
+        living_room: {
+          minisplits: ["ac_living"],
+          exteriorOpenings: ["front_door"],
+          interiorDoors: [],
+        },
+        bedroom: {
+          minisplits: ["ac_bedroom"],
+          exteriorOpenings: ["bedroom_window"],
+          interiorDoors: [],
+        },
+      },
+      sensorDelays: { front_door: 90, bedroom_window: 120 },
+      hvacUnits: {
+        ac_living: { name: "Living Room AC", iftttEvent: "turn_off_ac_living" },
+        ac_bedroom: { name: "Bedroom AC", iftttEvent: "turn_off_ac_bedroom" },
+      },
+      sensorDefaults: {},
       yolink: { baseUrl: "https://api.yosmart.com/open/yolink/v2/api" },
-      checkStateUrl: "https://example.com/api/check-state",
       turnOffUrl: "https://example.com/api/hvac-turn-off",
     },
     logger: mockLogger,
@@ -34,77 +60,40 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
   };
 }
 
-function makeRequest(body: unknown, signature = "valid-sig"): Request {
-  return new Request("https://example.com/api/check-state", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "upstash-signature": signature,
-    },
-    body: JSON.stringify(body),
-  });
-}
-
-describe("check-state handler", () => {
-  it("returns 405 for non-POST", async () => {
-    const req = new Request("https://example.com/api/check-state", { method: "GET" });
+describe("check-state diagnostic handler", () => {
+  it("returns 405 for non-GET", async () => {
+    const req = new Request("https://example.com/api/check-state", { method: "POST" });
     const res = await handleCheckState(req, createMockDeps());
     expect(res.status).toBe(405);
   });
 
-  it("returns 401 for invalid QStash signature", async () => {
-    const deps = createMockDeps({
-      qstashReceiver: {
-        verify: vi.fn().mockRejectedValue(new Error("bad sig")),
-      } as never,
-    });
-
-    const res = await handleCheckState(makeRequest({ sensorId: "sensor1" }), deps);
-    expect(res.status).toBe(401);
-  });
-
-  it("returns no action when sensor is closed", async () => {
-    const deps = createMockDeps({
-      sensor: { getState: vi.fn().mockResolvedValue("closed") },
-    });
-
-    const res = await handleCheckState(makeRequest({ sensorId: "sensor1" }), deps);
-    const body = (await res.json()) as Record<string, unknown>;
-
-    expect(res.status).toBe(200);
-    expect(body.action).toBe("none");
-    expect(body.state).toBe("closed");
-    expect(deps.hvac.turnOff).not.toHaveBeenCalled();
-  });
-
-  it("schedules deduplicated turn-off when sensor is still open", async () => {
+  it("returns diagnostic state on GET", async () => {
+    const req = new Request("https://example.com/api/check-state", { method: "GET" });
     const deps = createMockDeps();
-    const res = await handleCheckState(makeRequest({ sensorId: "sensor1" }), deps);
+    const res = await handleCheckState(req, deps);
     const body = (await res.json()) as Record<string, unknown>;
 
     expect(res.status).toBe(200);
-    expect(body.action).toBe("turnoff_scheduled");
-    expect(deps.scheduler.scheduleTurnOff).toHaveBeenCalledTimes(1);
-    expect(deps.scheduler.scheduleTurnOff).toHaveBeenCalledWith(
-      expect.stringContaining("turnoff-all-"),
-    );
-    expect(deps.hvac.turnOff).not.toHaveBeenCalled();
+    expect(body.status).toBe("ok");
+    expect(body.sensorStates).toEqual({ front_door: "open", bedroom_window: "closed" });
+    expect(body.exposedUnits).toEqual(["ac_living"]);
+    expect(body.unexposedUnits).toEqual(["ac_bedroom"]);
+    expect(body.activeTimers).toEqual(["ac_living"]);
   });
 
-  it("returns 500 on scheduler turn-off failure", async () => {
+  it("returns 500 on state store failure", async () => {
     const deps = createMockDeps({
-      scheduler: {
-        scheduleDelayedCheck: vi.fn(),
-        scheduleTurnOff: vi.fn().mockRejectedValue(new Error("QStash down")),
+      stateStore: {
+        setSensorState: vi.fn(),
+        getAllSensorStates: vi.fn().mockRejectedValue(new Error("Redis down")),
+        setTimerToken: vi.fn(),
+        getTimerToken: vi.fn(),
+        deleteTimerToken: vi.fn(),
+        getActiveTimerUnitIds: vi.fn(),
       },
     });
-    const res = await handleCheckState(makeRequest({ sensorId: "sensor1" }), deps);
+    const req = new Request("https://example.com/api/check-state", { method: "GET" });
+    const res = await handleCheckState(req, deps);
     expect(res.status).toBe(500);
-  });
-
-  it("returns 400 for invalid payload", async () => {
-    const deps = createMockDeps();
-    const res = await handleCheckState(makeRequest({ bad: "data" }), deps);
-    expect(res.status).toBe(400);
   });
 });

@@ -2,12 +2,31 @@
 
 ## Zone-aware AC control via internal door sensors
 
-Currently, when any sensor detects an open window or door, all HVAC units are turned off. A smarter approach would allow per-zone control:
+**Status: Implemented**
 
-- **Concept:** If a bedroom door is shut and that bedroom's window is also shut, the AC in that bedroom can stay on — even if open windows/doors elsewhere in the condo require AC to be off in those areas.
-- **Hardware needed:** Internal door sensors (e.g. YoLink door sensors on bedroom doors). Not yet purchased.
-- **Config changes:** Define zones (rooms), associate each sensor and HVAC unit with a zone. A zone is "sealed" when all its entry points (door + windows) are closed.
-- **Logic changes:** Turn-off decisions become per-zone. A zone's HVAC is only turned off if that zone has an open sensor, or if the zone's door is open and an adjacent zone has an open sensor (cascading exposure).
+Per-zone HVAC control using interior door sensors to determine connected components. Zones connected by open interior doors form a single component; only HVAC units in components exposed to an open exterior opening get shut off. Includes per-HVAC-unit timers with proactive cancellation via Redis tokens.
+
+- **Zone graph evaluation:** BFS over zones connected by open interior doors determines connected components.
+- **Cancellation tokens:** Each timer stores a UUID in Redis. Closing a door deletes the token; when QStash fires, a mismatched/missing token means the timer was cancelled.
+- **Per-sensor delays:** Each exterior sensor has its own `delaySeconds`. When multiple are open in a component, the minimum delay is used.
+
+## Remote delay configuration
+
+Ability to change per-sensor delay values without redeploying. Store delay overrides in Redis (`delay-override:{sensorId}` keys), falling back to `APP_CONFIG.sensorDelays` defaults when no override exists.
+
+- Expose a simple API endpoint (`POST /api/config/delays`) for updating overrides.
+- Read overrides in `sensor-event` and `hvac-event` handlers when computing timer delays.
+- Future: integrate into web configuration UI.
+
+## System on/off toggle
+
+A Redis flag (`system:enabled`) checked at the top of `sensor-event` and `hvac-event` handlers. When disabled:
+
+- All events are logged as usual.
+- No timers are scheduled and no turn-off commands are sent.
+- Active timers are not cancelled (they will expire naturally or be cancelled on re-enable).
+
+Controllable via a simple API endpoint (`POST /api/system/toggle`) or future dashboard.
 
 ## Shutoff analytics (Upstash Redis)
 

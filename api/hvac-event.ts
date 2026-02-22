@@ -6,6 +6,8 @@ import { createDependencies } from "../src/handlers/dependencies.js";
 import type { Dependencies } from "../src/handlers/dependencies.js";
 import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
+import { evaluateZoneGraph, getOpenExteriorSensors, getConnectedComponents } from "../src/zone-graph/index.js";
+import type { SensorState } from "../src/zone-graph/index.js";
 
 const HvacEventPayload = z.object({
   hvacId: z.string().min(1),
@@ -36,38 +38,57 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
       return jsonResponse({ status: "ok", action: "none" });
     }
 
-    // event === "on" — schedule delayed checks for all sensors
+    // event === "on" — check if this unit is in an exposed zone
     const d = deps ?? createDependencies(loadConfig(), loadEnvSecrets(), logger);
-    const hvacUnit = d.config.hvacUnits.find((u) => u.id === hvacId);
 
-    if (!hvacUnit) {
+    if (!(hvacId in d.config.hvacUnits)) {
       logger.warn("Unknown HVAC unit ID", { requestId, hvacId });
       return errorResponse("Unknown HVAC unit", 404);
     }
 
-    const window = Math.floor(Date.now() / (10 * 60 * 1000)); // 10-min window
-    logger.info("Scheduling delayed checks for sensors", {
+    // Read all sensor states from Redis, applying defaults for sensors without state
+    const allSensorIds = Object.keys(d.config.sensorDelays);
+    const sensorStates = await d.stateStore.getAllSensorStates(allSensorIds);
+    for (const [id, defaultState] of Object.entries(d.config.sensorDefaults)) {
+      if (!sensorStates.has(id)) {
+        sensorStates.set(id, defaultState);
+      }
+    }
+
+    // Evaluate zone graph
+    const { exposedUnits } = evaluateZoneGraph(d.config.zones, sensorStates);
+
+    if (!exposedUnits.has(hvacId)) {
+      logger.info("HVAC unit is not in an exposed zone, no action needed", {
+        requestId,
+        hvacId,
+      });
+      return jsonResponse({ status: "ok", action: "none" });
+    }
+
+    // Unit is exposed — schedule turn-off timer
+    const delaySeconds = getMinDelayForUnit(hvacId, d.config.zones, d.config.sensorDelays, sensorStates);
+    const token = crypto.randomUUID();
+    const ttl = delaySeconds + 60;
+
+    await d.stateStore.setTimerToken(hvacId, token, ttl);
+
+    const window = Math.floor(Date.now() / (10 * 60 * 1000));
+    const dedupId = `turnoff-${hvacId}-${window}`;
+    await d.scheduler.scheduleUnitTurnOff(hvacId, token, delaySeconds, dedupId);
+
+    logger.info("Turn-off scheduled for HVAC unit on event", {
       requestId,
       hvacId,
-      sensorCount: d.config.sensors.length,
-      dedupWindow: window,
+      delaySeconds,
+      dedupId,
     });
-
-    for (const sensor of d.config.sensors) {
-      const dedupId = `check-sensor-${sensor.id}-${window}`;
-      await d.scheduler.scheduleDelayedCheck(sensor.id, sensor.delaySeconds, dedupId);
-      logger.info("Delayed check scheduled", {
-        requestId,
-        sensorId: sensor.id,
-        delaySeconds: sensor.delaySeconds,
-        dedupId,
-      });
-    }
 
     return jsonResponse({
       status: "ok",
       action: "scheduled",
-      checksScheduled: d.config.sensors.length,
+      hvacUnitId: hvacId,
+      delaySeconds,
     });
   } catch (error) {
     logger.error("hvac-event handler error", {
@@ -76,6 +97,43 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
     });
     return errorResponse("Internal server error", 500);
   }
+}
+
+function getMinDelayForUnit(
+  unitId: string,
+  zones: Dependencies["config"]["zones"],
+  sensorDelays: Dependencies["config"]["sensorDelays"],
+  sensorStates: Map<string, SensorState>,
+): number {
+  const components = getConnectedComponents(zones, sensorStates);
+
+  for (const component of components) {
+    let hasUnit = false;
+    for (const zoneId of component) {
+      const zone = zones[zoneId];
+      if (zone && zone.minisplits.includes(unitId)) {
+        hasUnit = true;
+        break;
+      }
+    }
+
+    if (!hasUnit) continue;
+
+    const openSensors = getOpenExteriorSensors(component, zones, sensorStates);
+    if (openSensors.length === 0) continue;
+
+    let minDelay = Infinity;
+    for (const sensorId of openSensors) {
+      const delay = sensorDelays[sensorId];
+      if (delay !== undefined && delay < minDelay) {
+        minDelay = delay;
+      }
+    }
+
+    return minDelay === Infinity ? 90 : minDelay;
+  }
+
+  return 90;
 }
 
 export default async function handler(request: Request): Promise<Response> {
