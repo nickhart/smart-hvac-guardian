@@ -239,14 +239,14 @@
           renderHVAC();
         }
       }
-      if (type === 'timer-scheduled' || type === 'timer-fired' || type === 'timer-deleted') {
+      if (type === 'timer-scheduled' || type === 'timer-fired' || type === 'timer-deleted' || type === 'timer-cancelled') {
         refreshState();
       }
     };
 
     const eventTypes = [
       'sensor-state', 'hvac-turn-off', 'hvac-state',
-      'timer-scheduled', 'timer-fired', 'timer-deleted',
+      'timer-scheduled', 'timer-fired', 'timer-deleted', 'timer-cancelled',
       'timer-set', 'timer-expired',
     ];
     eventTypes.forEach(t => es.addEventListener(t, handleEvent(t)));

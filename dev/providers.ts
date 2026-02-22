@@ -240,6 +240,17 @@ export class LocalScheduler implements SchedulerProvider {
     }));
   }
 
+  /** Cancel pending timeout for a specific HVAC unit */
+  cancelByUnitId(unitId: string): void {
+    for (const [dedupId, entry] of this.pendingTimers) {
+      if (entry.hvacUnitId === unitId) {
+        clearTimeout(entry.timeout);
+        this.pendingTimers.delete(dedupId);
+        this.onChange?.("timer-cancelled", { hvacUnitId: unitId, dedupId });
+      }
+    }
+  }
+
   /** Clear all pending timeouts */
   cancelAll(): void {
     for (const entry of this.pendingTimers.values()) {
