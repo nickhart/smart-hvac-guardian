@@ -96,7 +96,7 @@ export const EnvSecretsSchema = z.object({
   upstashRedisUrl: z.string().url(),
   upstashRedisToken: z.string().min(1),
   tinybirdToken: z.string().min(1).optional(),
-  tinybirdBaseUrl: z.string().url().optional(),
+  tinybirdUrl: z.string().url().optional(),
 });
 
 export type ZoneConfig = z.infer<typeof ZoneConfigSchema>;

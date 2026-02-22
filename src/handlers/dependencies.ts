@@ -38,9 +38,9 @@ export function createDependencies(
     logger,
   });
 
-  const analytics = secrets.tinybirdToken && secrets.tinybirdBaseUrl
+  const analytics = secrets.tinybirdToken && secrets.tinybirdUrl
     ? new TinybirdAnalyticsProvider({
-        baseUrl: secrets.tinybirdBaseUrl,
+        baseUrl: secrets.tinybirdUrl,
         token: secrets.tinybirdToken,
       })
     : new NoopAnalyticsProvider();
