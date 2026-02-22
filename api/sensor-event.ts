@@ -95,6 +95,17 @@ export async function handleSensorEvent(request: Request, deps?: Dependencies): 
       logger.info("Timer cancelled for unit", { requestId, unitId });
     }
 
+    // 8. Track analytics
+    d.analytics.trackSensorEvent({
+      requestId,
+      sensorId,
+      event,
+      exposedUnits: [...exposedUnits],
+      unexposedUnits: [...unexposedUnits],
+      timersScheduled: schedule,
+      timersCancelled: cancel,
+    });
+
     return jsonResponse({
       status: "ok",
       action: schedule.length > 0 || cancel.length > 0 ? "updated" : "none",

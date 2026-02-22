@@ -25,6 +25,36 @@ export interface SchedulerProvider {
   ): Promise<void>;
 }
 
+export interface AnalyticsProvider {
+  trackSensorEvent(data: {
+    requestId: string;
+    sensorId: string;
+    event: "open" | "close";
+    exposedUnits: string[];
+    unexposedUnits: string[];
+    timersScheduled: string[];
+    timersCancelled: string[];
+  }): Promise<void>;
+
+  trackHvacCommand(data: {
+    requestId: string;
+    hvacUnitId: string;
+    unitName: string;
+    action: "turned_off" | "cancelled" | "scheduled";
+    triggerSource: "sensor_open" | "hvac_on";
+    delaySeconds?: number;
+    iftttEvent?: string;
+  }): Promise<void>;
+
+  trackHvacStateEvent(data: {
+    requestId: string;
+    hvacId: string;
+    event: "on" | "off";
+    wasExposed: boolean;
+    turnoffScheduled: boolean;
+  }): Promise<void>;
+}
+
 export interface StateStore {
   setSensorState(sensorId: string, state: ZoneSensorState): Promise<void>;
   getAllSensorStates(sensorIds: string[]): Promise<Map<string, ZoneSensorState>>;

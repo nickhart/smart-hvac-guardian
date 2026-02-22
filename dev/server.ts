@@ -20,6 +20,7 @@ import {
   MockHVACProvider,
   MockSensorProvider,
   mockQStashReceiver,
+  NoopAnalyticsProvider,
 } from "./providers.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -171,6 +172,7 @@ export async function createDevServer(
     hvac: hvacProvider,
     scheduler,
     stateStore,
+    analytics: new NoopAnalyticsProvider(),
     qstashReceiver: mockQStashReceiver,
     config,
     logger,

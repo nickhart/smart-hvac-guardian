@@ -35,6 +35,14 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
     logger.info("Received HVAC event", { requestId, hvacId, event });
 
     if (event === "off") {
+      const d = deps ?? createDependencies(loadConfig(), loadEnvSecrets(), logger);
+      d.analytics.trackHvacStateEvent({
+        requestId,
+        hvacId,
+        event: "off",
+        wasExposed: false,
+        turnoffScheduled: false,
+      });
       return jsonResponse({ status: "ok", action: "none" });
     }
 
@@ -63,6 +71,13 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
         requestId,
         hvacId,
       });
+      d.analytics.trackHvacStateEvent({
+        requestId,
+        hvacId,
+        event: "on",
+        wasExposed: false,
+        turnoffScheduled: false,
+      });
       return jsonResponse({ status: "ok", action: "none" });
     }
 
@@ -82,6 +97,24 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
       hvacId,
       delaySeconds,
       dedupId,
+    });
+
+    const unitConfig = d.config.hvacUnits[hvacId];
+    d.analytics.trackHvacStateEvent({
+      requestId,
+      hvacId,
+      event: "on",
+      wasExposed: true,
+      turnoffScheduled: true,
+    });
+    d.analytics.trackHvacCommand({
+      requestId,
+      hvacUnitId: hvacId,
+      unitName: unitConfig?.name ?? hvacId,
+      action: "scheduled",
+      triggerSource: "hvac_on",
+      delaySeconds,
+      iftttEvent: unitConfig?.iftttEvent,
     });
 
     return jsonResponse({

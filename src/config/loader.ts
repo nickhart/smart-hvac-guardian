@@ -43,6 +43,8 @@ export function loadEnvSecrets(env?: Record<string, string | undefined>): EnvSec
     qstashNextSigningKey: source.QSTASH_NEXT_SIGNING_KEY,
     upstashRedisUrl: source.UPSTASH_REDIS_REST_URL,
     upstashRedisToken: source.UPSTASH_REDIS_REST_TOKEN,
+    tinybirdToken: source.TINYBIRD_TOKEN || undefined,
+    tinybirdBaseUrl: source.TINYBIRD_BASE_URL || undefined,
   };
 
   const result = EnvSecretsSchema.safeParse(raw);

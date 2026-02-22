@@ -95,6 +95,8 @@ export const EnvSecretsSchema = z.object({
   qstashNextSigningKey: z.string().min(1),
   upstashRedisUrl: z.string().url(),
   upstashRedisToken: z.string().min(1),
+  tinybirdToken: z.string().min(1).optional(),
+  tinybirdBaseUrl: z.string().url().optional(),
 });
 
 export type ZoneConfig = z.infer<typeof ZoneConfigSchema>;

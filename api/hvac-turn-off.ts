@@ -51,6 +51,14 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
         expected: storedToken,
         received: cancellationToken,
       });
+      d.analytics.trackHvacCommand({
+        requestId,
+        hvacUnitId,
+        unitName: d.config.hvacUnits[hvacUnitId]?.name ?? hvacUnitId,
+        action: "cancelled",
+        triggerSource: "sensor_open",
+      });
+
       return jsonResponse({
         status: "ok",
         action: "cancelled",
@@ -75,6 +83,15 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
     await d.stateStore.deleteTimerToken(hvacUnitId);
 
     logger.info("HVAC unit turned off successfully", { requestId, hvacUnitId });
+
+    d.analytics.trackHvacCommand({
+      requestId,
+      hvacUnitId,
+      unitName: unitConfig.name,
+      action: "turned_off",
+      triggerSource: "sensor_open",
+      iftttEvent: unitConfig.iftttEvent,
+    });
 
     return jsonResponse({
       status: "ok",

@@ -4,6 +4,7 @@ import type {
   SchedulerProvider,
   HVACProvider,
   SensorProvider,
+  AnalyticsProvider,
 } from "../src/providers/types.js";
 import type { SensorState } from "../src/zone-graph/evaluate.js";
 import type { AppConfig } from "../src/config/schema.js";
@@ -349,3 +350,13 @@ export class MockSensorProvider implements SensorProvider {
 export const mockQStashReceiver = {
   verify: async () => true,
 } as unknown as Receiver;
+
+// ---------------------------------------------------------------------------
+// NoopAnalyticsProvider — no-op for dev server
+// ---------------------------------------------------------------------------
+
+export class NoopAnalyticsProvider implements AnalyticsProvider {
+  async trackSensorEvent(): Promise<void> {}
+  async trackHvacCommand(): Promise<void> {}
+  async trackHvacStateEvent(): Promise<void> {}
+}

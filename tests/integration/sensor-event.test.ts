@@ -33,6 +33,11 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
       deleteTimerToken: vi.fn().mockResolvedValue(undefined),
       getActiveTimerUnitIds: vi.fn().mockResolvedValue([]),
     },
+    analytics: {
+      trackSensorEvent: vi.fn().mockResolvedValue(undefined),
+      trackHvacCommand: vi.fn().mockResolvedValue(undefined),
+      trackHvacStateEvent: vi.fn().mockResolvedValue(undefined),
+    },
     qstashReceiver: { verify: vi.fn() } as never,
     config: {
       zones: {
