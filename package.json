@@ -10,7 +10,10 @@
     "format:check": "prettier --check .",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "dev": "tsx dev/server.ts",
+    "dev:fast": "tsx dev/server.ts --delay-scale 0.01",
+    "test:e2e": "vitest run --config dev/vitest.e2e.config.ts"
   },
   "dependencies": {
     "@upstash/qstash": "^2.7.0",
@@ -23,6 +26,7 @@
     "eslint": "^9.0.0",
     "eslint-config-prettier": "^10.0.0",
     "prettier": "^3.4.0",
+    "tsx": "^4.0.0",
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.0.0",
     "vitest": "^3.0.0"

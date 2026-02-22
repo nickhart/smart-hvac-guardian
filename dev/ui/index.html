@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Smart HVAC Guardian — Dev Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #0f172a; color: #e2e8f0; padding: 16px;
+  }
+  h1 { font-size: 1.25rem; margin-bottom: 16px; color: #94a3b8; }
+  h2 { font-size: 1rem; margin-bottom: 12px; color: #cbd5e1; }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    height: calc(100vh - 80px);
+  }
+  @media (max-width: 900px) {
+    .grid { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; }
+  }
+
+  .panel {
+    background: #1e293b; border-radius: 8px; padding: 16px;
+    overflow-y: auto;
+  }
+
+  .card {
+    background: #334155; border-radius: 6px; padding: 12px;
+    margin-bottom: 8px; display: flex; align-items: center;
+    justify-content: space-between; gap: 8px;
+  }
+  .card-info { flex: 1; min-width: 0; }
+  .card-id { font-weight: 600; font-size: 0.875rem; word-break: break-all; }
+  .card-meta { font-size: 0.75rem; color: #94a3b8; margin-top: 2px; }
+
+  .badge {
+    display: inline-block; padding: 2px 8px; border-radius: 9999px;
+    font-size: 0.7rem; font-weight: 700; text-transform: uppercase;
+    white-space: nowrap;
+  }
+  .badge-open { background: #dc2626; color: #fff; }
+  .badge-closed { background: #16a34a; color: #fff; }
+  .badge-unknown { background: #6b7280; color: #fff; }
+  .badge-on { background: #2563eb; color: #fff; }
+  .badge-off { background: #6b7280; color: #fff; }
+  .badge-exterior { background: #7c3aed22; color: #a78bfa; border: 1px solid #7c3aed44; }
+  .badge-interior { background: #d9770622; color: #fb923c; border: 1px solid #d9770644; }
+
+  .btn {
+    padding: 4px 12px; border: none; border-radius: 4px; cursor: pointer;
+    font-size: 0.75rem; font-weight: 600; color: #fff; white-space: nowrap;
+  }
+  .btn-open { background: #dc2626; }
+  .btn-open:hover { background: #b91c1c; }
+  .btn-close { background: #16a34a; }
+  .btn-close:hover { background: #15803d; }
+  .btn-on { background: #2563eb; }
+  .btn-on:hover { background: #1d4ed8; }
+  .btn-off { background: #6b7280; }
+  .btn-off:hover { background: #4b5563; }
+
+  .timer-info {
+    font-size: 0.7rem; color: #fbbf24; margin-top: 4px;
+  }
+
+  .log-entry {
+    font-size: 0.75rem; padding: 6px 8px; border-bottom: 1px solid #334155;
+    font-family: "SF Mono", Monaco, "Cascadia Code", monospace;
+  }
+  .log-time { color: #64748b; }
+  .log-type { color: #38bdf8; font-weight: 600; }
+  .log-data { color: #94a3b8; }
+</style>
+</head>
+<body>
+
+<h1>Smart HVAC Guardian &mdash; Dev Dashboard</h1>
+
+<div class="grid">
+  <div class="panel" id="sensors-panel">
+    <h2>Sensors</h2>
+    <div id="sensors-list"></div>
+  </div>
+
+  <div class="panel" id="hvac-panel">
+    <h2>HVAC Units</h2>
+    <div id="hvac-list"></div>
+  </div>
+
+  <div class="panel" id="log-panel">
+    <h2>Event Log</h2>
+    <div id="log-list"></div>
+  </div>
+</div>
+
+<script>
+(function() {
+  // State
+  let sensors = [];
+  let hvacUnits = [];
+  let pendingTimers = [];
+  let logEntries = [];
+
+  // DOM refs
+  const sensorsList = document.getElementById('sensors-list');
+  const hvacList = document.getElementById('hvac-list');
+  const logList = document.getElementById('log-list');
+
+  // Timer countdown interval
+  let countdownInterval = null;
+
+  // --- API helpers ---
+  async function post(path, body) {
+    const res = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    return res.json();
+  }
+
+  // --- Render ---
+  function renderSensors() {
+    sensorsList.innerHTML = sensors.map(s => {
+      const stateClass = s.state === 'open' ? 'badge-open'
+        : s.state === 'closed' ? 'badge-closed' : 'badge-unknown';
+      const typeClass = s.type === 'exterior' ? 'badge-exterior' : 'badge-interior';
+      const isOpen = s.state === 'open';
+      return `<div class="card">
+        <div class="card-info">
+          <div class="card-id">${esc(s.id)}</div>
+          <div class="card-meta">
+            <span class="badge ${typeClass}">${esc(s.type)}</span>
+            <span class="badge ${stateClass}">${esc(s.state)}</span>
+            ${s.delay > 0 ? `<span style="margin-left:4px;font-size:0.7rem;color:#94a3b8">delay: ${s.delay}s</span>` : ''}
+          </div>
+        </div>
+        <button class="btn ${isOpen ? 'btn-close' : 'btn-open'}"
+          onclick="toggleSensor('${esc(s.id)}', ${isOpen})">
+          ${isOpen ? 'Close' : 'Open'}
+        </button>
+      </div>`;
+    }).join('');
+  }
+
+  function renderHVAC() {
+    hvacList.innerHTML = hvacUnits.map(u => {
+      const stateClass = u.state === 'on' ? 'badge-on' : 'badge-off';
+      const isOn = u.state === 'on';
+      const timer = pendingTimers.find(t => t.hvacUnitId === u.id);
+      const timerHtml = timer
+        ? `<div class="timer-info">Timer fires in <span class="countdown" data-fires-at="${timer.firesAt}"></span></div>`
+        : '';
+      return `<div class="card">
+        <div class="card-info">
+          <div class="card-id">${esc(u.name)}</div>
+          <div class="card-meta">
+            <span style="font-size:0.7rem;color:#64748b">${esc(u.id)}</span>
+            <span class="badge ${stateClass}">${esc(u.state)}</span>
+          </div>
+          ${timerHtml}
+        </div>
+        <button class="btn ${isOn ? 'btn-off' : 'btn-on'}"
+          onclick="toggleHVAC('${esc(u.id)}', ${isOn})">
+          ${isOn ? 'Turn Off' : 'Turn On'}
+        </button>
+      </div>`;
+    }).join('');
+    startCountdowns();
+  }
+
+  function renderLog() {
+    // Show newest first, limit to 200
+    const items = logEntries.slice(-200).reverse();
+    logList.innerHTML = items.map(e =>
+      `<div class="log-entry">
+        <span class="log-time">${e.time}</span>
+        <span class="log-type">${esc(e.type)}</span>
+        <span class="log-data">${esc(JSON.stringify(e.data))}</span>
+      </div>`
+    ).join('');
+  }
+
+  function startCountdowns() {
+    if (countdownInterval) clearInterval(countdownInterval);
+    countdownInterval = setInterval(() => {
+      document.querySelectorAll('.countdown').forEach(el => {
+        const firesAt = parseInt(el.dataset.firesAt, 10);
+        const remaining = Math.max(0, Math.ceil((firesAt - Date.now()) / 1000));
+        el.textContent = remaining + 's';
+        if (remaining <= 0) el.textContent = 'firing...';
+      });
+    }, 200);
+  }
+
+  // --- Actions ---
+  window.toggleSensor = async function(sensorId, isOpen) {
+    await post('/api/sensor-event', {
+      sensorId,
+      event: isOpen ? 'close' : 'open',
+    });
+  };
+
+  window.toggleHVAC = async function(unitId, isOn) {
+    if (isOn) {
+      // Just toggle state in mock (no real IFTTT)
+      await post('/api/dev/hvac-toggle', { unitId, state: 'off' });
+    } else {
+      // Turn on + send hvac-event
+      await post('/api/dev/hvac-toggle', { unitId, state: 'on' });
+      await post('/api/hvac-event', { hvacId: unitId, event: 'on' });
+    }
+  };
+
+  // --- SSE ---
+  function connectSSE() {
+    const es = new EventSource('/api/events');
+
+    const handleEvent = (type) => (e) => {
+      const data = JSON.parse(e.data);
+      const time = new Date().toLocaleTimeString();
+      logEntries.push({ time, type, data });
+      renderLog();
+
+      // Update local state based on event type
+      if (type === 'sensor-state') {
+        const s = sensors.find(x => x.id === data.sensorId);
+        if (s) { s.state = data.state; renderSensors(); }
+      }
+      if (type === 'hvac-turn-off' || type === 'hvac-state') {
+        const unitId = data.unitId;
+        const u = hvacUnits.find(x => x.id === unitId);
+        if (u) {
+          u.state = type === 'hvac-turn-off' ? 'off' : data.state;
+          renderHVAC();
+        }
+      }
+      if (type === 'timer-scheduled' || type === 'timer-fired' || type === 'timer-deleted') {
+        refreshState();
+      }
+    };
+
+    const eventTypes = [
+      'sensor-state', 'hvac-turn-off', 'hvac-state',
+      'timer-scheduled', 'timer-fired', 'timer-deleted',
+      'timer-set', 'timer-expired',
+    ];
+    eventTypes.forEach(t => es.addEventListener(t, handleEvent(t)));
+
+    es.onerror = () => {
+      // Reconnect handled by EventSource automatically
+    };
+  }
+
+  async function refreshState() {
+    try {
+      const res = await fetch('/api/dev/state');
+      const state = await res.json();
+      sensors = state.sensors;
+      hvacUnits = state.hvacUnits;
+      pendingTimers = state.pendingTimers;
+      renderSensors();
+      renderHVAC();
+    } catch { /* ignore */ }
+  }
+
+  // --- Init ---
+  refreshState().then(() => {
+    renderLog();
+    connectSSE();
+  });
+
+  function esc(str) {
+    if (typeof str !== 'string') str = String(str ?? '');
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+})();
+</script>
+</body>
+</html>
