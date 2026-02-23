@@ -23,11 +23,21 @@ sudo chown -R "$(id -u):$(id -g)" "$HOME/.claude"
 # Ensure required subdirectories exist (volume mount starts empty)
 mkdir -p "$HOME/.claude/debug" "$HOME/.claude/projects"
 
-# Set zsh prompt: user@devcontainer directory%
-echo 'PS1="%n@devcontainer %1~%# "' >> "$HOME/.zshrc"
+# Install Claude CLI (native installer)
+echo "Installing Claude CLI..."
+curl -fsSL https://claude.ai/install.sh | sh
+
+# Python venv + Tinybird CLI
+VENV_DIR="$HOME/.venv"
+if [ ! -d "$VENV_DIR" ]; then
+  echo "Creating Python venv..."
+  python3 -m venv "$VENV_DIR"
+fi
+echo "Installing Tinybird CLI..."
+"$VENV_DIR/bin/pip" install --quiet tinybird-cli
 
 # Global npm tools
-npm install -g eas-cli @anthropic-ai/claude-code
+npm install -g eas-cli
 
 # Git aliases
 git config --global alias.pushf 'push origin HEAD --force-with-lease'
