@@ -48,12 +48,13 @@ export class RedisStateStore implements StateStore {
   }
 
   async getSystemEnabled(): Promise<boolean> {
-    const val = await this.redis.get<string>("system:enabled");
-    return val !== "false";
+    const val = await this.redis.get("system:enabled");
+    if (val === false || val === "false") return false;
+    return true;
   }
 
   async setSystemEnabled(enabled: boolean): Promise<void> {
-    await this.redis.set("system:enabled", enabled ? "true" : "false");
+    await this.redis.set("system:enabled", String(enabled));
   }
 
   // --- Auth helpers (not part of StateStore interface) ---
