@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { handleSendOtp, type SendOtpDeps } from "../../../api/auth/send-otp";
+import { handleSendMagic, type SendMagicDeps } from "../../../api/auth/send-magic";
 import type { Logger } from "@/utils/logger";
 import type { EnvSecrets } from "@/config/schema";
 
@@ -21,15 +21,16 @@ const mockSecrets: EnvSecrets = {
   upstashRedisToken: "redis-token",
   resendApiKey: "re_test_123",
   ownerEmail: "owner@example.com",
+  appUrl: "https://myapp.example.com",
 };
 
-function createDeps(overrides?: Partial<SendOtpDeps>): SendOtpDeps {
+function createDeps(overrides?: Partial<SendMagicDeps>): SendMagicDeps {
   return {
     secrets: mockSecrets,
     authStore: {
-      setOtp: vi.fn().mockResolvedValue(undefined),
-      getOtp: vi.fn(),
-      deleteOtp: vi.fn(),
+      setMagicToken: vi.fn().mockResolvedValue(undefined),
+      getMagicToken: vi.fn(),
+      deleteMagicToken: vi.fn(),
       setSession: vi.fn(),
       getSession: vi.fn(),
       deleteSession: vi.fn(),
@@ -41,17 +42,17 @@ function createDeps(overrides?: Partial<SendOtpDeps>): SendOtpDeps {
 }
 
 function makeRequest(body: unknown, method = "POST"): Request {
-  return new Request("https://example.com/api/auth/send-otp", {
+  return new Request("https://example.com/api/auth/send-magic", {
     method,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
 }
 
-describe("send-otp handler", () => {
+describe("send-magic handler", () => {
   it("returns 405 for non-POST", async () => {
-    const req = new Request("https://example.com/api/auth/send-otp", { method: "GET" });
-    const res = await handleSendOtp(req, createDeps());
+    const req = new Request("https://example.com/api/auth/send-magic", { method: "GET" });
+    const res = await handleSendMagic(req, createDeps());
     expect(res.status).toBe(405);
   });
 
@@ -59,64 +60,67 @@ describe("send-otp handler", () => {
     const deps = createDeps({
       secrets: { ...mockSecrets, resendApiKey: undefined, ownerEmail: undefined },
     });
-    const res = await handleSendOtp(makeRequest({ email: "test@example.com" }), deps);
+    const res = await handleSendMagic(makeRequest({ email: "test@example.com" }), deps);
     expect(res.status).toBe(503);
   });
 
   it("returns 400 for invalid payload", async () => {
-    const res = await handleSendOtp(makeRequest({ bad: "data" }), createDeps());
+    const res = await handleSendMagic(makeRequest({ bad: "data" }), createDeps());
     expect(res.status).toBe(400);
   });
 
-  it("returns ok for unauthorized email without sending OTP", async () => {
+  it("returns ok for unauthorized email without storing token", async () => {
     const deps = createDeps();
-    const res = await handleSendOtp(makeRequest({ email: "stranger@example.com" }), deps);
+    const res = await handleSendMagic(makeRequest({ email: "stranger@example.com" }), deps);
     const body = (await res.json()) as Record<string, unknown>;
 
     expect(res.status).toBe(200);
     expect(body.status).toBe("ok");
-    expect(deps.authStore.setOtp).not.toHaveBeenCalled();
+    expect(deps.authStore.setMagicToken).not.toHaveBeenCalled();
     expect(deps.sendEmail).not.toHaveBeenCalled();
   });
 
-  it("stores OTP and sends email for authorized email", async () => {
+  it("stores magic token and sends email with link for authorized email", async () => {
     const deps = createDeps();
-    const res = await handleSendOtp(makeRequest({ email: "owner@example.com" }), deps);
+    const res = await handleSendMagic(makeRequest({ email: "owner@example.com" }), deps);
     const body = (await res.json()) as Record<string, unknown>;
 
     expect(res.status).toBe(200);
     expect(body.status).toBe("ok");
-    expect(deps.authStore.setOtp).toHaveBeenCalledWith(
-      "owner@example.com",
+    expect(deps.authStore.setMagicToken).toHaveBeenCalledWith(
       expect.any(String),
+      "owner@example.com",
       600,
     );
-    expect(deps.sendEmail).toHaveBeenCalledWith(
+
+    // Verify the email contains a magic link
+    const sendEmailMock = deps.sendEmail as ReturnType<typeof vi.fn>;
+    expect(sendEmailMock).toHaveBeenCalledWith(
       "owner@example.com",
-      "Your login code",
-      expect.stringContaining("login code"),
+      "Your login link",
+      expect.stringContaining("https://myapp.example.com/api/auth/magic?token="),
     );
   });
 
   it("handles case-insensitive email matching", async () => {
     const deps = createDeps();
-    const res = await handleSendOtp(makeRequest({ email: "Owner@Example.COM" }), deps);
+    const res = await handleSendMagic(makeRequest({ email: "Owner@Example.COM" }), deps);
     expect(res.status).toBe(200);
-    expect(deps.authStore.setOtp).toHaveBeenCalled();
+    expect(deps.authStore.setMagicToken).toHaveBeenCalled();
   });
 
   it("returns 500 on authStore failure", async () => {
     const deps = createDeps({
       authStore: {
-        setOtp: vi.fn().mockRejectedValue(new Error("Redis down")),
-        getOtp: vi.fn(),
-        deleteOtp: vi.fn(),
+        setMagicToken: vi.fn().mockRejectedValue(new Error("Redis down")),
+        getMagicToken: vi.fn(),
+        deleteMagicToken: vi.fn(),
         setSession: vi.fn(),
         getSession: vi.fn(),
         deleteSession: vi.fn(),
       },
     });
-    const res = await handleSendOtp(makeRequest({ email: "owner@example.com" }), deps);
+    const res = await handleSendMagic(makeRequest({ email: "owner@example.com" }), deps);
     expect(res.status).toBe(500);
   });
 });

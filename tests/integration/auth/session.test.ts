@@ -12,9 +12,9 @@ const mockLogger: Logger = {
 function createDeps(overrides?: Partial<SessionDeps>): SessionDeps {
   return {
     authStore: {
-      setOtp: vi.fn(),
-      getOtp: vi.fn(),
-      deleteOtp: vi.fn(),
+      setMagicToken: vi.fn(),
+      getMagicToken: vi.fn(),
+      deleteMagicToken: vi.fn(),
       setSession: vi.fn(),
       getSession: vi.fn().mockResolvedValue("owner@example.com"),
       deleteSession: vi.fn(),
@@ -43,9 +43,9 @@ describe("session handler", () => {
   it("returns unauthenticated when session not found in store", async () => {
     const deps = createDeps({
       authStore: {
-        setOtp: vi.fn(),
-        getOtp: vi.fn(),
-        deleteOtp: vi.fn(),
+        setMagicToken: vi.fn(),
+        getMagicToken: vi.fn(),
+        deleteMagicToken: vi.fn(),
         setSession: vi.fn(),
         getSession: vi.fn().mockResolvedValue(null),
         deleteSession: vi.fn(),
@@ -80,9 +80,9 @@ describe("session handler", () => {
   it("returns 500 on authStore failure", async () => {
     const deps = createDeps({
       authStore: {
-        setOtp: vi.fn(),
-        getOtp: vi.fn(),
-        deleteOtp: vi.fn(),
+        setMagicToken: vi.fn(),
+        getMagicToken: vi.fn(),
+        deleteMagicToken: vi.fn(),
         setSession: vi.fn(),
         getSession: vi.fn().mockRejectedValue(new Error("Redis down")),
         deleteSession: vi.fn(),

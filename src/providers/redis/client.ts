@@ -59,16 +59,16 @@ export class RedisStateStore implements StateStore {
 
   // --- Auth helpers (not part of StateStore interface) ---
 
-  async setOtp(email: string, code: string, ttlSeconds: number): Promise<void> {
-    await this.redis.set(`otp:${email}`, code, { ex: ttlSeconds });
+  async setMagicToken(token: string, email: string, ttlSeconds: number): Promise<void> {
+    await this.redis.set(`magic:${token}`, email, { ex: ttlSeconds });
   }
 
-  async getOtp(email: string): Promise<string | null> {
-    return this.redis.get<string>(`otp:${email}`);
+  async getMagicToken(token: string): Promise<string | null> {
+    return this.redis.get<string>(`magic:${token}`);
   }
 
-  async deleteOtp(email: string): Promise<void> {
-    await this.redis.del(`otp:${email}`);
+  async deleteMagicToken(token: string): Promise<void> {
+    await this.redis.del(`magic:${token}`);
   }
 
   async setSession(token: string, email: string, ttlSeconds: number): Promise<void> {

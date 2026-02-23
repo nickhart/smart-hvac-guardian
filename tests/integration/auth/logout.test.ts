@@ -12,9 +12,9 @@ const mockLogger: Logger = {
 function createDeps(overrides?: Partial<LogoutDeps>): LogoutDeps {
   return {
     authStore: {
-      setOtp: vi.fn(),
-      getOtp: vi.fn(),
-      deleteOtp: vi.fn(),
+      setMagicToken: vi.fn(),
+      getMagicToken: vi.fn(),
+      deleteMagicToken: vi.fn(),
       setSession: vi.fn(),
       getSession: vi.fn(),
       deleteSession: vi.fn().mockResolvedValue(undefined),
@@ -60,9 +60,9 @@ describe("logout handler", () => {
   it("returns 500 on authStore failure", async () => {
     const deps = createDeps({
       authStore: {
-        setOtp: vi.fn(),
-        getOtp: vi.fn(),
-        deleteOtp: vi.fn(),
+        setMagicToken: vi.fn(),
+        getMagicToken: vi.fn(),
+        deleteMagicToken: vi.fn(),
         setSession: vi.fn(),
         getSession: vi.fn(),
         deleteSession: vi.fn().mockRejectedValue(new Error("Redis down")),

@@ -10,18 +10,25 @@ import { createLogger } from "../../src/utils/logger.js";
 import type { Logger } from "../../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../../src/utils/response.js";
 
-const SendOtpPayload = z.object({
+const SendMagicPayload = z.object({
   email: z.string().email(),
 });
 
-export interface SendOtpDeps {
+export interface SendMagicDeps {
   secrets: EnvSecrets;
   authStore: AuthStore;
   logger: Logger;
   sendEmail: (to: string, subject: string, text: string) => Promise<void>;
 }
 
-export async function handleSendOtp(request: Request, deps?: SendOtpDeps): Promise<Response> {
+function resolveAppUrl(secrets: EnvSecrets): string {
+  if (secrets.appUrl) return secrets.appUrl;
+  const vercelUrl = process.env.VERCEL_URL;
+  if (vercelUrl) return `https://${vercelUrl}`;
+  return "http://localhost:3000";
+}
+
+export async function handleSendMagic(request: Request, deps?: SendMagicDeps): Promise<Response> {
   const logger = deps?.logger ?? createLogger();
   const requestId = crypto.randomUUID().slice(0, 8);
 
@@ -38,7 +45,7 @@ export async function handleSendOtp(request: Request, deps?: SendOtpDeps): Promi
     }
 
     const body = await request.json().catch(() => null);
-    const parsed = SendOtpPayload.safeParse(body);
+    const parsed = SendMagicPayload.safeParse(body);
 
     if (!parsed.success) {
       return errorResponse("Invalid payload", 400);
@@ -52,11 +59,7 @@ export async function handleSendOtp(request: Request, deps?: SendOtpDeps): Promi
       return jsonResponse({ status: "ok" });
     }
 
-    // Generate 6-digit OTP
-    const code = Array.from(crypto.getRandomValues(new Uint8Array(3)))
-      .map((b) => (b % 10).toString())
-      .join("")
-      .padStart(6, "0");
+    const token = crypto.randomUUID();
 
     const authStore =
       deps?.authStore ??
@@ -64,7 +67,10 @@ export async function handleSendOtp(request: Request, deps?: SendOtpDeps): Promi
         url: secrets.upstashRedisUrl,
         token: secrets.upstashRedisToken,
       });
-    await authStore.setOtp(email.toLowerCase(), code, 600);
+    await authStore.setMagicToken(token, email.toLowerCase(), 600);
+
+    const appUrl = resolveAppUrl(secrets);
+    const magicLink = `${appUrl}/api/auth/magic?token=${token}`;
 
     const sendEmail =
       deps?.sendEmail ??
@@ -80,14 +86,14 @@ export async function handleSendOtp(request: Request, deps?: SendOtpDeps): Promi
 
     await sendEmail(
       email,
-      "Your login code",
-      `Your HVAC Guardian login code is: ${code}\n\nThis code expires in 10 minutes.`,
+      "Your login link",
+      `Click the link below to log in to HVAC Guardian:\n\n${magicLink}\n\nThis link expires in 10 minutes.`,
     );
 
-    logger.info("OTP sent", { requestId, email: email.toLowerCase() });
+    logger.info("Magic link sent", { requestId, email: email.toLowerCase() });
     return jsonResponse({ status: "ok" });
   } catch (error) {
-    logger.error("send-otp error", {
+    logger.error("send-magic error", {
       requestId,
       error: error instanceof Error ? error.message : String(error),
     });
@@ -96,5 +102,5 @@ export async function handleSendOtp(request: Request, deps?: SendOtpDeps): Promi
 }
 
 export default async function handler(request: Request): Promise<Response> {
-  return handleSendOtp(request);
+  return handleSendMagic(request);
 }

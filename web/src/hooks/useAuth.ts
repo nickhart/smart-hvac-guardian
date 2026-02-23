@@ -26,15 +26,10 @@ export function useAuth() {
       .catch(() => setState({ loading: false, authenticated: false }));
   }, []);
 
-  const login = useCallback(async (email: string, code: string) => {
-    await api.verifyOtp(email, code);
-    setState({ loading: false, authenticated: true, email });
-  }, []);
-
   const handleLogout = useCallback(async () => {
     await api.logout();
     setState({ loading: false, authenticated: false });
   }, []);
 
-  return { ...state, login, logout: handleLogout };
+  return { ...state, logout: handleLogout };
 }

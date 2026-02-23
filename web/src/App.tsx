@@ -3,7 +3,7 @@ import { LoginForm } from "./components/LoginForm";
 import { Dashboard } from "./components/Dashboard";
 
 export function App() {
-  const { loading, authenticated, login, logout } = useAuth();
+  const { loading, authenticated, logout } = useAuth();
 
   if (loading) {
     return (
@@ -14,7 +14,7 @@ export function App() {
   }
 
   if (!authenticated) {
-    return <LoginForm onLogin={login} />;
+    return <LoginForm />;
   }
 
   return <Dashboard onLogout={logout} />;

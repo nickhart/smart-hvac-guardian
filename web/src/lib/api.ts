@@ -29,19 +29,11 @@ export async function checkSession(): Promise<SessionResponse> {
   return fetchJson<SessionResponse>("/api/auth/session");
 }
 
-export async function sendOtp(email: string): Promise<void> {
-  await fetchJson("/api/auth/send-otp", {
+export async function sendMagicLink(email: string): Promise<void> {
+  await fetchJson("/api/auth/send-magic", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email }),
-  });
-}
-
-export async function verifyOtp(email: string, code: string): Promise<{ authenticated: boolean }> {
-  return fetchJson("/api/auth/verify-otp", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, code }),
   });
 }
 
