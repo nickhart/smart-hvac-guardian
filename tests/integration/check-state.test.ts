@@ -33,6 +33,8 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
       getActiveTimerUnitIds: vi.fn().mockResolvedValue(["ac_living"]),
       getSystemEnabled: vi.fn().mockResolvedValue(true),
       setSystemEnabled: vi.fn().mockResolvedValue(undefined),
+      getUnitDelay: vi.fn().mockResolvedValue(null),
+      setUnitDelay: vi.fn().mockResolvedValue(undefined),
     },
     analytics: {
       trackSensorEvent: vi.fn().mockResolvedValue(undefined),
@@ -55,9 +57,10 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
       },
       sensorDelays: { front_door: 90, bedroom_window: 120 },
       hvacUnits: {
-        ac_living: { name: "Living Room AC", iftttEvent: "turn_off_ac_living" },
-        ac_bedroom: { name: "Bedroom AC", iftttEvent: "turn_off_ac_bedroom" },
+        ac_living: { name: "Living Room AC", iftttEvent: "turn_off_ac_living", delaySeconds: 90 },
+        ac_bedroom: { name: "Bedroom AC", iftttEvent: "turn_off_ac_bedroom", delaySeconds: 120 },
       },
+      sensorNames: {},
       sensorDefaults: {},
       yolink: { baseUrl: "https://api.yosmart.com/open/yolink/v2/api" },
       turnOffUrl: "https://example.com/api/hvac-turn-off",
@@ -86,6 +89,15 @@ describe("check-state diagnostic handler", () => {
     expect(body.exposedUnits).toEqual(["ac_living"]);
     expect(body.unexposedUnits).toEqual(["ac_bedroom"]);
     expect(body.activeTimers).toEqual(["ac_living"]);
+    expect(body.sensorNames).toEqual({});
+    expect(body.unitNames).toEqual({
+      ac_living: "Living Room AC",
+      ac_bedroom: "Bedroom AC",
+    });
+    expect(body.unitDelays).toEqual({
+      ac_living: 90,
+      ac_bedroom: 120,
+    });
   });
 
   it("returns 500 on state store failure", async () => {
@@ -99,6 +111,8 @@ describe("check-state diagnostic handler", () => {
         getActiveTimerUnitIds: vi.fn(),
         getSystemEnabled: vi.fn(),
         setSystemEnabled: vi.fn(),
+        getUnitDelay: vi.fn().mockResolvedValue(null),
+        setUnitDelay: vi.fn(),
       },
     });
     const req = new Request("https://example.com/api/check-state", { method: "GET" });

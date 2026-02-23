@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { getCheckState, type CheckStateResponse } from "../lib/api";
+import { getCheckState, setUnitDelay, type CheckStateResponse } from "../lib/api";
 import { SensorCard } from "./SensorCard";
 import { HvacUnitCard } from "./HvacUnitCard";
 import { SystemToggle } from "./SystemToggle";
@@ -39,6 +39,23 @@ export function Dashboard({ onLogout }: DashboardProps) {
     };
   }, [refresh, startPolling]);
 
+  const handleDelayChange = useCallback(
+    async (unitId: string, delaySeconds: number) => {
+      // Optimistic update
+      setState((prev) =>
+        prev ? { ...prev, unitDelays: { ...prev.unitDelays, [unitId]: delaySeconds } } : prev,
+      );
+      try {
+        await setUnitDelay(unitId, delaySeconds);
+        await refresh();
+      } catch (err) {
+        setError(err instanceof Error ? err.message : "Failed to update delay");
+        await refresh();
+      }
+    },
+    [refresh],
+  );
+
   if (!state) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -70,18 +87,13 @@ export function Dashboard({ onLogout }: DashboardProps) {
               refresh();
             }}
           />
-          <button
-            onClick={onLogout}
-            className="text-sm text-gray-500 hover:text-gray-700"
-          >
+          <button onClick={onLogout} className="text-sm text-gray-500 hover:text-gray-700">
             Logout
           </button>
         </div>
       </header>
 
-      {error && (
-        <p className="text-red-600 text-sm mb-4">{error}</p>
-      )}
+      {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
 
       {!state.systemEnabled && (
         <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-3 mb-4 text-sm text-yellow-800">
@@ -100,6 +112,7 @@ export function Dashboard({ onLogout }: DashboardProps) {
               sensorId={id}
               state={state.sensorStates[id]}
               isOffline={offlineSet.has(id)}
+              displayName={state.sensorNames?.[id]}
             />
           ))}
         </div>
@@ -116,6 +129,9 @@ export function Dashboard({ onLogout }: DashboardProps) {
               unitId={id}
               isExposed={exposedSet.has(id)}
               hasActiveTimer={timerSet.has(id)}
+              displayName={state.unitNames?.[id]}
+              delaySeconds={state.unitDelays?.[id]}
+              onDelayChange={handleDelayChange}
             />
           ))}
         </div>

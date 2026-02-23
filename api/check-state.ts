@@ -6,6 +6,7 @@ import type { Dependencies } from "../src/handlers/dependencies.js";
 import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
 import { evaluateZoneGraph } from "../src/zone-graph/index.js";
+import { getDelayForUnit } from "../src/utils/delay.js";
 
 export async function handleCheckState(request: Request, deps?: Dependencies): Promise<Response> {
   const logger = deps?.logger ?? createLogger();
@@ -56,10 +57,21 @@ export async function handleCheckState(request: Request, deps?: Dependencies): P
       activeTimers: activeTimerUnitIds,
     });
 
+    // Build unit names and resolved delays
+    const unitNames: Record<string, string> = {};
+    const unitDelays: Record<string, number> = {};
+    for (const unitId of Object.keys(d.config.hvacUnits)) {
+      unitNames[unitId] = d.config.hvacUnits[unitId].name;
+      unitDelays[unitId] = await getDelayForUnit(unitId, d.stateStore, d.config);
+    }
+
     return jsonResponse({
       status: "ok",
       systemEnabled,
       sensorStates: sensorStateObj,
+      sensorNames: d.config.sensorNames,
+      unitNames,
+      unitDelays,
       exposedUnits: [...exposedUnits],
       unexposedUnits: [...unexposedUnits],
       activeTimers: activeTimerUnitIds,

@@ -42,9 +42,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
   return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="bg-white rounded-lg shadow-md p-8 w-full max-w-sm">
-        <h1 className="text-xl font-semibold mb-6 text-center">
-          HVAC Guardian
-        </h1>
+        <h1 className="text-xl font-semibold mb-6 text-center">HVAC Guardian</h1>
 
         {step === "email" ? (
           <form onSubmit={handleSendOtp}>
@@ -58,9 +56,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
               required
               autoFocus
             />
-            {error && (
-              <p className="text-red-600 text-sm mb-3">{error}</p>
-            )}
+            {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
             <button
               type="submit"
               disabled={sending}
@@ -71,9 +67,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
           </form>
         ) : (
           <form onSubmit={handleVerify}>
-            <p className="text-sm text-gray-600 mb-4">
-              Check your email for a 6-digit code.
-            </p>
+            <p className="text-sm text-gray-600 mb-4">Check your email for a 6-digit code.</p>
             <label className="block text-sm font-medium mb-1">Code</label>
             <input
               type="text"
@@ -87,9 +81,7 @@ export function LoginForm({ onLogin }: LoginFormProps) {
               required
               autoFocus
             />
-            {error && (
-              <p className="text-red-600 text-sm mb-3">{error}</p>
-            )}
+            {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
             <button
               type="submit"
               disabled={sending || code.length !== 6}

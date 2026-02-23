@@ -29,10 +29,12 @@ const TEST_CONFIG = JSON.stringify({
     ac_living: {
       name: "Living Room AC",
       iftttEvent: "turn_off_ac_living",
+      delaySeconds: 5,
     },
     ac_bedroom: {
       name: "Bedroom AC",
       iftttEvent: "turn_off_ac_bedroom",
+      delaySeconds: 5,
     },
   },
   yolink: { baseUrl: "https://api.yosmart.com/open/yolink/v2/api" },

@@ -2,9 +2,10 @@ interface SensorCardProps {
   sensorId: string;
   state: string;
   isOffline: boolean;
+  displayName?: string;
 }
 
-export function SensorCard({ sensorId, state, isOffline }: SensorCardProps) {
+export function SensorCard({ sensorId, state, isOffline, displayName }: SensorCardProps) {
   const isOpen = state === "open";
 
   return (
@@ -19,7 +20,7 @@ export function SensorCard({ sensorId, state, isOffline }: SensorCardProps) {
     >
       <div className="flex items-center justify-between">
         <span className="text-sm font-medium truncate">
-          {sensorId.replace(/_/g, " ")}
+          {displayName ?? sensorId.replace(/_/g, " ")}
         </span>
         <span
           className={`text-xs font-semibold px-2 py-0.5 rounded-full ${

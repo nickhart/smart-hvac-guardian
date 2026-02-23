@@ -82,6 +82,15 @@ export class RedisStateStore implements StateStore {
     await this.redis.del(`session:${token}`);
   }
 
+  async getUnitDelay(hvacUnitId: string): Promise<number | null> {
+    const val = await this.redis.get<number>(`delay:${hvacUnitId}`);
+    return val ?? null;
+  }
+
+  async setUnitDelay(hvacUnitId: string, delaySeconds: number): Promise<void> {
+    await this.redis.set(`delay:${hvacUnitId}`, delaySeconds);
+  }
+
   async getActiveTimerUnitIds(): Promise<string[]> {
     const keys: string[] = [];
     let cursor = "0";

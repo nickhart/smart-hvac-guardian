@@ -11,10 +11,7 @@ const TogglePayload = z.object({
   enabled: z.boolean(),
 });
 
-export async function handleSystemToggle(
-  request: Request,
-  deps?: Dependencies,
-): Promise<Response> {
+export async function handleSystemToggle(request: Request, deps?: Dependencies): Promise<Response> {
   const logger = deps?.logger ?? createLogger();
   const requestId = crypto.randomUUID().slice(0, 8);
 

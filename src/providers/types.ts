@@ -64,4 +64,6 @@ export interface StateStore {
   getActiveTimerUnitIds(): Promise<string[]>;
   getSystemEnabled(): Promise<boolean>;
   setSystemEnabled(enabled: boolean): Promise<void>;
+  getUnitDelay(hvacUnitId: string): Promise<number | null>;
+  setUnitDelay(hvacUnitId: string, delaySeconds: number): Promise<void>;
 }

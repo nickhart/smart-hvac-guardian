@@ -56,6 +56,7 @@ interface TimerEntry {
 export class InMemoryStateStore implements StateStore {
   private sensors = new Map<string, SensorState>();
   private timers = new Map<string, TimerEntry>();
+  private unitDelays = new Map<string, number>();
   private systemEnabled = true;
   private onChange: ((type: string, data: unknown) => void) | undefined;
 
@@ -119,6 +120,15 @@ export class InMemoryStateStore implements StateStore {
   async setSystemEnabled(enabled: boolean): Promise<void> {
     this.systemEnabled = enabled;
     this.onChange?.("system-enabled", { enabled });
+  }
+
+  async getUnitDelay(hvacUnitId: string): Promise<number | null> {
+    return this.unitDelays.get(hvacUnitId) ?? null;
+  }
+
+  async setUnitDelay(hvacUnitId: string, delaySeconds: number): Promise<void> {
+    this.unitDelays.set(hvacUnitId, delaySeconds);
+    this.onChange?.("unit-delay", { hvacUnitId, delaySeconds });
   }
 
   /** For UI/E2E introspection */

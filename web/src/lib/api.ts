@@ -2,6 +2,9 @@ export interface CheckStateResponse {
   status: string;
   systemEnabled: boolean;
   sensorStates: Record<string, string>;
+  sensorNames: Record<string, string>;
+  unitNames: Record<string, string>;
+  unitDelays: Record<string, number>;
   exposedUnits: string[];
   unexposedUnits: string[];
   activeTimers: string[];
@@ -34,10 +37,7 @@ export async function sendOtp(email: string): Promise<void> {
   });
 }
 
-export async function verifyOtp(
-  email: string,
-  code: string,
-): Promise<{ authenticated: boolean }> {
+export async function verifyOtp(email: string, code: string): Promise<{ authenticated: boolean }> {
   return fetchJson("/api/auth/verify-otp", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -53,9 +53,18 @@ export async function getCheckState(): Promise<CheckStateResponse> {
   return fetchJson<CheckStateResponse>("/api/check-state");
 }
 
-export async function setSystemToggle(
-  enabled: boolean,
-): Promise<{ enabled: boolean }> {
+export async function setUnitDelay(
+  unitId: string,
+  delaySeconds: number,
+): Promise<{ status: string; unitId: string; delaySeconds: number }> {
+  return fetchJson("/api/unit-delay", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ unitId, delaySeconds }),
+  });
+}
+
+export async function setSystemToggle(enabled: boolean): Promise<{ enabled: boolean }> {
   return fetchJson("/api/system-toggle", {
     method: "POST",
     headers: { "Content-Type": "application/json" },

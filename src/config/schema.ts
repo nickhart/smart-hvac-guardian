@@ -14,6 +14,7 @@ export const ZoneConfigSchema = z.object({
 export const HVACUnitSchema = z.object({
   name: z.string().min(1),
   iftttEvent: z.string().min(1),
+  delaySeconds: z.number().int().positive().default(300),
 });
 
 export const YoLinkConfigSchema = z.object({
@@ -25,6 +26,7 @@ export const AppConfigSchema = z
     zones: z.record(z.string(), ZoneConfigSchema),
     sensorDelays: z.record(z.string(), z.number().int().nonnegative()),
     hvacUnits: z.record(z.string(), HVACUnitSchema),
+    sensorNames: z.record(z.string(), z.string().min(1)).default({}),
     sensorDefaults: z.record(z.string(), z.enum(["open", "closed"])).default({}),
     yolink: YoLinkConfigSchema,
     turnOffUrl: z.string().url(),

@@ -6,12 +6,8 @@ import { createDependencies } from "../src/handlers/dependencies.js";
 import type { Dependencies } from "../src/handlers/dependencies.js";
 import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
-import {
-  evaluateZoneGraph,
-  getOpenExteriorSensors,
-  getConnectedComponents,
-} from "../src/zone-graph/index.js";
-import type { SensorState } from "../src/zone-graph/index.js";
+import { evaluateZoneGraph } from "../src/zone-graph/index.js";
+import { getDelayForUnit } from "../src/utils/delay.js";
 
 const HvacEventPayload = z.object({
   hvacId: z.string().min(1),
@@ -103,12 +99,7 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
     }
 
     // Unit is exposed — schedule turn-off timer
-    const delaySeconds = getMinDelayForUnit(
-      hvacId,
-      d.config.zones,
-      d.config.sensorDelays,
-      sensorStates,
-    );
+    const delaySeconds = await getDelayForUnit(hvacId, d.stateStore, d.config);
     const token = crypto.randomUUID();
     const ttl = delaySeconds + 60;
 
@@ -156,43 +147,6 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
     });
     return errorResponse("Internal server error", 500);
   }
-}
-
-function getMinDelayForUnit(
-  unitId: string,
-  zones: Dependencies["config"]["zones"],
-  sensorDelays: Dependencies["config"]["sensorDelays"],
-  sensorStates: Map<string, SensorState>,
-): number {
-  const components = getConnectedComponents(zones, sensorStates);
-
-  for (const component of components) {
-    let hasUnit = false;
-    for (const zoneId of component) {
-      const zone = zones[zoneId];
-      if (zone && zone.minisplits.includes(unitId)) {
-        hasUnit = true;
-        break;
-      }
-    }
-
-    if (!hasUnit) continue;
-
-    const openSensors = getOpenExteriorSensors(component, zones, sensorStates);
-    if (openSensors.length === 0) continue;
-
-    let minDelay = Infinity;
-    for (const sensorId of openSensors) {
-      const delay = sensorDelays[sensorId];
-      if (delay !== undefined && delay < minDelay) {
-        minDelay = delay;
-      }
-    }
-
-    return minDelay === Infinity ? 90 : minDelay;
-  }
-
-  return 90;
 }
 
 export default async function handler(request: Request): Promise<Response> {

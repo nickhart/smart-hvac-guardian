@@ -28,6 +28,8 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
       getActiveTimerUnitIds: vi.fn(),
       getSystemEnabled: vi.fn().mockResolvedValue(true),
       setSystemEnabled: vi.fn(),
+      getUnitDelay: vi.fn().mockResolvedValue(null),
+      setUnitDelay: vi.fn(),
     },
     analytics: {
       trackSensorEvent: vi.fn().mockResolvedValue(undefined),
@@ -45,8 +47,9 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
       },
       sensorDelays: { front_door: 90 },
       hvacUnits: {
-        ac_living: { name: "Living Room AC", iftttEvent: "turn_off_ac_living" },
+        ac_living: { name: "Living Room AC", iftttEvent: "turn_off_ac_living", delaySeconds: 90 },
       },
+      sensorNames: {},
       sensorDefaults: {},
       yolink: { baseUrl: "https://api.yosmart.com/open/yolink/v2/api" },
       turnOffUrl: "https://example.com/api/hvac-turn-off",
@@ -105,6 +108,8 @@ describe("hvac-turn-off handler", () => {
         getActiveTimerUnitIds: vi.fn(),
         getSystemEnabled: vi.fn().mockResolvedValue(true),
         setSystemEnabled: vi.fn(),
+        getUnitDelay: vi.fn().mockResolvedValue(null),
+        setUnitDelay: vi.fn(),
       },
     });
 
@@ -132,6 +137,8 @@ describe("hvac-turn-off handler", () => {
         getActiveTimerUnitIds: vi.fn(),
         getSystemEnabled: vi.fn().mockResolvedValue(true),
         setSystemEnabled: vi.fn(),
+        getUnitDelay: vi.fn().mockResolvedValue(null),
+        setUnitDelay: vi.fn(),
       },
     });
 
@@ -157,6 +164,8 @@ describe("hvac-turn-off handler", () => {
         getActiveTimerUnitIds: vi.fn(),
         getSystemEnabled: vi.fn().mockResolvedValue(true),
         setSystemEnabled: vi.fn(),
+        getUnitDelay: vi.fn().mockResolvedValue(null),
+        setUnitDelay: vi.fn(),
       },
     });
 
@@ -182,6 +191,8 @@ describe("hvac-turn-off handler", () => {
         getActiveTimerUnitIds: vi.fn(),
         getSystemEnabled: vi.fn().mockResolvedValue(true),
         setSystemEnabled: vi.fn(),
+        getUnitDelay: vi.fn().mockResolvedValue(null),
+        setUnitDelay: vi.fn(),
       },
     });
 

@@ -6,13 +6,10 @@ import { createDependencies } from "../src/handlers/dependencies.js";
 import type { Dependencies } from "../src/handlers/dependencies.js";
 import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
-import {
-  evaluateZoneGraph,
-  getOpenExteriorSensors,
-  getConnectedComponents,
-} from "../src/zone-graph/index.js";
+import { evaluateZoneGraph } from "../src/zone-graph/index.js";
 import { computeTimerActions } from "../src/zone-graph/index.js";
 import type { SensorState } from "../src/zone-graph/index.js";
+import { getDelayForUnit } from "../src/utils/delay.js";
 
 const SensorEventPayload = z.object({
   sensorId: z.string().min(1),
@@ -100,12 +97,7 @@ export async function handleSensorEvent(request: Request, deps?: Dependencies): 
     // 6. Schedule new timers for newly exposed units
     for (const unitId of schedule) {
       // Find which component this unit belongs to, get min delay of open exterior sensors
-      const delaySeconds = getMinDelayForUnit(
-        unitId,
-        d.config.zones,
-        d.config.sensorDelays,
-        sensorStates,
-      );
+      const delaySeconds = await getDelayForUnit(unitId, d.stateStore, d.config);
       const token = crypto.randomUUID();
       const ttl = delaySeconds + 60; // buffer for QStash delivery
 
@@ -148,51 +140,6 @@ export async function handleSensorEvent(request: Request, deps?: Dependencies): 
     });
     return errorResponse("Internal server error", 500);
   }
-}
-
-/**
- * Find the minimum delay for a given HVAC unit based on open exterior sensors
- * in its connected component.
- */
-function getMinDelayForUnit(
-  unitId: string,
-  zones: Dependencies["config"]["zones"],
-  sensorDelays: Dependencies["config"]["sensorDelays"],
-  sensorStates: Map<string, SensorState>,
-): number {
-  // Find which zone(s) contain this unit
-  const components = getConnectedComponents(zones, sensorStates);
-
-  for (const component of components) {
-    // Check if this component contains the unit
-    let hasUnit = false;
-    for (const zoneId of component) {
-      const zone = zones[zoneId];
-      if (zone && zone.minisplits.includes(unitId)) {
-        hasUnit = true;
-        break;
-      }
-    }
-
-    if (!hasUnit) continue;
-
-    // Get open exterior sensors in this component
-    const openSensors = getOpenExteriorSensors(component, zones, sensorStates);
-    if (openSensors.length === 0) continue;
-
-    // Return min delay
-    let minDelay = Infinity;
-    for (const sensorId of openSensors) {
-      const delay = sensorDelays[sensorId];
-      if (delay !== undefined && delay < minDelay) {
-        minDelay = delay;
-      }
-    }
-
-    return minDelay === Infinity ? 90 : minDelay; // fallback to 90s
-  }
-
-  return 90; // default fallback
 }
 
 export default async function handler(request: Request): Promise<Response> {

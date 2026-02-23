@@ -34,6 +34,8 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
       getActiveTimerUnitIds: vi.fn().mockResolvedValue([]),
       getSystemEnabled: vi.fn().mockResolvedValue(true),
       setSystemEnabled: vi.fn().mockResolvedValue(undefined),
+      getUnitDelay: vi.fn().mockResolvedValue(null),
+      setUnitDelay: vi.fn().mockResolvedValue(undefined),
     },
     analytics: {
       trackSensorEvent: vi.fn().mockResolvedValue(undefined),
@@ -60,9 +62,10 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
         door_bedroom: 0,
       },
       hvacUnits: {
-        ac_living: { name: "Living Room AC", iftttEvent: "turn_off_ac_living" },
-        ac_bedroom: { name: "Bedroom AC", iftttEvent: "turn_off_ac_bedroom" },
+        ac_living: { name: "Living Room AC", iftttEvent: "turn_off_ac_living", delaySeconds: 90 },
+        ac_bedroom: { name: "Bedroom AC", iftttEvent: "turn_off_ac_bedroom", delaySeconds: 120 },
       },
+      sensorNames: {},
       sensorDefaults: {},
       yolink: { baseUrl: "https://api.yosmart.com/open/yolink/v2/api" },
       turnOffUrl: "https://example.com/api/hvac-turn-off",
@@ -121,6 +124,8 @@ describe("sensor-event handler", () => {
         getActiveTimerUnitIds: vi.fn().mockResolvedValue([]),
         getSystemEnabled: vi.fn().mockResolvedValue(true),
         setSystemEnabled: vi.fn().mockResolvedValue(undefined),
+        getUnitDelay: vi.fn().mockResolvedValue(null),
+        setUnitDelay: vi.fn().mockResolvedValue(undefined),
       },
     });
 
@@ -163,6 +168,8 @@ describe("sensor-event handler", () => {
         getActiveTimerUnitIds: vi.fn().mockResolvedValue(["ac_living"]),
         getSystemEnabled: vi.fn().mockResolvedValue(true),
         setSystemEnabled: vi.fn().mockResolvedValue(undefined),
+        getUnitDelay: vi.fn().mockResolvedValue(null),
+        setUnitDelay: vi.fn().mockResolvedValue(undefined),
       },
     });
 
@@ -195,6 +202,8 @@ describe("sensor-event handler", () => {
         getActiveTimerUnitIds: vi.fn(),
         getSystemEnabled: vi.fn().mockResolvedValue(true),
         setSystemEnabled: vi.fn(),
+        getUnitDelay: vi.fn().mockResolvedValue(null),
+        setUnitDelay: vi.fn(),
       },
     });
     const res = await handleSensorEvent(
@@ -222,10 +231,11 @@ describe("sensor-event handler", () => {
           },
         },
         sensorDelays: { front_door: 90, bedroom_window: 120, door_bedroom: 0 },
+        sensorNames: {},
         sensorDefaults: { door_bedroom: "open" },
         hvacUnits: {
-          ac_living: { name: "Living Room AC", iftttEvent: "turn_off_ac_living" },
-          ac_bedroom: { name: "Bedroom AC", iftttEvent: "turn_off_ac_bedroom" },
+          ac_living: { name: "Living Room AC", iftttEvent: "turn_off_ac_living", delaySeconds: 90 },
+          ac_bedroom: { name: "Bedroom AC", iftttEvent: "turn_off_ac_bedroom", delaySeconds: 120 },
         },
         yolink: { baseUrl: "https://api.yosmart.com/open/yolink/v2/api" },
         turnOffUrl: "https://example.com/api/hvac-turn-off",
@@ -245,6 +255,8 @@ describe("sensor-event handler", () => {
         getActiveTimerUnitIds: vi.fn().mockResolvedValue([]),
         getSystemEnabled: vi.fn().mockResolvedValue(true),
         setSystemEnabled: vi.fn().mockResolvedValue(undefined),
+        getUnitDelay: vi.fn().mockResolvedValue(null),
+        setUnitDelay: vi.fn().mockResolvedValue(undefined),
       },
     });
 
@@ -276,10 +288,11 @@ describe("sensor-event handler", () => {
           },
         },
         sensorDelays: { front_door: 90, bedroom_window: 120, door_bedroom: 0 },
+        sensorNames: {},
         sensorDefaults: { door_bedroom: "open" },
         hvacUnits: {
-          ac_living: { name: "Living Room AC", iftttEvent: "turn_off_ac_living" },
-          ac_bedroom: { name: "Bedroom AC", iftttEvent: "turn_off_ac_bedroom" },
+          ac_living: { name: "Living Room AC", iftttEvent: "turn_off_ac_living", delaySeconds: 90 },
+          ac_bedroom: { name: "Bedroom AC", iftttEvent: "turn_off_ac_bedroom", delaySeconds: 120 },
         },
         yolink: { baseUrl: "https://api.yosmart.com/open/yolink/v2/api" },
         turnOffUrl: "https://example.com/api/hvac-turn-off",
@@ -299,6 +312,8 @@ describe("sensor-event handler", () => {
         getActiveTimerUnitIds: vi.fn().mockResolvedValue([]),
         getSystemEnabled: vi.fn().mockResolvedValue(true),
         setSystemEnabled: vi.fn().mockResolvedValue(undefined),
+        getUnitDelay: vi.fn().mockResolvedValue(null),
+        setUnitDelay: vi.fn().mockResolvedValue(undefined),
       },
     });
 
@@ -324,6 +339,8 @@ describe("sensor-event handler", () => {
         getActiveTimerUnitIds: vi.fn(),
         getSystemEnabled: vi.fn().mockResolvedValue(false),
         setSystemEnabled: vi.fn(),
+        getUnitDelay: vi.fn().mockResolvedValue(null),
+        setUnitDelay: vi.fn(),
       },
     });
 
@@ -356,6 +373,8 @@ describe("sensor-event handler", () => {
         getActiveTimerUnitIds: vi.fn().mockResolvedValue([]),
         getSystemEnabled: vi.fn().mockResolvedValue(true),
         setSystemEnabled: vi.fn().mockResolvedValue(undefined),
+        getUnitDelay: vi.fn().mockResolvedValue(null),
+        setUnitDelay: vi.fn().mockResolvedValue(undefined),
       },
     });
 

@@ -20,8 +20,8 @@ const validConfig = {
     door_bedroom: 0,
   },
   hvacUnits: {
-    ac_living: { name: "Living Room AC", iftttEvent: "turn_off_ac_living" },
-    ac_bedroom: { name: "Bedroom AC", iftttEvent: "turn_off_ac_bedroom" },
+    ac_living: { name: "Living Room AC", iftttEvent: "turn_off_ac_living", delaySeconds: 300 },
+    ac_bedroom: { name: "Bedroom AC", iftttEvent: "turn_off_ac_bedroom", delaySeconds: 300 },
   },
   yolink: { baseUrl: "https://api.yosmart.com/open/yolink/v2/api" },
   turnOffUrl: "https://example.vercel.app/api/hvac-turn-off",
