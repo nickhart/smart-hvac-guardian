@@ -84,7 +84,6 @@ export function Dashboard({ onLogout }: DashboardProps) {
             onToggle={(enabled) => {
               setState((prev) => (prev ? { ...prev, systemEnabled: enabled } : prev));
               startPolling();
-              refresh();
             }}
           />
           <button onClick={onLogout} className="text-sm text-gray-500 hover:text-gray-700">
