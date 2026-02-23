@@ -1,0 +1,19 @@
+DESCRIPTION >
+    Daily count of HVAC shutoff commands
+
+NODE aggregated
+SQL >
+    %
+    SELECT
+        toDate(timestamp) AS day,
+        count() AS shutoff_count,
+        groupUniqArray(hvac_unit_id) AS units_affected,
+        groupUniqArray(trigger_source) AS trigger_sources
+    FROM hvac_commands
+    WHERE action = 'turned_off'
+        AND timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
+        AND timestamp <= parseDateTimeBestEffort({{String(end_date, '2099-12-31')}})
+    GROUP BY day
+    ORDER BY day DESC
+
+TYPE endpoint

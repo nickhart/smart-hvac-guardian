@@ -192,38 +192,44 @@ export const exposureDuration = defineEndpoint("exposure_duration", {
   params: {
     start_date: p.string().optional("2024-01-01").describe("Start date (YYYY-MM-DD)"),
     end_date: p.string().optional("2099-12-31").describe("End date (YYYY-MM-DD)"),
-    hvac_unit_id: p.string().optional("").describe("Filter by HVAC unit ID (empty = all)"),
+    hvac_unit_id_filter: p.string().optional("").describe("Filter by HVAC unit ID (empty = all)"),
   },
   nodes: [
     node({
+      name: "open_events_node",
+      sql: `
+        SELECT
+          timestamp AS opened_at,
+          arrayJoin(exposed_units) AS hvac_unit_id
+        FROM sensor_events
+        WHERE length(exposed_units) > 0
+          AND timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
+          AND timestamp <= parseDateTimeBestEffort({{String(end_date, '2099-12-31')}})
+          AND ({{String(hvac_unit_id_filter, '')}} = '' OR has(exposed_units, {{String(hvac_unit_id_filter, '')}}))
+      `,
+    }),
+    node({
+      name: "close_events_node",
+      sql: `
+        SELECT
+          timestamp AS closed_at,
+          arrayJoin(unexposed_units) AS hvac_unit_id
+        FROM sensor_events
+        WHERE length(unexposed_units) > 0
+          AND timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
+          AND timestamp <= parseDateTimeBestEffort({{String(end_date, '2099-12-31')}})
+      `,
+    }),
+    node({
       name: "exposure_sessions",
       sql: `
-        WITH open_events AS (
-          SELECT
-            timestamp AS opened_at,
-            arrayJoin(exposed_units) AS hvac_unit_id
-          FROM sensor_events
-          WHERE length(exposed_units) > 0
-            AND timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
-            AND timestamp <= parseDateTimeBestEffort({{String(end_date, '2099-12-31')}})
-            AND ({{String(hvac_unit_id, '')}} = '' OR has(exposed_units, {{String(hvac_unit_id, '')}}))
-        ),
-        close_events AS (
-          SELECT
-            timestamp AS closed_at,
-            arrayJoin(unexposed_units) AS hvac_unit_id
-          FROM sensor_events
-          WHERE length(unexposed_units) > 0
-            AND timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
-            AND timestamp <= parseDateTimeBestEffort({{String(end_date, '2099-12-31')}})
-        )
         SELECT
           o.hvac_unit_id,
           o.opened_at,
           min(c.closed_at) AS closed_at,
           dateDiff('minute', o.opened_at, min(c.closed_at)) AS duration_minutes
-        FROM open_events o
-        ASOF LEFT JOIN close_events c
+        FROM open_events_node o
+        ASOF LEFT JOIN close_events_node c
           ON o.hvac_unit_id = c.hvac_unit_id
           AND c.closed_at >= o.opened_at
         GROUP BY o.hvac_unit_id, o.opened_at

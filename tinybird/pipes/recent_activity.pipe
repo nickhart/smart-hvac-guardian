@@ -1,0 +1,20 @@
+DESCRIPTION >
+    Recent sensor events in reverse chronological order
+
+NODE recent
+SQL >
+    %
+    SELECT
+        timestamp,
+        'sensor' AS event_type,
+        sensor_id AS entity_id,
+        event AS action,
+        exposed_units,
+        timers_scheduled,
+        timers_cancelled
+    FROM sensor_events
+    WHERE timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
+    ORDER BY timestamp DESC
+    LIMIT {{Int32(limit, 50)}}
+
+TYPE endpoint

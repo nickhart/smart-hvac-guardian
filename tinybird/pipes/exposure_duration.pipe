@@ -1,0 +1,39 @@
+DESCRIPTION >
+    Duration each HVAC unit was exposed to open exterior openings
+
+NODE open_events_node
+SQL >
+    %
+    SELECT
+        timestamp AS opened_at,
+        arrayJoin(exposed_units) AS hvac_unit_id
+    FROM sensor_events
+    WHERE length(exposed_units) > 0
+        AND timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
+        AND timestamp <= parseDateTimeBestEffort({{String(end_date, '2099-12-31')}})
+        AND ({{String(hvac_unit_id_filter, '')}} = '' OR has(exposed_units, {{String(hvac_unit_id_filter, '')}}))
+
+NODE close_events_node
+SQL >
+    %
+    SELECT
+        timestamp AS closed_at,
+        arrayJoin(unexposed_units) AS hvac_unit_id
+    FROM sensor_events
+    WHERE length(unexposed_units) > 0
+        AND timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
+        AND timestamp <= parseDateTimeBestEffort({{String(end_date, '2099-12-31')}})
+
+NODE exposure_sessions
+SQL >
+    SELECT
+        o.hvac_unit_id,
+        o.opened_at,
+        min(c.closed_at) AS closed_at,
+        dateDiff('minute', o.opened_at, min(c.closed_at)) AS duration_minutes
+    FROM open_events_node o
+    ASOF LEFT JOIN close_events_node c
+        ON o.hvac_unit_id = c.hvac_unit_id
+        AND c.closed_at >= o.opened_at
+    GROUP BY o.hvac_unit_id, o.opened_at
+    ORDER BY o.opened_at DESC

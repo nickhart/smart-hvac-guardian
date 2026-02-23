@@ -1,0 +1,18 @@
+DESCRIPTION >
+    How often each sensor fires open events
+
+NODE aggregated
+SQL >
+    %
+    SELECT
+        sensor_id,
+        count() AS open_count,
+        min(timestamp) AS first_seen,
+        max(timestamp) AS last_seen
+    FROM sensor_events
+    WHERE event = 'open'
+        AND timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
+    GROUP BY sensor_id
+    ORDER BY open_count DESC
+
+TYPE endpoint
