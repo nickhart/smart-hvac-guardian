@@ -37,8 +37,14 @@ export async function handleMagic(request: Request, deps?: MagicDeps): Promise<R
       return errorResponse("Method not allowed", 405);
     }
 
-    const url = new URL(request.url);
-    const parsed = MagicQuery.safeParse({ token: url.searchParams.get("token") });
+    let tokenParam: string | null = null;
+    try {
+      const url = new URL(request.url, "http://localhost");
+      tokenParam = url.searchParams.get("token");
+    } catch {
+      // URL parsing failed
+    }
+    const parsed = MagicQuery.safeParse({ token: tokenParam });
 
     if (!parsed.success) {
       return htmlPage("Invalid link", "This login link is invalid. Please request a new one.");

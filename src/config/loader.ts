@@ -47,6 +47,7 @@ export function loadEnvSecrets(env?: Record<string, string | undefined>): EnvSec
     tinybirdUrl: source.TINYBIRD_URL || undefined,
     resendApiKey: source.RESEND_API_KEY || undefined,
     ownerEmail: source.OWNER_EMAIL || undefined,
+    appUrl: source.APP_URL || undefined,
   };
 
   const result = EnvSecretsSchema.safeParse(raw);
