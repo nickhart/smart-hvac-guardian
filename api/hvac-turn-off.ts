@@ -66,6 +66,21 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
       });
     }
 
+    // Check if system is enabled before executing turn-off
+    const systemEnabled = await d.stateStore.getSystemEnabled();
+    if (!systemEnabled) {
+      logger.info("Turn-off skipped: system disabled", { requestId, hvacUnitId });
+      await d.stateStore.deleteTimerToken(hvacUnitId);
+      await d.analytics.trackHvacCommand({
+        requestId,
+        hvacUnitId,
+        unitName: d.config.hvacUnits[hvacUnitId]?.name ?? hvacUnitId,
+        action: "cancelled",
+        triggerSource: "sensor_open",
+      });
+      return jsonResponse({ status: "ok", action: "cancelled", hvacUnitId, reason: "system_disabled" });
+    }
+
     // Token matches — turn off the unit
     const unitConfig = d.config.hvacUnits[hvacUnitId];
     if (!unitConfig) {

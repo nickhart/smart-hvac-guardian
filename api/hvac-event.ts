@@ -51,6 +51,13 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
     const systemEnabled = await d.stateStore.getSystemEnabled();
     if (!systemEnabled) {
       logger.info("System disabled, skipping HVAC evaluation", { requestId });
+      await d.analytics.trackHvacStateEvent({
+        requestId,
+        hvacId,
+        event: "on",
+        wasExposed: false,
+        turnoffScheduled: false,
+      });
       return jsonResponse({ status: "ok", action: "system_disabled" });
     }
 

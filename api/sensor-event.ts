@@ -54,6 +54,15 @@ export async function handleSensorEvent(request: Request, deps?: Dependencies): 
 
     if (!systemEnabled) {
       logger.info("System disabled, skipping zone evaluation", { requestId });
+      await d.analytics.trackSensorEvent({
+        requestId,
+        sensorId,
+        event,
+        exposedUnits: [],
+        unexposedUnits: [],
+        timersScheduled: [],
+        timersCancelled: [],
+      });
       return jsonResponse({ status: "ok", action: "system_disabled" });
     }
 

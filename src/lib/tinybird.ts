@@ -187,11 +187,66 @@ export const recentActivity = defineEndpoint("recent_activity", {
 export type RecentActivityParams = InferParams<typeof recentActivity>;
 export type RecentActivityOutput = InferOutputRow<typeof recentActivity>;
 
+export const exposureDuration = defineEndpoint("exposure_duration", {
+  description: "Duration each HVAC unit was exposed to open exterior openings",
+  params: {
+    start_date: p.string().optional("2024-01-01").describe("Start date (YYYY-MM-DD)"),
+    end_date: p.string().optional("2099-12-31").describe("End date (YYYY-MM-DD)"),
+    hvac_unit_id: p.string().optional("").describe("Filter by HVAC unit ID (empty = all)"),
+  },
+  nodes: [
+    node({
+      name: "exposure_sessions",
+      sql: `
+        WITH open_events AS (
+          SELECT
+            timestamp AS opened_at,
+            arrayJoin(exposed_units) AS hvac_unit_id
+          FROM sensor_events
+          WHERE length(exposed_units) > 0
+            AND timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
+            AND timestamp <= parseDateTimeBestEffort({{String(end_date, '2099-12-31')}})
+            AND ({{String(hvac_unit_id, '')}} = '' OR has(exposed_units, {{String(hvac_unit_id, '')}}))
+        ),
+        close_events AS (
+          SELECT
+            timestamp AS closed_at,
+            arrayJoin(unexposed_units) AS hvac_unit_id
+          FROM sensor_events
+          WHERE length(unexposed_units) > 0
+            AND timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
+            AND timestamp <= parseDateTimeBestEffort({{String(end_date, '2099-12-31')}})
+        )
+        SELECT
+          o.hvac_unit_id,
+          o.opened_at,
+          min(c.closed_at) AS closed_at,
+          dateDiff('minute', o.opened_at, min(c.closed_at)) AS duration_minutes
+        FROM open_events o
+        ASOF LEFT JOIN close_events c
+          ON o.hvac_unit_id = c.hvac_unit_id
+          AND c.closed_at >= o.opened_at
+        GROUP BY o.hvac_unit_id, o.opened_at
+        ORDER BY o.opened_at DESC
+      `,
+    }),
+  ],
+  output: {
+    hvac_unit_id: t.string(),
+    opened_at: t.dateTime(),
+    closed_at: t.dateTime().nullable(),
+    duration_minutes: t.int32(),
+  },
+});
+
+export type ExposureDurationParams = InferParams<typeof exposureDuration>;
+export type ExposureDurationOutput = InferOutputRow<typeof exposureDuration>;
+
 // ============================================================================
 // Client
 // ============================================================================
 
 export const tinybird = new Tinybird({
   datasources: { sensorEvents, hvacCommands, hvacStateEvents },
-  pipes: { shutoffsPerDay, sensorTriggerFrequency, recentActivity },
+  pipes: { shutoffsPerDay, sensorTriggerFrequency, recentActivity, exposureDuration },
 });

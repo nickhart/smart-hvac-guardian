@@ -180,6 +180,41 @@ describe("hvac-turn-off handler", () => {
     expect(deps.hvac.turnOff).not.toHaveBeenCalled();
   });
 
+  it("skips turn-off when system is disabled (valid token)", async () => {
+    const deps = createMockDeps({
+      stateStore: {
+        setSensorState: vi.fn(),
+        getAllSensorStates: vi.fn(),
+        setTimerToken: vi.fn(),
+        getTimerToken: vi.fn().mockResolvedValue("valid-token"),
+        deleteTimerToken: vi.fn().mockResolvedValue(undefined),
+        getActiveTimerUnitIds: vi.fn(),
+        getSystemEnabled: vi.fn().mockResolvedValue(false),
+        setSystemEnabled: vi.fn(),
+        getUnitDelay: vi.fn().mockResolvedValue(null),
+        setUnitDelay: vi.fn(),
+      },
+    });
+
+    const res = await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "valid-token" }),
+      deps,
+    );
+    const body = (await res.json()) as Record<string, unknown>;
+
+    expect(res.status).toBe(200);
+    expect(body.action).toBe("cancelled");
+    expect(body.reason).toBe("system_disabled");
+    expect(deps.hvac.turnOff).not.toHaveBeenCalled();
+    expect(deps.stateStore.deleteTimerToken).toHaveBeenCalledWith("ac_living");
+    expect(deps.analytics.trackHvacCommand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        hvacUnitId: "ac_living",
+        action: "cancelled",
+      }),
+    );
+  });
+
   it("returns 404 for unknown HVAC unit (with valid token)", async () => {
     const deps = createMockDeps({
       stateStore: {
