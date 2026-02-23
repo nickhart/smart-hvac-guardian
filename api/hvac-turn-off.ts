@@ -78,7 +78,12 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
         action: "cancelled",
         triggerSource: "sensor_open",
       });
-      return jsonResponse({ status: "ok", action: "cancelled", hvacUnitId, reason: "system_disabled" });
+      return jsonResponse({
+        status: "ok",
+        action: "cancelled",
+        hvacUnitId,
+        reason: "system_disabled",
+      });
     }
 
     // Token matches — turn off the unit

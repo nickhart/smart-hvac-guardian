@@ -7,7 +7,6 @@ import type { Dependencies } from "../src/handlers/dependencies.js";
 import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
 import { evaluateZoneGraph, computeTimerActions } from "../src/zone-graph/index.js";
-import type { SensorState } from "../src/zone-graph/index.js";
 import { getDelayForUnit } from "../src/utils/delay.js";
 
 const TogglePayload = z.object({
@@ -59,7 +58,11 @@ export async function handleSystemToggle(request: Request, deps?: Dependencies):
       }
 
       const { exposedUnits, unexposedUnits } = evaluateZoneGraph(d.config.zones, sensorStates);
-      logger.info("Re-evaluation after enable", { requestId, exposedUnits: [...exposedUnits], unexposedUnits: [...unexposedUnits] });
+      logger.info("Re-evaluation after enable", {
+        requestId,
+        exposedUnits: [...exposedUnits],
+        unexposedUnits: [...unexposedUnits],
+      });
 
       const activeTimerUnitIds = await d.stateStore.getActiveTimerUnitIds();
       const previouslyExposed = new Set(activeTimerUnitIds);
@@ -74,7 +77,13 @@ export async function handleSystemToggle(request: Request, deps?: Dependencies):
         const window = Math.floor(Date.now() / (10 * 60 * 1000));
         const dedupId = `turnoff-${unitId}-${window}`;
         await d.scheduler.scheduleUnitTurnOff(unitId, token, delaySeconds, dedupId);
-        logger.info("Timer scheduled on re-enable", { requestId, unitId, delaySeconds, token, dedupId });
+        logger.info("Timer scheduled on re-enable", {
+          requestId,
+          unitId,
+          delaySeconds,
+          token,
+          dedupId,
+        });
       }
 
       for (const unitId of cancel) {
