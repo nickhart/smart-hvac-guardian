@@ -63,7 +63,10 @@ export async function handleMagic(request: Request, deps?: MagicDeps): Promise<R
     const email = await authStore.getMagicToken(token);
 
     if (!email) {
-      return htmlPage("Link expired", "This login link has expired or already been used. Please request a new one.");
+      return htmlPage(
+        "Link expired",
+        "This login link has expired or already been used. Please request a new one.",
+      );
     }
 
     // Single-use: delete the magic token

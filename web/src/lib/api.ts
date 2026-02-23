@@ -1,5 +1,6 @@
 export interface CheckStateResponse {
   status: string;
+  siteName: string;
   systemEnabled: boolean;
   sensorStates: Record<string, string>;
   sensorNames: Record<string, string>;
@@ -14,6 +15,7 @@ export interface CheckStateResponse {
 export interface SessionResponse {
   authenticated: boolean;
   email?: string;
+  siteName?: string;
 }
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {

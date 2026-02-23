@@ -72,12 +72,14 @@ export async function handleSendMagic(request: Request, deps?: SendMagicDeps): P
     const appUrl = resolveAppUrl(secrets);
     const magicLink = `${appUrl}/api/auth/magic?token=${token}`;
 
+    const siteName = secrets.siteName ?? "HVAC Guardian";
+
     const sendEmail =
       deps?.sendEmail ??
       (async (to: string, subject: string, text: string) => {
         const resend = new Resend(secrets.resendApiKey);
         await resend.emails.send({
-          from: "HVAC Guardian <onboarding@resend.dev>",
+          from: `${siteName} <onboarding@resend.dev>`,
           to,
           subject,
           text,
@@ -87,7 +89,7 @@ export async function handleSendMagic(request: Request, deps?: SendMagicDeps): P
     await sendEmail(
       email,
       "Your login link",
-      `Click the link below to log in to HVAC Guardian:\n\n${magicLink}\n\nThis link expires in 10 minutes.`,
+      `Click the link below to log in to ${siteName}:\n\n${magicLink}\n\nThis link expires in 10 minutes.`,
     );
 
     logger.info("Magic link sent", { requestId, email: email.toLowerCase() });

@@ -6,9 +6,10 @@ import { SystemToggle } from "./SystemToggle";
 
 interface DashboardProps {
   onLogout: () => void;
+  siteName: string;
 }
 
-export function Dashboard({ onLogout }: DashboardProps) {
+export function Dashboard({ onLogout, siteName }: DashboardProps) {
   const [state, setState] = useState<CheckStateResponse | null>(null);
   const [error, setError] = useState("");
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
@@ -17,9 +18,7 @@ export function Dashboard({ onLogout }: DashboardProps) {
     try {
       const data = await getCheckState();
       if (Date.now() < toggleGraceRef.current) {
-        setState((prev) =>
-          prev ? { ...data, systemEnabled: prev.systemEnabled } : data,
-        );
+        setState((prev) => (prev ? { ...data, systemEnabled: prev.systemEnabled } : data));
       } else {
         setState(data);
       }
@@ -84,7 +83,7 @@ export function Dashboard({ onLogout }: DashboardProps) {
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
       <header className="flex items-center justify-between mb-6">
-        <h1 className="text-lg font-semibold">HVAC Guardian</h1>
+        <h1 className="text-lg font-semibold">{siteName}</h1>
         <div className="flex items-center gap-4">
           <SystemToggle
             enabled={state.systemEnabled}

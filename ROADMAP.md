@@ -64,5 +64,6 @@ Browser-based UI to manage sensors, HVAC units, IFTTT event names, and delay tim
 Persist HVAC on/off state from `hvac-event` to avoid scheduling redundant turn-off timers for units that are already off. Currently the system uses "fire and forget" — a redundant IFTTT turn-off call is harmless but wasteful.
 
 Considerations:
+
 - Potential side effects of firing "off" to an already-off unit (extra beep from the HVAC)
 - Race condition: user turns on HVAC locally while a pending turn-off fires at the same time

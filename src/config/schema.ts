@@ -102,6 +102,7 @@ export const EnvSecretsSchema = z.object({
   resendApiKey: z.string().min(1).optional(),
   ownerEmail: z.string().email().optional(),
   appUrl: z.string().url().optional(),
+  siteName: z.string().min(1).optional(),
 });
 
 export type ZoneConfig = z.infer<typeof ZoneConfigSchema>;

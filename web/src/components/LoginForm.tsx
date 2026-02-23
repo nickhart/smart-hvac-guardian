@@ -1,7 +1,11 @@
 import { useState } from "react";
 import * as api from "../lib/api";
 
-export function LoginForm() {
+interface LoginFormProps {
+  siteName: string;
+}
+
+export function LoginForm({ siteName }: LoginFormProps) {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
@@ -24,7 +28,7 @@ export function LoginForm() {
   return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="bg-white rounded-lg shadow-md p-8 w-full max-w-sm">
-        <h1 className="text-xl font-semibold mb-6 text-center">HVAC Guardian</h1>
+        <h1 className="text-xl font-semibold mb-6 text-center">{siteName}</h1>
 
         {!sent ? (
           <form onSubmit={handleSend}>

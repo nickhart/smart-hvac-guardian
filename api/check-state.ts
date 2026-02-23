@@ -18,6 +18,7 @@ export async function handleCheckState(request: Request, deps?: Dependencies): P
     }
 
     const d = deps ?? createDependencies(loadConfig(), loadEnvSecrets(), logger);
+    const siteName = process.env.SITE_NAME || "HVAC Guardian";
 
     // Read all sensor states from Redis, applying defaults for sensors without state
     const allSensorIds = Object.keys(d.config.sensorDelays);
@@ -67,6 +68,7 @@ export async function handleCheckState(request: Request, deps?: Dependencies): P
 
     return jsonResponse({
       status: "ok",
+      siteName,
       systemEnabled,
       sensorStates: sensorStateObj,
       sensorNames: d.config.sensorNames,

@@ -31,27 +31,28 @@ Set these in your Vercel project (or `.env` file locally):
 
 #### Required
 
-| Variable                      | Description                                    |
-| ----------------------------- | ---------------------------------------------- |
-| `APP_CONFIG`                  | JSON string with app configuration (see below) |
+| Variable                     | Description                                    |
+| ---------------------------- | ---------------------------------------------- |
+| `APP_CONFIG`                 | JSON string with app configuration (see below) |
 | `YOLINK_UA_CID`              | YoLink API UA Client ID                        |
-| `YOLINK_SECRET_KEY`           | YoLink API Secret Key                          |
-| `IFTTT_WEBHOOK_KEY`           | IFTTT Webhooks service key                     |
-| `QSTASH_TOKEN`                | Upstash QStash token                           |
-| `QSTASH_CURRENT_SIGNING_KEY`  | QStash current signing key                     |
-| `QSTASH_NEXT_SIGNING_KEY`     | QStash next signing key                        |
-| `UPSTASH_REDIS_REST_URL`      | Upstash Redis REST URL                         |
-| `UPSTASH_REDIS_REST_TOKEN`    | Upstash Redis REST token                       |
+| `YOLINK_SECRET_KEY`          | YoLink API Secret Key                          |
+| `IFTTT_WEBHOOK_KEY`          | IFTTT Webhooks service key                     |
+| `QSTASH_TOKEN`               | Upstash QStash token                           |
+| `QSTASH_CURRENT_SIGNING_KEY` | QStash current signing key                     |
+| `QSTASH_NEXT_SIGNING_KEY`    | QStash next signing key                        |
+| `UPSTASH_REDIS_REST_URL`     | Upstash Redis REST URL                         |
+| `UPSTASH_REDIS_REST_TOKEN`   | Upstash Redis REST token                       |
 
 #### Optional
 
-| Variable         | Description                                          |
-| ---------------- | ---------------------------------------------------- |
-| `RESEND_API_KEY`  | Resend API key (required for magic link auth)        |
-| `OWNER_EMAIL`     | Email address allowed to log in to the dashboard     |
-| `APP_URL`         | Public app URL for magic link emails (e.g. `https://your-app.vercel.app`) |
-| `TINYBIRD_TOKEN`  | Tinybird auth token (enables analytics tracking)     |
-| `TINYBIRD_URL`    | Tinybird API base URL                                |
+| Variable         | Description                                                               |
+| ---------------- | ------------------------------------------------------------------------- |
+| `RESEND_API_KEY` | Resend API key (required for magic link auth)                             |
+| `OWNER_EMAIL`    | Email address allowed to log in to the dashboard                          |
+| `APP_URL`        | Public app URL for magic link emails (e.g. `https://your-app.vercel.app`) |
+| `TINYBIRD_TOKEN` | Tinybird auth token (enables analytics tracking)                          |
+| `TINYBIRD_URL`   | Tinybird API base URL                                                     |
+| `SITE_NAME`      | Custom branding name (default: `HVAC Guardian`)                           |
 
 ### APP_CONFIG Format
 
@@ -63,35 +64,35 @@ The `APP_CONFIG` environment variable is a JSON string validated against a Zod s
     "living-room": {
       "minisplits": ["unit-lr"],
       "exteriorOpenings": ["sensor-front-door", "sensor-window-1"],
-      "interiorDoors": [{ "id": "sensor-hallway-door", "connectsTo": "bedroom" }]
+      "interiorDoors": [{ "id": "sensor-hallway-door", "connectsTo": "bedroom" }],
     },
     "bedroom": {
       "minisplits": ["unit-br"],
       "exteriorOpenings": ["sensor-bedroom-window"],
-      "interiorDoors": [{ "id": "sensor-hallway-door", "connectsTo": "living-room" }]
-    }
+      "interiorDoors": [{ "id": "sensor-hallway-door", "connectsTo": "living-room" }],
+    },
   },
   "sensorDelays": {
     "sensor-front-door": 90,
     "sensor-window-1": 120,
     "sensor-bedroom-window": 120,
-    "sensor-hallway-door": 0
+    "sensor-hallway-door": 0,
   },
   "hvacUnits": {
     "unit-lr": { "name": "Living Room AC", "iftttEvent": "turn_off_lr", "delaySeconds": 300 },
-    "unit-br": { "name": "Bedroom AC", "iftttEvent": "turn_off_br", "delaySeconds": 300 }
+    "unit-br": { "name": "Bedroom AC", "iftttEvent": "turn_off_br", "delaySeconds": 300 },
   },
   "sensorNames": {
     "sensor-front-door": "Front Door",
-    "sensor-window-1": "Living Room Window"
+    "sensor-window-1": "Living Room Window",
   },
   "sensorDefaults": {
-    "sensor-window-1": "closed"
+    "sensor-window-1": "closed",
   },
   "yolink": {
-    "baseUrl": "https://api.yosmart.com/open/yolink/v2/api"
+    "baseUrl": "https://api.yosmart.com/open/yolink/v2/api",
   },
-  "turnOffUrl": "https://your-app.vercel.app/api/hvac-turn-off"
+  "turnOffUrl": "https://your-app.vercel.app/api/hvac-turn-off",
 }
 ```
 
@@ -126,23 +127,23 @@ vercel deploy
 
 ### Core
 
-| Method | Endpoint              | Description                                                    |
-| ------ | --------------------- | -------------------------------------------------------------- |
-| POST   | `/api/sensor-event`   | Receives sensor open/close events from IFTTT                   |
-| POST   | `/api/hvac-event`     | Receives HVAC on/off events; re-schedules turn-off if exposed  |
-| POST   | `/api/hvac-turn-off`  | QStash callback that executes the IFTTT turn-off command       |
-| GET    | `/api/check-state`    | Returns full system snapshot (sensors, units, timers, offline) |
-| GET/POST | `/api/system-toggle` | Read or set the system-wide enable/disable flag              |
-| GET/POST | `/api/unit-delay`   | Read or set per-unit delay overrides                          |
+| Method   | Endpoint             | Description                                                    |
+| -------- | -------------------- | -------------------------------------------------------------- |
+| POST     | `/api/sensor-event`  | Receives sensor open/close events from IFTTT                   |
+| POST     | `/api/hvac-event`    | Receives HVAC on/off events; re-schedules turn-off if exposed  |
+| POST     | `/api/hvac-turn-off` | QStash callback that executes the IFTTT turn-off command       |
+| GET      | `/api/check-state`   | Returns full system snapshot (sensors, units, timers, offline) |
+| GET/POST | `/api/system-toggle` | Read or set the system-wide enable/disable flag                |
+| GET/POST | `/api/unit-delay`    | Read or set per-unit delay overrides                           |
 
 ### Auth
 
-| Method | Endpoint              | Description                              |
-| ------ | --------------------- | ---------------------------------------- |
-| POST   | `/api/auth/send-magic`| Sends a magic link login email           |
-| GET    | `/api/auth/magic`     | Redeems a magic link token, sets session |
-| GET    | `/api/auth/session`   | Checks current authentication status     |
-| POST   | `/api/auth/logout`    | Clears the session cookie                |
+| Method | Endpoint               | Description                              |
+| ------ | ---------------------- | ---------------------------------------- |
+| POST   | `/api/auth/send-magic` | Sends a magic link login email           |
+| GET    | `/api/auth/magic`      | Redeems a magic link token, sets session |
+| GET    | `/api/auth/session`    | Checks current authentication status     |
+| POST   | `/api/auth/logout`     | Clears the session cookie                |
 
 ## Web Dashboard
 

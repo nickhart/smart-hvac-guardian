@@ -48,6 +48,7 @@ export function loadEnvSecrets(env?: Record<string, string | undefined>): EnvSec
     resendApiKey: source.RESEND_API_KEY || undefined,
     ownerEmail: source.OWNER_EMAIL || undefined,
     appUrl: source.APP_URL || undefined,
+    siteName: source.SITE_NAME || undefined,
   };
 
   const result = EnvSecretsSchema.safeParse(raw);

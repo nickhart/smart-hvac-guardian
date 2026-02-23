@@ -27,10 +27,11 @@ export async function handleSession(request: Request, deps?: SessionDeps): Promi
       return errorResponse("Method not allowed", 405);
     }
 
+    const siteName = process.env.SITE_NAME || "HVAC Guardian";
     const token = getSessionToken(request);
 
     if (!token) {
-      return jsonResponse({ authenticated: false });
+      return jsonResponse({ authenticated: false, siteName });
     }
 
     const authStore =
@@ -46,11 +47,11 @@ export async function handleSession(request: Request, deps?: SessionDeps): Promi
     const email = await authStore.getSession(token);
 
     if (!email) {
-      return jsonResponse({ authenticated: false });
+      return jsonResponse({ authenticated: false, siteName });
     }
 
     logger.info("Session validated", { requestId, email });
-    return jsonResponse({ authenticated: true, email });
+    return jsonResponse({ authenticated: true, email, siteName });
   } catch (error) {
     logger.error("session check error", {
       requestId,
