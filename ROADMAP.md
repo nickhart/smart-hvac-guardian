@@ -1,106 +1,68 @@
 # Roadmap
 
-## Zone-aware AC control via internal door sensors
+## Implemented
 
-**Status: Implemented**
+### Zone-aware AC control
 
-Per-zone HVAC control using interior door sensors to determine connected components. Zones connected by open interior doors form a single component; only HVAC units in components exposed to an open exterior opening get shut off. Includes per-HVAC-unit timers with proactive cancellation via Redis tokens.
+Per-zone HVAC control using interior door sensors to determine connected components. Zones connected by open interior doors form a single component; only HVAC units in components exposed to an open exterior opening get shut off.
 
 - **Zone graph evaluation:** BFS over zones connected by open interior doors determines connected components.
 - **Cancellation tokens:** Each timer stores a UUID in Redis. Closing a door deletes the token; when QStash fires, a mismatched/missing token means the timer was cancelled.
 - **Per-sensor delays:** Each exterior sensor has its own `delaySeconds`. When multiple are open in a component, the minimum delay is used.
+- **HVAC-on re-scheduling:** When an HVAC unit turns on while in an exposed zone, a new turn-off timer is scheduled automatically.
 
-## Remote delay configuration
+### Remote delay configuration
 
-Ability to change per-sensor delay values without redeploying. Store delay overrides in Redis (`delay-override:{sensorId}` keys), falling back to `APP_CONFIG.sensorDelays` defaults when no override exists.
+Per-unit delay overrides stored in Redis (`delay:<unitId>` keys), falling back to `APP_CONFIG` defaults when no override exists. Exposed via `GET/POST /api/unit-delay` and editable from the web dashboard.
 
-- Expose a simple API endpoint (`POST /api/config/delays`) for updating overrides.
-- Read overrides in `sensor-event` and `hvac-event` handlers when computing timer delays.
-- Future: integrate into web configuration UI.
+### System on/off toggle
 
-## System on/off toggle
+A Redis flag (`system:enabled`) checked at the top of `sensor-event` and `hvac-event` handlers. When disabled, sensor state is still recorded but no timers are scheduled and no turn-off commands are sent. Controllable via `GET/POST /api/system-toggle` and from the web dashboard.
 
-A Redis flag (`system:enabled`) checked at the top of `sensor-event` and `hvac-event` handlers. When disabled:
+### Offline sensor handling
 
-- All events are logged as usual.
-- No timers are scheduled and no turn-off commands are sent.
-- Active timers are not cancelled (they will expire naturally or be cancelled on re-enable).
+Sensors with no recorded state in Redis are treated as **closed** (safe default — AC stays on). A two-tier approach: first, per-sensor `sensorDefaults` from config are applied, then any remaining unknown sensor defaults to `"closed"`. The dashboard displays offline sensors.
 
-Controllable via a simple API endpoint (`POST /api/system/toggle`) or future dashboard.
+### Resend integration
 
-## Shutoff analytics (Upstash Redis)
+[Resend](https://resend.com) is integrated as the transactional email provider, used for magic link login emails.
 
-Track how often auto-shutoffs happen, which sensors trigger them, and observe patterns over time (e.g. guests learning the system).
+### Magic link authentication
 
-Uses **Upstash Redis** (already an Upstash customer via QStash; free tier: 10K commands/day, 256 MB).
+Email-based login with no passwords. The owner submits their email, receives a magic link via Resend, and clicking it creates a 7-day `HttpOnly` session cookie. Only `OWNER_EMAIL` is allowed to log in.
 
-- **Storage model:** Each shutoff event is stored as a sorted-set entry (score = Unix timestamp).
-  - Key structure: `shutoffs:{YYYY-MM}` — monthly buckets for easy range queries and automatic expiry.
-  - Event payload: `{ timestamp, sensorId, sensorName, hvacUnitsAffected, triggerSource }` where `triggerSource` is `"hvac-on"` or `"sensor-open"`.
-- **Query patterns:** shutoffs per day/week, most-triggered sensor, frequency trends over time.
-- **Phase 1 — instrument:** Write events to Redis from `api/hvac-turn-off.ts` on each successful turn-off.
-- **Phase 2 — dashboard:** Build a simple Next.js page showing shutoff history, frequency charts, and per-sensor breakdown.
-- **Future:** Add guest/unit context (which HVAC unit was on that triggered the check).
+### Web dashboard
 
-## Resend.dev integration
+React 19 + Vite + Tailwind CSS app (`web/` directory). Shows real-time sensor states, HVAC unit exposure status, active timers, per-unit delay overrides, and a system toggle. Polls `/api/check-state` every 10 seconds.
 
-Add [Resend](https://resend.com) as the transactional email provider for user-facing features.
+### Tinybird analytics
 
-## User accounts and authentication
+Event tracking via [Tinybird](https://tinybird.co) for sensor events, HVAC commands, and HVAC state changes. Includes query pipes for shutoffs per day, sensor trigger frequency, and recent activity. Gracefully degrades to a no-op when `TINYBIRD_TOKEN` is not set.
 
-- Email/OTP (magic link) login — no passwords
-- Account ties together a user's sensor and HVAC configuration
+---
 
-## Web configuration UI
+## Planned / Future
 
-- Browser-based UI to manage sensors, HVAC units, IFTTT event names, and delay timers
-- Replaces manual environment variable / config file editing
-
-## Web dashboard
-
-- Live view of sensor states (open/closed) and HVAC unit status (on/off)
-- Event history log (sensor events, HVAC commands, errors)
-
-## Email notifications
+### Email notifications
 
 - Sensor open alerts (e.g. "Kitchen window has been open for 10 minutes")
 - HVAC turn-off confirmations
 - System error alerts (provider failures, QStash issues)
 
-## handle offline sensors
+### Web configuration UI
 
-- if a sensor is offline treat it as closed
-- if IFTTT, Cielo, or YoLink is down, temporarily disable the AC shutoff system
-- we don't want dead batteries or service outages to result in guests being unable to use the AC
+Browser-based UI to manage sensors, HVAC units, IFTTT event names, and delay timers. Replaces manual `APP_CONFIG` environment variable editing.
 
-## minimal web UI
+### Shutoff analytics dashboard
 
-- have a basic index with an email login form
-- add OWNER_EMAIL to the environment (eg: OWNER_EMAIL=<nickhart@gmail.com>)
-- add support for email/OTP auth with resend.dev
-- for now we only support the OWNER_EMAIL
-- once logged in show a dashboard with the current state of the sensors and hvac units
-- if possible use the qstash/redis state to show any active timers for the hvac units
-- at some point plan a history view which shows sensor, hvac, timer, and shutoff activity
-- at some point plan a metrics view which shows how often shutoff activity occurs over a time period
-  - over a day, week, month, year?
-  - allow one to choose the exact time period
-  - eg: the past 24 hours, or a previous 24 hour period
-  - eg: over the past week, or a specific 7 day period
-  - etc...
+- History view showing sensor, HVAC, timer, and shutoff activity over time
+- Metrics view showing shutoff frequency over configurable time periods (day, week, month, custom ranges)
+- Per-sensor breakdown of trigger frequency
 
-## tracking HVAC state in redis
+### HVAC state tracking in Redis
 
-Your first question — valid concern. The system currently has no concept of HVAC power state. It treats "exposed" as "needs a turn-off timer" regardless of whether the unit is already off. So yes, if you open the front door, the living room AC gets turned off, and then you open the lanai door, it would schedule another turn-off for the already-off AC (which is harmless but wasteful — IFTTT just gets a redundant call).
+Persist HVAC on/off state from `hvac-event` to avoid scheduling redundant turn-off timers for units that are already off. Currently the system uses "fire and forget" — a redundant IFTTT turn-off call is harmless but wasteful.
 
-The system doesn't track HVAC on/off state in Redis today. The hvac-event endpoint receives on/off events but doesn't persist them. To skip unnecessary timers, you'd need to store HVAC power state and check it before scheduling. That's a production code change though — want me to look into it, or are you happy with the current "fire and forget" behavior since the redundant turn-off is a no-op?
-
-concerns:
-
-- potential side effects of firing an "off" to an already off hvac
-  - an extra unwanted "beep" from the hvac if it is already off? (not sure, need to test this!)
-  - race condition: maybe I turned it on locally and the turn off logic on the server fires at the same time, immediately shutting off the hvac that I just turned on. probably an edge case, but could be annoying
-
-## improve login to use magic links
-
-- support magic links and don't require the user to enter the OTP
+Considerations:
+- Potential side effects of firing "off" to an already-off unit (extra beep from the HVAC)
+- Race condition: user turns on HVAC locally while a pending turn-off fires at the same time
