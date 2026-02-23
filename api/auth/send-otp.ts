@@ -3,16 +3,26 @@ export const config = { runtime: "edge" };
 import { z } from "zod";
 import { Resend } from "resend";
 import { loadEnvSecrets } from "../../src/config/index.js";
+import type { EnvSecrets } from "../../src/config/index.js";
 import { RedisStateStore } from "../../src/providers/redis/index.js";
+import type { AuthStore } from "../../src/providers/types.js";
 import { createLogger } from "../../src/utils/logger.js";
+import type { Logger } from "../../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../../src/utils/response.js";
 
 const SendOtpPayload = z.object({
   email: z.string().email(),
 });
 
-export default async function handler(request: Request): Promise<Response> {
-  const logger = createLogger();
+export interface SendOtpDeps {
+  secrets: EnvSecrets;
+  authStore: AuthStore;
+  logger: Logger;
+  sendEmail: (to: string, subject: string, text: string) => Promise<void>;
+}
+
+export async function handleSendOtp(request: Request, deps?: SendOtpDeps): Promise<Response> {
+  const logger = deps?.logger ?? createLogger();
   const requestId = crypto.randomUUID().slice(0, 8);
 
   try {
@@ -20,7 +30,7 @@ export default async function handler(request: Request): Promise<Response> {
       return errorResponse("Method not allowed", 405);
     }
 
-    const secrets = loadEnvSecrets();
+    const secrets = deps?.secrets ?? loadEnvSecrets();
 
     if (!secrets.resendApiKey || !secrets.ownerEmail) {
       logger.error("Auth not configured", { requestId });
@@ -48,21 +58,31 @@ export default async function handler(request: Request): Promise<Response> {
       .join("")
       .padStart(6, "0");
 
-    // Store OTP in Redis with 10-minute TTL
-    const redis = new RedisStateStore({
-      url: secrets.upstashRedisUrl,
-      token: secrets.upstashRedisToken,
-    });
-    await redis.setOtp(email.toLowerCase(), code, 600);
+    const authStore =
+      deps?.authStore ??
+      new RedisStateStore({
+        url: secrets.upstashRedisUrl,
+        token: secrets.upstashRedisToken,
+      });
+    await authStore.setOtp(email.toLowerCase(), code, 600);
 
-    // Send OTP email via Resend
-    const resend = new Resend(secrets.resendApiKey);
-    await resend.emails.send({
-      from: "HVAC Guardian <onboarding@resend.dev>",
-      to: email,
-      subject: "Your login code",
-      text: `Your HVAC Guardian login code is: ${code}\n\nThis code expires in 10 minutes.`,
-    });
+    const sendEmail =
+      deps?.sendEmail ??
+      (async (to: string, subject: string, text: string) => {
+        const resend = new Resend(secrets.resendApiKey);
+        await resend.emails.send({
+          from: "HVAC Guardian <onboarding@resend.dev>",
+          to,
+          subject,
+          text,
+        });
+      });
+
+    await sendEmail(
+      email,
+      "Your login code",
+      `Your HVAC Guardian login code is: ${code}\n\nThis code expires in 10 minutes.`,
+    );
 
     logger.info("OTP sent", { requestId, email: email.toLowerCase() });
     return jsonResponse({ status: "ok" });
@@ -73,4 +93,8 @@ export default async function handler(request: Request): Promise<Response> {
     });
     return errorResponse("Internal server error", 500);
   }
+}
+
+export default async function handler(request: Request): Promise<Response> {
+  return handleSendOtp(request);
 }

@@ -55,6 +55,15 @@ export interface AnalyticsProvider {
   }): Promise<void>;
 }
 
+export interface AuthStore {
+  setOtp(email: string, code: string, ttlSeconds: number): Promise<void>;
+  getOtp(email: string): Promise<string | null>;
+  deleteOtp(email: string): Promise<void>;
+  setSession(token: string, email: string, ttlSeconds: number): Promise<void>;
+  getSession(token: string): Promise<string | null>;
+  deleteSession(token: string): Promise<void>;
+}
+
 export interface StateStore {
   setSensorState(sensorId: string, state: ZoneSensorState): Promise<void>;
   getAllSensorStates(sensorIds: string[]): Promise<Map<string, ZoneSensorState>>;

@@ -2,7 +2,9 @@ export const config = { runtime: "edge" };
 
 import { loadEnvSecrets } from "../../src/config/index.js";
 import { RedisStateStore } from "../../src/providers/redis/index.js";
+import type { AuthStore } from "../../src/providers/types.js";
 import { createLogger } from "../../src/utils/logger.js";
+import type { Logger } from "../../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../../src/utils/response.js";
 
 function getSessionToken(request: Request): string | null {
@@ -11,8 +13,13 @@ function getSessionToken(request: Request): string | null {
   return match?.[1] ?? null;
 }
 
-export default async function handler(request: Request): Promise<Response> {
-  const logger = createLogger();
+export interface SessionDeps {
+  authStore: AuthStore;
+  logger: Logger;
+}
+
+export async function handleSession(request: Request, deps?: SessionDeps): Promise<Response> {
+  const logger = deps?.logger ?? createLogger();
   const requestId = crypto.randomUUID().slice(0, 8);
 
   try {
@@ -20,19 +27,23 @@ export default async function handler(request: Request): Promise<Response> {
       return errorResponse("Method not allowed", 405);
     }
 
-    const secrets = loadEnvSecrets();
     const token = getSessionToken(request);
 
     if (!token) {
       return jsonResponse({ authenticated: false });
     }
 
-    const redis = new RedisStateStore({
-      url: secrets.upstashRedisUrl,
-      token: secrets.upstashRedisToken,
-    });
+    const authStore =
+      deps?.authStore ??
+      (() => {
+        const secrets = loadEnvSecrets();
+        return new RedisStateStore({
+          url: secrets.upstashRedisUrl,
+          token: secrets.upstashRedisToken,
+        });
+      })();
 
-    const email = await redis.getSession(token);
+    const email = await authStore.getSession(token);
 
     if (!email) {
       return jsonResponse({ authenticated: false });
@@ -47,4 +58,8 @@ export default async function handler(request: Request): Promise<Response> {
     });
     return errorResponse("Internal server error", 500);
   }
+}
+
+export default async function handler(request: Request): Promise<Response> {
+  return handleSession(request);
 }
