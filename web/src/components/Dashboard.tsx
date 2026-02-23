@@ -16,7 +16,13 @@ export function Dashboard({ onLogout }: DashboardProps) {
   const refresh = useCallback(async () => {
     try {
       const data = await getCheckState();
-      setState(data);
+      if (Date.now() < toggleGraceRef.current) {
+        setState((prev) =>
+          prev ? { ...data, systemEnabled: prev.systemEnabled } : data,
+        );
+      } else {
+        setState(data);
+      }
       setLastUpdate(new Date());
       setError("");
     } catch (err) {
@@ -25,6 +31,7 @@ export function Dashboard({ onLogout }: DashboardProps) {
   }, []);
 
   const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined);
+  const toggleGraceRef = useRef<number>(0);
 
   const startPolling = useCallback(() => {
     if (intervalRef.current) clearInterval(intervalRef.current);
@@ -83,6 +90,7 @@ export function Dashboard({ onLogout }: DashboardProps) {
             enabled={state.systemEnabled}
             onToggle={(enabled) => {
               setState((prev) => (prev ? { ...prev, systemEnabled: enabled } : prev));
+              toggleGraceRef.current = Date.now() + 15_000;
               startPolling();
             }}
           />
