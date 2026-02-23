@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { getCheckState, type CheckStateResponse } from "../lib/api";
 import { SensorCard } from "./SensorCard";
 import { HvacUnitCard } from "./HvacUnitCard";
@@ -24,11 +24,20 @@ export function Dashboard({ onLogout }: DashboardProps) {
     }
   }, []);
 
+  const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined);
+
+  const startPolling = useCallback(() => {
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    intervalRef.current = setInterval(refresh, 10_000);
+  }, [refresh]);
+
   useEffect(() => {
     refresh();
-    const interval = setInterval(refresh, 10_000);
-    return () => clearInterval(interval);
-  }, [refresh]);
+    startPolling();
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current);
+    };
+  }, [refresh, startPolling]);
 
   if (!state) {
     return (
@@ -55,7 +64,11 @@ export function Dashboard({ onLogout }: DashboardProps) {
         <div className="flex items-center gap-4">
           <SystemToggle
             enabled={state.systemEnabled}
-            onToggle={(enabled) => setState({ ...state, systemEnabled: enabled })}
+            onToggle={(enabled) => {
+              setState((prev) => (prev ? { ...prev, systemEnabled: enabled } : prev));
+              startPolling();
+              refresh();
+            }}
           />
           <button
             onClick={onLogout}
