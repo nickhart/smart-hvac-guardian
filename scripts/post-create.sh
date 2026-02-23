@@ -27,14 +27,9 @@ mkdir -p "$HOME/.claude/debug" "$HOME/.claude/projects"
 echo "Installing Claude CLI..."
 curl -fsSL https://claude.ai/install.sh | sh
 
-# Python venv + Tinybird CLI
-VENV_DIR="$HOME/.venv"
-if [ ! -d "$VENV_DIR" ]; then
-  echo "Creating Python venv..."
-  python3 -m venv "$VENV_DIR"
-fi
+# Tinybird CLI
 echo "Installing Tinybird CLI..."
-"$VENV_DIR/bin/pip" install --quiet tinybird-cli
+curl -fsSL https://tinybird.co | sh
 
 # Global npm tools
 npm install -g eas-cli
