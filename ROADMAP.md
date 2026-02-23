@@ -121,13 +121,10 @@ concerns:
 - system shutoff should prevent firing shutoff events, in case of a race condition
 - verify we keep performing analytics even when off
 
-## consolidate all my third party services to the same region
+## ~~consolidate all my third party services to the same region~~
 
-- tinybird supports us-east1 and us-west2
-- I think for upstash I'm using us-west1 but maybe us-west2 is available
-  - probably need to create a new DB for redis
-- not sure about other 3rd party tools
-  - I don't think IFTTT lets you select a region
-  - same for YoLink and Cielo
-  - resend?
-  
+All regionable services already consolidated in **US-East**:
+- Tinybird: us-east AWS
+- Upstash Redis: us-east-1
+- Upstash QStash: us-east-1
+- IFTTT, YoLink, Resend: global services (no region selection)
