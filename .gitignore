@@ -144,5 +144,6 @@ vite.config.ts.timestamp-*
 .hvac-devices.json
 .zone-config.json
 
-# Tinybird SDK agent skills
-.agents/
+# Claude Code user data and runtime files
+.claude/
+skills-lock.json
