@@ -100,3 +100,7 @@ concerns:
 - potential side effects of firing an "off" to an already off hvac
   - an extra unwanted "beep" from the hvac if it is already off? (not sure, need to test this!)
   - race condition: maybe I turned it on locally and the turn off logic on the server fires at the same time, immediately shutting off the hvac that I just turned on. probably an edge case, but could be annoying
+
+## improve login to use magic links
+
+- support magic links and don't require the user to enter the OTP
