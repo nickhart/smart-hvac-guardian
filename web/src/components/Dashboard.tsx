@@ -1,5 +1,6 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import { getCheckState, setUnitDelay, type CheckStateResponse } from "../lib/api";
+import { useState, useCallback } from "react";
+import { setUnitDelay } from "../lib/api";
+import { useRealtimeState } from "../hooks/useRealtimeState";
 import { SensorCard } from "./SensorCard";
 import { HvacUnitCard } from "./HvacUnitCard";
 import { SystemToggle } from "./SystemToggle";
@@ -10,56 +11,25 @@ interface DashboardProps {
 }
 
 export function Dashboard({ onLogout, siteName }: DashboardProps) {
-  const [state, setState] = useState<CheckStateResponse | null>(null);
-  const [error, setError] = useState("");
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
-
-  const refresh = useCallback(async () => {
-    try {
-      const data = await getCheckState();
-      if (Date.now() < toggleGraceRef.current) {
-        setState((prev) => (prev ? { ...data, systemEnabled: prev.systemEnabled } : data));
-      } else {
-        setState(data);
-      }
-      setLastUpdate(new Date());
-      setError("");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to load state");
-    }
-  }, []);
-
-  const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined);
-  const toggleGraceRef = useRef<number>(0);
-
-  const startPolling = useCallback(() => {
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    intervalRef.current = setInterval(refresh, 10_000);
-  }, [refresh]);
-
-  useEffect(() => {
-    refresh();
-    startPolling();
-    return () => {
-      if (intervalRef.current) clearInterval(intervalRef.current);
-    };
-  }, [refresh, startPolling]);
+  const { state, error, lastUpdate, refresh, setOptimisticState, setToggleGrace, sseActive } =
+    useRealtimeState();
+  const [mutationError, setMutationError] = useState("");
 
   const handleDelayChange = useCallback(
     async (unitId: string, delaySeconds: number) => {
-      // Optimistic update
-      setState((prev) =>
+      setOptimisticState((prev) =>
         prev ? { ...prev, unitDelays: { ...prev.unitDelays, [unitId]: delaySeconds } } : prev,
       );
       try {
         await setUnitDelay(unitId, delaySeconds);
         await refresh();
+        setMutationError("");
       } catch (err) {
-        setError(err instanceof Error ? err.message : "Failed to update delay");
+        setMutationError(err instanceof Error ? err.message : "Failed to update delay");
         await refresh();
       }
     },
-    [refresh],
+    [refresh, setOptimisticState],
   );
 
   if (!state) {
@@ -79,6 +49,7 @@ export function Dashboard({ onLogout, siteName }: DashboardProps) {
   const exposedSet = new Set(state.exposedUnits);
   const timerSet = new Set(state.activeTimers);
   const offlineSet = new Set(state.offlineSensors);
+  const displayError = error || mutationError;
 
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
@@ -88,9 +59,8 @@ export function Dashboard({ onLogout, siteName }: DashboardProps) {
           <SystemToggle
             enabled={state.systemEnabled}
             onToggle={(enabled) => {
-              setState((prev) => (prev ? { ...prev, systemEnabled: enabled } : prev));
-              toggleGraceRef.current = Date.now() + 15_000;
-              startPolling();
+              setOptimisticState((prev) => (prev ? { ...prev, systemEnabled: enabled } : prev));
+              setToggleGrace();
             }}
           />
           <button onClick={onLogout} className="text-sm text-gray-500 hover:text-gray-700">
@@ -99,7 +69,7 @@ export function Dashboard({ onLogout, siteName }: DashboardProps) {
         </div>
       </header>
 
-      {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
+      {displayError && <p className="text-red-600 text-sm mb-4">{displayError}</p>}
 
       {!state.systemEnabled && (
         <div className="bg-yellow-50 border border-yellow-300 rounded-lg p-3 mb-4 text-sm text-yellow-800">
@@ -146,6 +116,7 @@ export function Dashboard({ onLogout, siteName }: DashboardProps) {
       {lastUpdate && (
         <p className="text-xs text-gray-400 text-center">
           Updated {lastUpdate.toLocaleTimeString()}
+          {sseActive && " · live"}
         </p>
       )}
     </div>
