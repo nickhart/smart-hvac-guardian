@@ -27,12 +27,15 @@ export function useRealtimeState() {
   const [lastUpdate, setLastUpdate] = useState<Date | null>(null);
 
   const toggleGraceRef = useRef<number>(0);
+  const quietUntilRef = useRef<number>(0);
+  const quietTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const sseConnectedRef = useRef(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const intervalRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const mountedRef = useRef(true);
 
   const refresh = useCallback(async () => {
+    if (Date.now() < quietUntilRef.current) return; // suppress during quiet period
     try {
       const data = await getCheckState();
       if (!mountedRef.current) return;
@@ -63,7 +66,11 @@ export function useRealtimeState() {
 
   const setToggleGrace = useCallback(() => {
     toggleGraceRef.current = Date.now() + 15_000;
-  }, []);
+    // Suppress refreshes for 2s so the backend can settle before we poll
+    quietUntilRef.current = Date.now() + 2_000;
+    if (quietTimerRef.current) clearTimeout(quietTimerRef.current);
+    quietTimerRef.current = setTimeout(refresh, 2_000);
+  }, [refresh]);
 
   // Adaptive polling
   useEffect(() => {
@@ -138,6 +145,7 @@ export function useRealtimeState() {
     refresh();
     return () => {
       mountedRef.current = false;
+      if (quietTimerRef.current) clearTimeout(quietTimerRef.current);
     };
   }, [refresh]);
 
