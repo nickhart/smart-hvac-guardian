@@ -24,15 +24,20 @@ PROJECT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 ZONE_CONFIG_FILE="$PROJECT_ROOT/.zone-config.json"
 HVAC_DEVICES_FILE="$PROJECT_ROOT/.hvac-devices.json"
 
-# ── Step 1: Load credentials from .env.local ──────────────────────────────────
+# ── Step 1: Load credentials ──────────────────────────────────────────────────
 
 header "Step 1: Loading credentials"
 
-ENV_FILE="$PROJECT_ROOT/.env.local"
+ENV_FILE="${1:-$PROJECT_ROOT/.env.local}"
+# Resolve relative paths
+[[ "$ENV_FILE" != /* ]] && ENV_FILE="$PWD/$ENV_FILE"
+
 if [[ ! -f "$ENV_FILE" ]]; then
-  err ".env.local not found at $ENV_FILE"
+  err "Environment file not found: $ENV_FILE"
+  echo "  Usage: $0 [path/to/.env.file]  (defaults to .env.local)"
   exit 1
 fi
+echo "  Using env file: $ENV_FILE"
 
 # Parse .env.local with python (handles unquoted JSON values)
 eval "$(python3 -c "
@@ -74,9 +79,13 @@ if [[ -z "${UPSTASH_REDIS_REST_URL:-}" || -z "${UPSTASH_REDIS_REST_TOKEN:-}" ]];
 fi
 echo "  Upstash Redis credentials: found"
 
-# Determine base URL
+# Determine base URL: prefer APP_URL, then fall back to APP_CONFIG.turnOffUrl
 BASE_URL=""
-if [[ -n "${APP_CONFIG:-}" ]]; then
+if [[ -n "${APP_URL:-}" ]]; then
+  BASE_URL="${APP_URL%/}"
+fi
+
+if [[ -z "$BASE_URL" && -n "${APP_CONFIG:-}" ]]; then
   BASE_URL=$(python3 -c "
 import json, os, sys
 try:
@@ -93,9 +102,8 @@ fi
 
 if [[ -z "$BASE_URL" ]]; then
   echo ""
-  echo "  No deployment URL found in APP_CONFIG."
-  read -rp "  Enter your Vercel deployment URL (e.g. https://smart-hvac-guardian.vercel.app): " BASE_URL
-  # Strip trailing slash
+  echo "  No deployment URL found (set APP_URL or APP_CONFIG.turnOffUrl in $ENV_FILE)."
+  read -rp "  Enter your Vercel deployment URL (e.g. https://your-app.vercel.app): " BASE_URL
   BASE_URL="${BASE_URL%/}"
 fi
 
@@ -179,16 +187,36 @@ pause
 
 header "Step 3: Define zones"
 
-# Check for saved zone config
+# Check for existing zone config: prefer APP_CONFIG from env file, fall back to .zone-config.json
 USE_SAVED_CONFIG=false
-if [[ -f "$ZONE_CONFIG_FILE" ]]; then
+SAVED_CONFIG_SOURCE=""
+
+if [[ -n "${APP_CONFIG:-}" ]]; then
+  SAVED_CONFIG_SOURCE="APP_CONFIG (from $ENV_FILE)"
+  SAVED_CONFIG_JSON=$(python3 -c "
+import json, os
+c = json.loads(os.environ['APP_CONFIG'])
+# Extract zone config fields (strip runtime-only fields like yolink/turnOffUrl)
+out = {
+    'zones': c.get('zones', {}),
+    'sensorDelays': c.get('sensorDelays', {}),
+    'sensorDefaults': c.get('sensorDefaults', {}),
+    'hvacUnits': c.get('hvacUnits', {}),
+}
+print(json.dumps(out))
+")
+elif [[ -f "$ZONE_CONFIG_FILE" ]]; then
+  SAVED_CONFIG_SOURCE=".zone-config.json"
+  SAVED_CONFIG_JSON=$(cat "$ZONE_CONFIG_FILE")
+fi
+
+if [[ -n "$SAVED_CONFIG_SOURCE" ]]; then
   echo ""
-  echo "  Found saved zone configuration:"
+  echo "  Found zone configuration from $SAVED_CONFIG_SOURCE:"
   echo ""
   python3 -c "
-import json
-with open('$ZONE_CONFIG_FILE') as f:
-    config = json.load(f)
+import json, sys
+config = json.loads(sys.argv[1])
 hvac_units = config.get('hvacUnits', {})
 for zname, zdata in config.get('zones', {}).items():
     hvac_names = [hvac_units.get(m, {}).get('name', m) for m in zdata.get('minisplits', [])]
@@ -196,9 +224,9 @@ for zname, zdata in config.get('zones', {}).items():
     ext = len(zdata.get('exteriorOpenings', []))
     intr = len(zdata.get('interiorDoors', []))
     print(f'    {zname}: HVAC=[{hvacs}], {ext} exterior, {intr} interior doors')
-"
+" "$SAVED_CONFIG_JSON"
   echo ""
-  read -rp "  Use existing zone config? [Y/n] " use_existing
+  read -rp "  Use this zone config? [Y/n] " use_existing
   if [[ ! "$use_existing" =~ ^[Nn]$ ]]; then
     USE_SAVED_CONFIG=true
   fi
@@ -422,9 +450,9 @@ PYEOF
 
 fi  # end of USE_SAVED_CONFIG check
 
-# If we loaded from saved config, read the file
+# If we loaded from saved config, use it
 if [[ "$USE_SAVED_CONFIG" == "true" ]]; then
-  ZONE_CONFIG_JSON=$(cat "$ZONE_CONFIG_FILE")
+  ZONE_CONFIG_JSON="$SAVED_CONFIG_JSON"
 fi
 
 # Extract pieces from ZONE_CONFIG_JSON for later steps
