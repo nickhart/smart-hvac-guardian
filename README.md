@@ -149,12 +149,12 @@ vercel deploy
 
 A React 19 + Vite + Tailwind CSS app in the `web/` directory. Once authenticated, it displays:
 
-- Real-time sensor states (open/closed/offline) with 10-second polling
-- HVAC unit exposure status and active timer badges
+- Real-time sensor states (open/closed/offline) with friendly display names
+- HVAC unit exposure status and active timer countdown badges
 - Per-unit delay override controls
 - System-wide enable/disable toggle
 
-The Vite dev server proxies `/api/*` to the local backend.
+Updates arrive via SSE in development (instant) or adaptive polling in production (3–15 s depending on state). The Vite dev server proxies `/api/*` to the local backend.
 
 ## Authentication
 
@@ -168,13 +168,15 @@ Only the `OWNER_EMAIL` address is allowed to log in. Requires `RESEND_API_KEY`, 
 
 ## Local Development
 
+### Commands
+
 ```bash
 pnpm install        # install dependencies
 pnpm test           # run unit tests (vitest)
 pnpm test:watch     # run tests in watch mode
 pnpm test:coverage  # run tests with coverage
 pnpm test:e2e       # run end-to-end tests
-pnpm dev            # start local dev server
+pnpm dev            # start local dev server (default config)
 pnpm dev:fast       # start dev server with 0.033x delay scaling
 pnpm type-check     # TypeScript validation
 pnpm lint           # ESLint
@@ -182,3 +184,54 @@ pnpm format         # Prettier format
 pnpm web:dev        # start the web dashboard dev server
 pnpm web:build      # build the web dashboard for production
 ```
+
+### Dev Server
+
+The dev server (`dev/server.ts`) is a local Express server that emulates the full production stack — QStash scheduling, Redis state, sensor events, and the dashboard — all in-process with no external dependencies.
+
+#### Environment files
+
+The server loads config from `.env.<name>` files. Pass `--env` to select one:
+
+```bash
+pnpm dev:fast -- --env dev        # .env.dev  — fake sensor IDs (default)
+pnpm dev:fast -- --env dev.prod   # .env.dev.prod — real production config
+```
+
+- **`.env.dev`** — placeholder sensor/zone IDs, good for quick iteration.
+- **`.env.dev.prod`** — exact production `APP_CONFIG` (real device IDs, 3 zones with interior doors, friendly sensor names). The `turnOffUrl` in the config points to production but the dev server auto-overrides it to `http://localhost:3000/api/hvac-turn-off`, so it's safe to use.
+
+#### Delay scaling
+
+HVAC turn-off timers are multiplied by a delay scale factor:
+
+- `pnpm dev` — real-time (1×). A 5-minute delay takes 5 minutes.
+- `pnpm dev:fast` — 0.033× (~30× faster). A 5-minute delay fires in ~10 seconds.
+
+#### Simulated sensor toggling
+
+The dashboard shows clickable sensor cards. Clicking a sensor sends `POST /api/sensor-event` to toggle it open/closed, letting you exercise the full zone-graph evaluation and timer logic without physical hardware.
+
+HVAC units can also be toggled via `POST /api/dev/hvac-toggle` to test re-exposure detection.
+
+#### Real-time dashboard updates (SSE)
+
+In dev mode the dashboard opens an SSE connection to `GET /api/events` for instant UI updates (sensor changes, timer set/fired/cancelled, HVAC state). A green "live" indicator appears when SSE is active.
+
+If SSE fails (e.g. after 5 consecutive errors), the dashboard falls back to adaptive polling:
+
+| Condition     | Poll interval |
+| ------------- | ------------- |
+| Tab hidden    | 15 s          |
+| Active timers | 3 s           |
+| Idle          | 5 s           |
+
+Production always uses adaptive polling (SSE is dev-only).
+
+#### Friendly sensor names
+
+When `sensorNames` is present in `APP_CONFIG`, the dashboard displays human-readable names (e.g. "Front Door") instead of raw device IDs. The `.env.dev.prod` file includes these by default.
+
+#### Dev-only introspection
+
+`GET /api/dev/state` returns the full internal state: all sensors, HVAC units, pending timers with fire timestamps, event log, zone config, and delay scale.

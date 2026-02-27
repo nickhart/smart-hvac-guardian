@@ -232,8 +232,9 @@
               const isOpen = s.state === "open";
               return `<div class="card">
         <div class="card-info">
-          <div class="card-id">${esc(s.id)}</div>
+          <div class="card-id">${esc(s.name || s.id)}</div>
           <div class="card-meta">
+            ${s.name ? `<span style="font-size:0.7rem;color:#64748b">${esc(s.id)}</span>` : ""}
             <span class="badge ${typeClass}">${esc(s.type)}</span>
             <span class="badge ${stateClass}">${esc(s.state)}</span>
             ${s.delay > 0 ? `<span style="margin-left:4px;font-size:0.7rem;color:#94a3b8">delay: ${s.delay}s</span>` : ""}

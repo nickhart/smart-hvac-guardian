@@ -200,6 +200,7 @@ export async function createDevServer(options: DevServerOptions = {}): Promise<D
         const state = {
           sensors: Object.entries(config.sensorDelays).map(([id, delay]) => ({
             id,
+            name: config.sensorNames[id] ?? null,
             delay,
             state: stateStore.getSensorSnapshot()[id] ?? "unknown",
             default: config.sensorDefaults[id] ?? null,
