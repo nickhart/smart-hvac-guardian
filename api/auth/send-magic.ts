@@ -6,6 +6,9 @@ import { loadEnvSecrets } from "../../src/config/index.js";
 import type { EnvSecrets } from "../../src/config/index.js";
 import { RedisStateStore } from "../../src/providers/redis/index.js";
 import type { AuthStore } from "../../src/providers/types.js";
+import { getDb } from "../../src/db/client.js";
+import { getUserByEmail } from "../../src/db/queries/users.js";
+import type { Database } from "../../src/db/client.js";
 import { createLogger } from "../../src/utils/logger.js";
 import type { Logger } from "../../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../../src/utils/response.js";
@@ -18,6 +21,7 @@ export interface SendMagicDeps {
   secrets: EnvSecrets;
   authStore: AuthStore;
   logger: Logger;
+  db?: Database;
   sendEmail: (to: string, subject: string, text: string) => Promise<void>;
 }
 
@@ -39,7 +43,7 @@ export async function handleSendMagic(request: Request, deps?: SendMagicDeps): P
 
     const secrets = deps?.secrets ?? loadEnvSecrets();
 
-    if (!secrets.resendApiKey || !secrets.ownerEmail) {
+    if (!secrets.resendApiKey) {
       logger.error("Auth not configured", { requestId });
       return errorResponse("Auth not configured", 503);
     }
@@ -53,7 +57,19 @@ export async function handleSendMagic(request: Request, deps?: SendMagicDeps): P
 
     const { email } = parsed.data;
 
-    if (email.toLowerCase() !== secrets.ownerEmail.toLowerCase()) {
+    // Multi-tenant: look up user in DB. Fall back to OWNER_EMAIL for legacy single-tenant.
+    const db = deps?.db ?? (process.env.DATABASE_URL ? getDb() : undefined);
+    let isAuthorized = false;
+
+    if (db) {
+      const user = await getUserByEmail(db, email);
+      isAuthorized = !!user;
+    } else if (secrets.ownerEmail) {
+      // Legacy single-tenant fallback
+      isAuthorized = email.toLowerCase() === secrets.ownerEmail.toLowerCase();
+    }
+
+    if (!isAuthorized) {
       logger.warn("Unauthorized email attempt", { requestId, email });
       // Return success to avoid email enumeration
       return jsonResponse({ status: "ok" });

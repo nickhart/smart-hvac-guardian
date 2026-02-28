@@ -16,6 +16,8 @@ export interface SessionResponse {
   authenticated: boolean;
   email?: string;
   siteName?: string;
+  tenantId?: string;
+  tenantStatus?: "onboarding" | "active" | "suspended";
 }
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -64,4 +66,96 @@ export async function setSystemToggle(enabled: boolean): Promise<{ enabled: bool
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ enabled }),
   });
+}
+
+// --- Onboarding API ---
+
+export async function startOnboarding(
+  email: string,
+  propertyName: string,
+): Promise<{ status: string; tenantId?: string; slug?: string; message: string }> {
+  return fetchJson("/api/onboarding/start", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, propertyName }),
+  });
+}
+
+export async function getOnboardingSteps(): Promise<{
+  status: string;
+  stepData: Record<string, Record<string, unknown>>;
+}> {
+  return fetchJson("/api/onboarding/step");
+}
+
+export async function saveOnboardingStep(
+  step: number,
+  data: Record<string, unknown>,
+): Promise<{ status: string }> {
+  return fetchJson("/api/onboarding/step", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ step, data }),
+  });
+}
+
+export async function testYoLinkCredentials(
+  uaCid: string,
+  secretKey: string,
+): Promise<{ status: string; message: string }> {
+  return fetchJson("/api/onboarding/yolink-test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ uaCid, secretKey }),
+  });
+}
+
+export async function discoverYoLinkDevices(): Promise<{
+  status: string;
+  devices: Array<{ deviceId: string; name: string; type: string; modelName: string }>;
+}> {
+  return fetchJson("/api/onboarding/yolink-devices");
+}
+
+export async function testIftttKey(
+  webhookKey: string,
+): Promise<{ status: string; message: string }> {
+  return fetchJson("/api/onboarding/ifttt-test", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ webhookKey }),
+  });
+}
+
+export async function testIftttApplet(
+  iftttEvent: string,
+): Promise<{ status: string; message: string }> {
+  return fetchJson("/api/onboarding/ifttt-test-applet", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ iftttEvent }),
+  });
+}
+
+export async function verifyOnboarding(): Promise<{
+  status: string;
+  message: string;
+  config?: unknown;
+  errors?: unknown;
+  webhookUrls?: { sensorEvent: string; hvacEvent: string };
+}> {
+  return fetchJson("/api/onboarding/verify", { method: "POST" });
+}
+
+export async function activateOnboarding(): Promise<{
+  status: string;
+  message: string;
+  webhookUrls?: { sensorEvent: string; hvacEvent: string };
+  webhookSecret?: string;
+}> {
+  return fetchJson("/api/onboarding/activate", { method: "POST" });
+}
+
+export async function importEnvConfig(): Promise<{ status: string; message: string }> {
+  return fetchJson("/api/onboarding/import-env", { method: "POST" });
 }

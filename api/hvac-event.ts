@@ -4,6 +4,8 @@ import { z } from "zod";
 import { loadConfig, loadEnvSecrets } from "../src/config/index.js";
 import { createDependencies } from "../src/handlers/dependencies.js";
 import type { Dependencies } from "../src/handlers/dependencies.js";
+import { extractTenantIdFromUrl } from "../src/middleware/extractTenant.js";
+import { resolveTenantFromWebhook } from "../src/middleware/tenant.js";
 import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
 import { evaluateZoneGraph } from "../src/zone-graph/index.js";
@@ -34,7 +36,26 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
     const { hvacId, event } = parsed.data;
     logger.info("Received HVAC event", { requestId, hvacId, event });
 
-    const d = deps ?? createDependencies(loadConfig(), loadEnvSecrets(), logger);
+    // Resolve dependencies: multi-tenant or legacy
+    let d: Dependencies;
+    if (deps) {
+      d = deps;
+    } else {
+      const tenantId = extractTenantIdFromUrl(request);
+      if (tenantId && process.env.DATABASE_URL) {
+        const ctx = await resolveTenantFromWebhook(tenantId, request);
+        if (!ctx) {
+          logger.warn("Unknown or suspended tenant", { requestId, tenantId });
+          return errorResponse("Unknown tenant", 404);
+        }
+        d = createDependencies(ctx.config, ctx.envSecrets, logger, {
+          tenantId: ctx.tenantId,
+          tenantSecrets: ctx.tenantSecrets,
+        });
+      } else {
+        d = createDependencies(loadConfig(), loadEnvSecrets(), logger);
+      }
+    }
 
     if (event === "off") {
       await d.analytics.trackHvacStateEvent({

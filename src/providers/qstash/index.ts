@@ -8,6 +8,7 @@ interface QStashSchedulerOptions {
   checkStateUrl: string;
   turnOffUrl: string;
   logger: Logger;
+  tenantId?: string;
 }
 
 export class QStashScheduler implements SchedulerProvider {
@@ -15,12 +16,14 @@ export class QStashScheduler implements SchedulerProvider {
   private readonly checkStateUrl: string;
   private readonly turnOffUrl: string;
   private readonly logger: Logger;
+  private readonly tenantId?: string;
 
   constructor(options: QStashSchedulerOptions) {
     this.client = new Client({ token: options.token });
     this.checkStateUrl = options.checkStateUrl;
     this.turnOffUrl = options.turnOffUrl;
     this.logger = options.logger;
+    this.tenantId = options.tenantId;
   }
 
   async scheduleDelayedCheck(
@@ -33,7 +36,7 @@ export class QStashScheduler implements SchedulerProvider {
     try {
       await this.client.publishJSON({
         url: this.checkStateUrl,
-        body: { sensorId },
+        body: { sensorId, ...(this.tenantId ? { tenantId: this.tenantId } : {}) },
         delay: delaySeconds,
         ...(deduplicationId ? { deduplicationId } : {}),
       });
@@ -53,7 +56,7 @@ export class QStashScheduler implements SchedulerProvider {
     try {
       await this.client.publishJSON({
         url: this.turnOffUrl,
-        body: {},
+        body: { ...(this.tenantId ? { tenantId: this.tenantId } : {}) },
         deduplicationId,
       });
 
@@ -72,24 +75,32 @@ export class QStashScheduler implements SchedulerProvider {
     delaySeconds: number,
     deduplicationId: string,
   ): Promise<void> {
+    // Scope dedup IDs to tenant
+    const scopedDedupId = this.tenantId ? `${this.tenantId}-${deduplicationId}` : deduplicationId;
+
     this.logger.info("Scheduling per-unit HVAC turn-off", {
       hvacUnitId,
       cancellationToken,
       delaySeconds,
-      deduplicationId,
+      deduplicationId: scopedDedupId,
+      tenantId: this.tenantId,
     });
 
     try {
       await this.client.publishJSON({
         url: this.turnOffUrl,
-        body: { hvacUnitId, cancellationToken },
+        body: {
+          hvacUnitId,
+          cancellationToken,
+          ...(this.tenantId ? { tenantId: this.tenantId } : {}),
+        },
         delay: delaySeconds,
-        deduplicationId,
+        deduplicationId: scopedDedupId,
       });
 
       this.logger.info("Per-unit HVAC turn-off scheduled successfully", {
         hvacUnitId,
-        deduplicationId,
+        deduplicationId: scopedDedupId,
       });
     } catch (error) {
       throw new ProviderError(

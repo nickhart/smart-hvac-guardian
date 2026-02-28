@@ -4,6 +4,8 @@ import { z } from "zod";
 import { loadConfig, loadEnvSecrets } from "../src/config/index.js";
 import { createDependencies } from "../src/handlers/dependencies.js";
 import type { Dependencies } from "../src/handlers/dependencies.js";
+import { extractTenantIdFromUrl } from "../src/middleware/extractTenant.js";
+import { resolveTenantFromWebhook } from "../src/middleware/tenant.js";
 import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
 import { evaluateZoneGraph } from "../src/zone-graph/index.js";
@@ -36,7 +38,26 @@ export async function handleSensorEvent(request: Request, deps?: Dependencies): 
     const { sensorId, event } = parsed.data;
     logger.info("Received sensor event", { requestId, sensorId, event });
 
-    const d = deps ?? createDependencies(loadConfig(), loadEnvSecrets(), logger);
+    // Resolve dependencies: multi-tenant (URL path) or legacy (env vars)
+    let d: Dependencies;
+    if (deps) {
+      d = deps;
+    } else {
+      const tenantId = extractTenantIdFromUrl(request);
+      if (tenantId && process.env.DATABASE_URL) {
+        const ctx = await resolveTenantFromWebhook(tenantId, request);
+        if (!ctx) {
+          logger.warn("Unknown or suspended tenant", { requestId, tenantId });
+          return errorResponse("Unknown tenant", 404);
+        }
+        d = createDependencies(ctx.config, ctx.envSecrets, logger, {
+          tenantId: ctx.tenantId,
+          tenantSecrets: ctx.tenantSecrets,
+        });
+      } else {
+        d = createDependencies(loadConfig(), loadEnvSecrets(), logger);
+      }
+    }
 
     // Validate sensor exists in config
     if (!(sensorId in d.config.sensorDelays)) {
@@ -105,7 +126,6 @@ export async function handleSensorEvent(request: Request, deps?: Dependencies): 
 
     // 6. Schedule new timers for newly exposed units
     for (const unitId of schedule) {
-      // Find which component this unit belongs to, get min delay of open exterior sensors
       const delaySeconds = await getDelayForUnit(unitId, d.stateStore, d.config);
       const token = crypto.randomUUID();
       const ttl = delaySeconds + 60; // buffer for QStash delivery

@@ -3,10 +3,12 @@ import type { AnalyticsProvider } from "../types.js";
 export class TinybirdAnalyticsProvider implements AnalyticsProvider {
   private baseUrl: string;
   private token: string;
+  private tenantId?: string;
 
-  constructor(options: { baseUrl: string; token: string }) {
+  constructor(options: { baseUrl: string; token: string; tenantId?: string }) {
     this.baseUrl = options.baseUrl.replace(/\/$/, "");
     this.token = options.token;
+    this.tenantId = options.tenantId;
   }
 
   async trackSensorEvent(
@@ -21,6 +23,7 @@ export class TinybirdAnalyticsProvider implements AnalyticsProvider {
       unexposed_units: data.unexposedUnits,
       timers_scheduled: data.timersScheduled,
       timers_cancelled: data.timersCancelled,
+      ...(this.tenantId ? { tenant_id: this.tenantId } : {}),
     });
   }
 
@@ -36,6 +39,7 @@ export class TinybirdAnalyticsProvider implements AnalyticsProvider {
       trigger_source: data.triggerSource,
       delay_seconds: data.delaySeconds ?? null,
       ifttt_event: data.iftttEvent ?? null,
+      ...(this.tenantId ? { tenant_id: this.tenantId } : {}),
     });
   }
 
@@ -49,6 +53,7 @@ export class TinybirdAnalyticsProvider implements AnalyticsProvider {
       event: data.event,
       was_exposed: data.wasExposed ? 1 : 0,
       turnoff_scheduled: data.turnoffScheduled ? 1 : 0,
+      ...(this.tenantId ? { tenant_id: this.tenantId } : {}),
     });
   }
 
