@@ -26,9 +26,7 @@ describe("extractTenantIdFromUrl", () => {
 
   it("handles UUID tenant IDs", () => {
     const uuid = "550e8400-e29b-41d4-a716-446655440000";
-    const result = extractTenantIdFromUrl(
-      req(`https://example.com/api/t/${uuid}/sensor-event`),
-    );
+    const result = extractTenantIdFromUrl(req(`https://example.com/api/t/${uuid}/sensor-event`));
     expect(result).toBe(uuid);
   });
 });
