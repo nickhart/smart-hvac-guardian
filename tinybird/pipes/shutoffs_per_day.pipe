@@ -9,10 +9,15 @@ SQL >
         count() AS shutoff_count,
         groupUniqArray(hvac_unit_id) AS units_affected,
         groupUniqArray(trigger_source) AS trigger_sources
-    FROM hvac_commands
+    FROM (
+        SELECT timestamp, hvac_unit_id, action, trigger_source, '' AS tenant_id FROM hvac_commands
+        UNION ALL
+        SELECT timestamp, hvac_unit_id, action, trigger_source, tenant_id FROM hvac_commands_v2
+    )
     WHERE action = 'turned_off'
         AND timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
         AND timestamp <= parseDateTimeBestEffort({{String(end_date, '2099-12-31')}})
+        AND ({{String(tenant_id, '')}} = '' OR tenant_id = {{String(tenant_id, '')}})
     GROUP BY day
     ORDER BY day DESC
 

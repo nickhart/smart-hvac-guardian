@@ -5,6 +5,9 @@ import { loadEnvSecrets } from "../../src/config/index.js";
 import type { EnvSecrets } from "../../src/config/index.js";
 import { RedisStateStore } from "../../src/providers/redis/index.js";
 import type { AuthStore } from "../../src/providers/types.js";
+import { createSession } from "../../src/auth/session.js";
+import { getDb } from "../../src/db/client.js";
+import type { Database } from "../../src/db/client.js";
 import { createLogger } from "../../src/utils/logger.js";
 import type { Logger } from "../../src/utils/logger.js";
 import { errorResponse } from "../../src/utils/response.js";
@@ -19,6 +22,7 @@ export interface MagicDeps {
   secrets: EnvSecrets;
   authStore: AuthStore;
   logger: Logger;
+  db?: Database;
 }
 
 function htmlPage(title: string, body: string): Response {
@@ -72,7 +76,24 @@ export async function handleMagic(request: Request, deps?: MagicDeps): Promise<R
     // Single-use: delete the magic token
     await authStore.deleteMagicToken(token);
 
-    // Create session
+    // Try multi-tenant session creation (DB-backed)
+    const db = deps?.db ?? (process.env.DATABASE_URL ? getDb() : undefined);
+
+    if (db) {
+      const sessionResult = await createSession(authStore, email, db);
+      if (sessionResult) {
+        logger.info("Magic link login (multi-tenant)", { requestId, email });
+        return new Response(null, {
+          status: 302,
+          headers: {
+            Location: "/",
+            "Set-Cookie": `session=${sessionResult.token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL}; Secure`,
+          },
+        });
+      }
+    }
+
+    // Legacy single-tenant fallback: store plain email
     const sessionToken = crypto.randomUUID();
     await authStore.setSession(sessionToken, email, SESSION_TTL);
 

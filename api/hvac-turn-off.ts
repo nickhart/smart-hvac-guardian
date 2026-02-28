@@ -4,6 +4,7 @@ import { z } from "zod";
 import { loadConfig, loadEnvSecrets } from "../src/config/index.js";
 import { createDependencies } from "../src/handlers/dependencies.js";
 import type { Dependencies } from "../src/handlers/dependencies.js";
+import { resolveTenantFromWebhook } from "../src/middleware/tenant.js";
 import { verifyQStashSignature } from "../src/providers/qstash/verify.js";
 import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
@@ -12,6 +13,7 @@ import { WebhookValidationError } from "../src/utils/errors.js";
 const TurnOffPayload = z.object({
   hvacUnitId: z.string().min(1),
   cancellationToken: z.string().min(1),
+  tenantId: z.string().optional(),
 });
 
 export async function handleHvacTurnOff(request: Request, deps?: Dependencies): Promise<Response> {
@@ -24,22 +26,50 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
     }
 
     const rawBody = await request.text();
-    const d = deps ?? createDependencies(loadConfig(), loadEnvSecrets(), logger);
 
-    // Verify QStash signature
-    const signature = request.headers.get("upstash-signature") ?? "";
-    await verifyQStashSignature(d.qstashReceiver, signature, rawBody);
+    // Parse body first to check for tenantId
+    let body: unknown;
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      return errorResponse("Invalid JSON", 400);
+    }
 
-    const body = JSON.parse(rawBody);
     const parsed = TurnOffPayload.safeParse(body);
-
     if (!parsed.success) {
       logger.warn("Invalid turn-off payload", { requestId, errors: parsed.error.flatten() });
       return errorResponse("Invalid payload", 400);
     }
 
-    const { hvacUnitId, cancellationToken } = parsed.data;
-    logger.info("Received turn-off request", { requestId, hvacUnitId, cancellationToken });
+    const { hvacUnitId, cancellationToken, tenantId } = parsed.data;
+    logger.info("Received turn-off request", {
+      requestId,
+      hvacUnitId,
+      cancellationToken,
+      tenantId,
+    });
+
+    // Resolve dependencies: multi-tenant (from QStash payload) or legacy
+    let d: Dependencies;
+    if (deps) {
+      d = deps;
+    } else if (tenantId && process.env.DATABASE_URL) {
+      const ctx = await resolveTenantFromWebhook(tenantId);
+      if (!ctx) {
+        logger.warn("Unknown or suspended tenant", { requestId, tenantId });
+        return errorResponse("Unknown tenant", 404);
+      }
+      d = createDependencies(ctx.config, ctx.envSecrets, logger, {
+        tenantId: ctx.tenantId,
+        tenantSecrets: ctx.tenantSecrets,
+      });
+    } else {
+      d = createDependencies(loadConfig(), loadEnvSecrets(), logger);
+    }
+
+    // Verify QStash signature
+    const signature = request.headers.get("upstash-signature") ?? "";
+    await verifyQStashSignature(d.qstashReceiver, signature, rawBody);
 
     // Check cancellation token in Redis
     const storedToken = await d.stateStore.getTimerToken(hvacUnitId);

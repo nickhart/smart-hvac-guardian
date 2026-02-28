@@ -25,22 +25,35 @@ export interface Dependencies {
   qstashReceiver: Receiver;
   config: AppConfig;
   logger: Logger;
+  tenantId?: string;
+}
+
+export interface TenantSecrets {
+  yolinkUaCid: string;
+  yolinkSecretKey: string;
+  iftttWebhookKey: string;
 }
 
 export function createDependencies(
   config: AppConfig,
   secrets: EnvSecrets,
   logger: Logger,
+  options?: { tenantId?: string; tenantSecrets?: TenantSecrets },
 ): Dependencies {
+  // Per-tenant credentials override env secrets for YoLink/IFTTT
+  const yolinkUaCid = options?.tenantSecrets?.yolinkUaCid ?? secrets.yolinkUaCid;
+  const yolinkSecretKey = options?.tenantSecrets?.yolinkSecretKey ?? secrets.yolinkSecretKey;
+  const iftttWebhookKey = options?.tenantSecrets?.iftttWebhookKey ?? secrets.iftttWebhookKey;
+
   const yolinkClient = new YoLinkClient({
     baseUrl: config.yolink.baseUrl,
-    uaCid: secrets.yolinkUaCid,
-    secretKey: secrets.yolinkSecretKey,
+    uaCid: yolinkUaCid,
+    secretKey: yolinkSecretKey,
     logger,
   });
 
   const iftttClient = new IFTTTClient({
-    webhookKey: secrets.iftttWebhookKey,
+    webhookKey: iftttWebhookKey,
     logger,
   });
 
@@ -49,6 +62,7 @@ export function createDependencies(
       ? new TinybirdAnalyticsProvider({
           baseUrl: secrets.tinybirdUrl,
           token: secrets.tinybirdToken,
+          tenantId: options?.tenantId,
         })
       : new NoopAnalyticsProvider();
 
@@ -57,13 +71,15 @@ export function createDependencies(
     hvac: new CieloIFTTTProvider(iftttClient),
     scheduler: new QStashScheduler({
       token: secrets.qstashToken,
-      checkStateUrl: "unused", // check-state is no longer in the critical path
+      checkStateUrl: "unused",
       turnOffUrl: config.turnOffUrl,
       logger,
+      tenantId: options?.tenantId,
     }),
     stateStore: new RedisStateStore({
       url: secrets.upstashRedisUrl,
       token: secrets.upstashRedisToken,
+      tenantId: options?.tenantId,
     }),
     analytics,
     qstashReceiver: createQStashReceiver({
@@ -72,5 +88,6 @@ export function createDependencies(
     }),
     config,
     logger,
+    tenantId: options?.tenantId,
   };
 }

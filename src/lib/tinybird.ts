@@ -21,11 +21,12 @@ import {
 // Datasources
 // ============================================================================
 
-export const sensorEvents = defineDatasource("sensor_events", {
-  description: "Door/window sensor open/close events",
+export const sensorEvents = defineDatasource("sensor_events_v2", {
+  description: "Door/window sensor open/close events (v2 with tenant_id)",
   schema: {
     timestamp: t.dateTime(),
     request_id: t.string(),
+    tenant_id: t.string(),
     sensor_id: t.string(),
     event: t.string(),
     exposed_units: t.array(t.string()).jsonPath("$.exposed_units[:]"),
@@ -34,17 +35,18 @@ export const sensorEvents = defineDatasource("sensor_events", {
     timers_cancelled: t.array(t.string()).jsonPath("$.timers_cancelled[:]"),
   },
   engine: engine.mergeTree({
-    sortingKey: ["timestamp", "sensor_id"],
+    sortingKey: ["tenant_id", "timestamp", "sensor_id"],
   }),
 });
 
 export type SensorEventsRow = InferRow<typeof sensorEvents>;
 
-export const hvacCommands = defineDatasource("hvac_commands", {
-  description: "HVAC turn-off, cancellation, and scheduling commands",
+export const hvacCommands = defineDatasource("hvac_commands_v2", {
+  description: "HVAC turn-off, cancellation, and scheduling commands (v2 with tenant_id)",
   schema: {
     timestamp: t.dateTime(),
     request_id: t.string(),
+    tenant_id: t.string(),
     hvac_unit_id: t.string(),
     unit_name: t.string(),
     action: t.string(),
@@ -53,24 +55,25 @@ export const hvacCommands = defineDatasource("hvac_commands", {
     ifttt_event: t.string().nullable(),
   },
   engine: engine.mergeTree({
-    sortingKey: ["timestamp", "hvac_unit_id"],
+    sortingKey: ["tenant_id", "timestamp", "hvac_unit_id"],
   }),
 });
 
 export type HvacCommandsRow = InferRow<typeof hvacCommands>;
 
-export const hvacStateEvents = defineDatasource("hvac_state_events", {
-  description: "HVAC unit on/off state change events",
+export const hvacStateEvents = defineDatasource("hvac_state_events_v2", {
+  description: "HVAC unit on/off state change events (v2 with tenant_id)",
   schema: {
     timestamp: t.dateTime(),
     request_id: t.string(),
+    tenant_id: t.string(),
     hvac_id: t.string(),
     event: t.string(),
     was_exposed: t.uint8(),
     turnoff_scheduled: t.uint8(),
   },
   engine: engine.mergeTree({
-    sortingKey: ["timestamp", "hvac_id"],
+    sortingKey: ["tenant_id", "timestamp", "hvac_id"],
   }),
 });
 
@@ -85,6 +88,7 @@ export const shutoffsPerDay = defineEndpoint("shutoffs_per_day", {
   params: {
     start_date: p.string().optional("2024-01-01").describe("Start date (YYYY-MM-DD)"),
     end_date: p.string().optional("2099-12-31").describe("End date (YYYY-MM-DD)"),
+    tenant_id: p.string().optional("").describe("Filter by tenant ID (empty = all)"),
   },
   nodes: [
     node({
@@ -95,10 +99,11 @@ export const shutoffsPerDay = defineEndpoint("shutoffs_per_day", {
           count() AS shutoff_count,
           groupUniqArray(hvac_unit_id) AS units_affected,
           groupUniqArray(trigger_source) AS trigger_sources
-        FROM hvac_commands
+        FROM hvac_commands_v2
         WHERE action = 'turned_off'
           AND timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
           AND timestamp <= parseDateTimeBestEffort({{String(end_date, '2099-12-31')}})
+          AND ({{String(tenant_id, '')}} = '' OR tenant_id = {{String(tenant_id, '')}})
         GROUP BY day
         ORDER BY day DESC
       `,
@@ -119,6 +124,7 @@ export const sensorTriggerFrequency = defineEndpoint("sensor_trigger_frequency",
   description: "How often each sensor fires open events",
   params: {
     start_date: p.string().optional("2024-01-01").describe("Start date (YYYY-MM-DD)"),
+    tenant_id: p.string().optional("").describe("Filter by tenant ID (empty = all)"),
   },
   nodes: [
     node({
@@ -129,9 +135,10 @@ export const sensorTriggerFrequency = defineEndpoint("sensor_trigger_frequency",
           count() AS open_count,
           min(timestamp) AS first_seen,
           max(timestamp) AS last_seen
-        FROM sensor_events
+        FROM sensor_events_v2
         WHERE event = 'open'
           AND timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
+          AND ({{String(tenant_id, '')}} = '' OR tenant_id = {{String(tenant_id, '')}})
         GROUP BY sensor_id
         ORDER BY open_count DESC
       `,
@@ -153,6 +160,7 @@ export const recentActivity = defineEndpoint("recent_activity", {
   params: {
     start_date: p.string().optional("2024-01-01").describe("Start date (YYYY-MM-DD)"),
     limit: p.int32().optional(50).describe("Max rows to return"),
+    tenant_id: p.string().optional("").describe("Filter by tenant ID (empty = all)"),
   },
   nodes: [
     node({
@@ -166,8 +174,9 @@ export const recentActivity = defineEndpoint("recent_activity", {
           exposed_units,
           timers_scheduled,
           timers_cancelled
-        FROM sensor_events
+        FROM sensor_events_v2
         WHERE timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
+          AND ({{String(tenant_id, '')}} = '' OR tenant_id = {{String(tenant_id, '')}})
         ORDER BY timestamp DESC
         LIMIT {{Int32(limit, 50)}}
       `,
@@ -193,6 +202,7 @@ export const exposureDuration = defineEndpoint("exposure_duration", {
     start_date: p.string().optional("2024-01-01").describe("Start date (YYYY-MM-DD)"),
     end_date: p.string().optional("2099-12-31").describe("End date (YYYY-MM-DD)"),
     hvac_unit_id_filter: p.string().optional("").describe("Filter by HVAC unit ID (empty = all)"),
+    tenant_id: p.string().optional("").describe("Filter by tenant ID (empty = all)"),
   },
   nodes: [
     node({
@@ -201,11 +211,12 @@ export const exposureDuration = defineEndpoint("exposure_duration", {
         SELECT
           timestamp AS opened_at,
           arrayJoin(exposed_units) AS hvac_unit_id
-        FROM sensor_events
+        FROM sensor_events_v2
         WHERE length(exposed_units) > 0
           AND timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
           AND timestamp <= parseDateTimeBestEffort({{String(end_date, '2099-12-31')}})
           AND ({{String(hvac_unit_id_filter, '')}} = '' OR has(exposed_units, {{String(hvac_unit_id_filter, '')}}))
+          AND ({{String(tenant_id, '')}} = '' OR tenant_id = {{String(tenant_id, '')}})
       `,
     }),
     node({
@@ -214,10 +225,11 @@ export const exposureDuration = defineEndpoint("exposure_duration", {
         SELECT
           timestamp AS closed_at,
           arrayJoin(unexposed_units) AS hvac_unit_id
-        FROM sensor_events
+        FROM sensor_events_v2
         WHERE length(unexposed_units) > 0
           AND timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
           AND timestamp <= parseDateTimeBestEffort({{String(end_date, '2099-12-31')}})
+          AND ({{String(tenant_id, '')}} = '' OR tenant_id = {{String(tenant_id, '')}})
       `,
     }),
     node({

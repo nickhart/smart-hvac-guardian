@@ -2,6 +2,9 @@
   "buildCommand": "pnpm --filter smart-hvac-guardian-web build",
   "outputDirectory": "web/dist",
   "rewrites": [
+    { "source": "/api/t/:tenantId/sensor-event", "destination": "/api/sensor-event" },
+    { "source": "/api/t/:tenantId/hvac-event", "destination": "/api/hvac-event" },
+    { "source": "/api/t/:tenantId/:path*", "destination": "/api/:path*" },
     { "source": "/api/:path*", "destination": "/api/:path*" },
     { "source": "/(.*)", "destination": "/index.html" }
   ]

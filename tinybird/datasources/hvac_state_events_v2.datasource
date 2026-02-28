@@ -1,0 +1,14 @@
+DESCRIPTION >
+    HVAC unit on/off state change events (v2 with tenant_id)
+
+SCHEMA >
+    timestamp DateTime `json:$.timestamp`,
+    request_id String `json:$.request_id`,
+    tenant_id String `json:$.tenant_id`,
+    hvac_id String `json:$.hvac_id`,
+    event String `json:$.event`,
+    was_exposed UInt8 `json:$.was_exposed`,
+    turnoff_scheduled UInt8 `json:$.turnoff_scheduled`
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "tenant_id, timestamp, hvac_id"

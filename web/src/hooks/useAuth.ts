@@ -6,6 +6,8 @@ interface AuthState {
   authenticated: boolean;
   email?: string;
   siteName: string;
+  tenantId?: string;
+  tenantStatus?: "onboarding" | "active" | "suspended";
 }
 
 export function useAuth() {
@@ -15,7 +17,7 @@ export function useAuth() {
     siteName: "HVAC Guardian",
   });
 
-  useEffect(() => {
+  const checkAuth = useCallback(() => {
     api
       .checkSession()
       .then((res) => {
@@ -26,15 +28,26 @@ export function useAuth() {
           authenticated: res.authenticated,
           email: res.email,
           siteName,
+          tenantId: res.tenantId,
+          tenantStatus: res.tenantStatus,
         });
       })
       .catch(() => setState({ loading: false, authenticated: false, siteName: "HVAC Guardian" }));
   }, []);
 
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
   const handleLogout = useCallback(async () => {
     await api.logout();
-    setState((prev) => ({ ...prev, loading: false, authenticated: false }));
+    setState((prev) => ({
+      ...prev,
+      loading: false,
+      authenticated: false,
+      tenantStatus: undefined,
+    }));
   }, []);
 
-  return { ...state, logout: handleLogout };
+  return { ...state, logout: handleLogout, refreshAuth: checkAuth };
 }

@@ -1,9 +1,10 @@
 import { useAuth } from "./hooks/useAuth";
 import { LoginForm } from "./components/LoginForm";
 import { Dashboard } from "./components/Dashboard";
+import { OnboardingWizard } from "./components/onboarding/OnboardingWizard";
 
 export function App() {
-  const { loading, authenticated, logout, siteName } = useAuth();
+  const { loading, authenticated, logout, siteName, tenantStatus, refreshAuth } = useAuth();
 
   if (loading) {
     return (
@@ -15,6 +16,10 @@ export function App() {
 
   if (!authenticated) {
     return <LoginForm siteName={siteName} />;
+  }
+
+  if (tenantStatus === "onboarding") {
+    return <OnboardingWizard siteName={siteName} onComplete={refreshAuth} onLogout={logout} />;
   }
 
   return <Dashboard onLogout={logout} siteName={siteName} />;

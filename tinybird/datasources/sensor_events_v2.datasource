@@ -1,0 +1,16 @@
+DESCRIPTION >
+    Door/window sensor open/close events (v2 with tenant_id)
+
+SCHEMA >
+    timestamp DateTime `json:$.timestamp`,
+    request_id String `json:$.request_id`,
+    tenant_id String `json:$.tenant_id`,
+    sensor_id String `json:$.sensor_id`,
+    event String `json:$.event`,
+    exposed_units Array(String) `json:$.exposed_units[:]`,
+    unexposed_units Array(String) `json:$.unexposed_units[:]`,
+    timers_scheduled Array(String) `json:$.timers_scheduled[:]`,
+    timers_cancelled Array(String) `json:$.timers_cancelled[:]`
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "tenant_id, timestamp, sensor_id"

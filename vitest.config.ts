@@ -21,6 +21,11 @@ export default defineConfig({
         "src/providers/tinybird/**",
         "src/providers/types.ts",
         "src/providers/yolink/types.ts",
+        "src/db/client.ts",
+        "src/db/queries/**",
+        "src/migration/**",
+        "api/onboarding/**",
+        "api/auth/**",
       ],
       thresholds: {
         lines: 80,

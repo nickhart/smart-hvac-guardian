@@ -12,8 +12,13 @@ SQL >
         exposed_units,
         timers_scheduled,
         timers_cancelled
-    FROM sensor_events
+    FROM (
+        SELECT timestamp, sensor_id, event, exposed_units, timers_scheduled, timers_cancelled, '' AS tenant_id FROM sensor_events
+        UNION ALL
+        SELECT timestamp, sensor_id, event, exposed_units, timers_scheduled, timers_cancelled, tenant_id FROM sensor_events_v2
+    )
     WHERE timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
+        AND ({{String(tenant_id, '')}} = '' OR tenant_id = {{String(tenant_id, '')}})
     ORDER BY timestamp DESC
     LIMIT {{Int32(limit, 50)}}
 

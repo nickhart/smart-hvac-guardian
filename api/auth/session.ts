@@ -3,19 +3,17 @@ export const config = { runtime: "edge" };
 import { loadEnvSecrets } from "../../src/config/index.js";
 import { RedisStateStore } from "../../src/providers/redis/index.js";
 import type { AuthStore } from "../../src/providers/types.js";
+import { getSessionPayload, getSessionToken } from "../../src/auth/session.js";
+import { getDb } from "../../src/db/client.js";
+import type { Database } from "../../src/db/client.js";
 import { createLogger } from "../../src/utils/logger.js";
 import type { Logger } from "../../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../../src/utils/response.js";
 
-function getSessionToken(request: Request): string | null {
-  const cookie = request.headers.get("Cookie") ?? "";
-  const match = cookie.match(/(?:^|;\s*)session=([^\s;]+)/);
-  return match?.[1] ?? null;
-}
-
 export interface SessionDeps {
   authStore: AuthStore;
   logger: Logger;
+  db?: Database;
 }
 
 export async function handleSession(request: Request, deps?: SessionDeps): Promise<Response> {
@@ -44,10 +42,37 @@ export async function handleSession(request: Request, deps?: SessionDeps): Promi
         });
       })();
 
+    const db = deps?.db ?? (process.env.DATABASE_URL ? getDb() : undefined);
+
+    // Try multi-tenant session (JSON payload with tenantId)
+    if (db) {
+      const payload = await getSessionPayload(authStore, token, db);
+      if (payload) {
+        logger.info("Session validated (multi-tenant)", { requestId, email: payload.email });
+        return jsonResponse({
+          authenticated: true,
+          email: payload.email,
+          tenantId: payload.tenantId,
+          tenantStatus: payload.tenantStatus,
+          siteName,
+        });
+      }
+    }
+
+    // Legacy fallback: session stores plain email
     const email = await authStore.getSession(token);
 
     if (!email) {
       return jsonResponse({ authenticated: false, siteName });
+    }
+
+    // If it looks like JSON, it was a multi-tenant session but DB is unavailable
+    try {
+      JSON.parse(email);
+      // It's JSON but we have no DB — can't validate
+      return jsonResponse({ authenticated: false, siteName });
+    } catch {
+      // Plain email string — legacy single-tenant
     }
 
     logger.info("Session validated", { requestId, email });

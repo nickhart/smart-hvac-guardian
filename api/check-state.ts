@@ -3,6 +3,7 @@ export const config = { runtime: "edge" };
 import { loadConfig, loadEnvSecrets } from "../src/config/index.js";
 import { createDependencies } from "../src/handlers/dependencies.js";
 import type { Dependencies } from "../src/handlers/dependencies.js";
+import { resolveTenantFromSession } from "../src/middleware/tenant.js";
 import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
 import { evaluateZoneGraph } from "../src/zone-graph/index.js";
@@ -17,7 +18,23 @@ export async function handleCheckState(request: Request, deps?: Dependencies): P
       return errorResponse("Method not allowed", 405);
     }
 
-    const d = deps ?? createDependencies(loadConfig(), loadEnvSecrets(), logger);
+    // Resolve dependencies: multi-tenant (session) or legacy
+    let d: Dependencies;
+    if (deps) {
+      d = deps;
+    } else if (process.env.DATABASE_URL) {
+      const ctx = await resolveTenantFromSession(request);
+      if (!ctx) {
+        return errorResponse("Unauthorized", 401);
+      }
+      d = createDependencies(ctx.config, ctx.envSecrets, logger, {
+        tenantId: ctx.tenantId,
+        tenantSecrets: ctx.tenantSecrets,
+      });
+    } else {
+      d = createDependencies(loadConfig(), loadEnvSecrets(), logger);
+    }
+
     const siteName = process.env.SITE_NAME || "HVAC Guardian";
 
     // Read all sensor states from Redis, applying defaults for sensors without state
