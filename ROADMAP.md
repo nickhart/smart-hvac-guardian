@@ -45,6 +45,37 @@ Requires Resend (already integrated for auth).
 - System error alerts (provider failures, QStash issues)
 - User preferences for which notifications to receive
 
+### Energy usage insights
+
+Upload historical energy data (CSV with `date` and `kwh` columns) to track consumption over time and correlate with weather conditions. Enables comparisons across periods (e.g. this summer vs last summer) to quantify savings from automated HVAC shutoffs.
+
+**Data model:**
+
+- New `energy_readings` table in Postgres: `tenant_id`, `date`, `kwh`, `created_at`
+- Simple CSV upload — two columns (`date`, `kwh`), one row per day/billing period
+- Tenant property zip code stored in `tenants` table (new column) or in `tenant_config` JSONB
+
+**Weather correlation:**
+
+- Fetch historical daily temperature + humidity from [Open-Meteo](https://open-meteo.com/) (free, no API key, 10k requests/day)
+- Cache in Redis by zip code + date range (`weather:{zipCode}:{year}`) with 30-day TTL
+- Shared across tenants in the same zip code — avoids redundant API calls
+- One API call fetches up to a year of daily data, so cache hit rate should be high
+
+**Upload flow:**
+
+- API endpoint accepts CSV, validates columns, upserts rows into `energy_readings`
+- On upload, auto-fetch weather data for the same date range + zip code (cache-first)
+- Return summary: rows imported, date range, any duplicates/overwrites
+
+**Future insights (visualization TBD):**
+
+- Energy usage over time (daily/monthly chart)
+- Energy vs outdoor temperature scatter plot (shows AC correlation)
+- Period-over-period comparison (same month, different years)
+- Estimated savings: compare energy during HVAC-guardian-active periods vs baseline
+- Cooling degree days (CDD) normalization for fair year-over-year comparison
+
 ### Web configuration UI
 
 Browser-based management to replace manual `APP_CONFIG` editing.
