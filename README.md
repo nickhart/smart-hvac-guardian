@@ -183,6 +183,7 @@ pnpm lint           # ESLint
 pnpm format         # Prettier format
 pnpm web:dev        # start the web dashboard dev server
 pnpm web:build      # build the web dashboard for production
+pnpm cli            # tenant & user management CLI (see below)
 ```
 
 ### Dev Server
@@ -235,3 +236,52 @@ When `sensorNames` is present in `APP_CONFIG`, the dashboard displays human-read
 #### Dev-only introspection
 
 `GET /api/dev/state` returns the full internal state: all sensors, HVAC units, pending timers with fire timestamps, event log, zone config, and delay scale.
+
+## Tenant & User Management
+
+The system supports **multi-tenancy** — each tenant has isolated data, users, and webhook endpoints scoped under `/api/t/{tenantId}/...`.
+
+### CLI
+
+Manage tenants and users from the command line:
+
+```bash
+pnpm cli <command> [...args]
+```
+
+#### Tenant commands
+
+| Command                      | Description                               |
+| ---------------------------- | ----------------------------------------- |
+| `tenant:create <name>`       | Create a new tenant (auto-generates slug) |
+| `tenant:list`                | List all tenants                          |
+| `tenant:activate <tenantId>` | Activate a tenant                         |
+| `tenant:suspend <tenantId>`  | Suspend a tenant                          |
+| `tenant:delete <tenantId>`   | Delete tenant and all related data        |
+
+#### User commands
+
+| Command                              | Description                                                      |
+| ------------------------------------ | ---------------------------------------------------------------- |
+| `user:add <email> <tenantId> [role]` | Add a user (role: `owner`\|`admin`\|`viewer`, default: `viewer`) |
+| `user:list <tenantId>`               | List users for a tenant                                          |
+| `user:remove <userId>`               | Remove a user                                                    |
+| `user:set-role <userId> <role>`      | Change a user's role                                             |
+
+### Quick-start example
+
+```bash
+# Create a tenant
+pnpm cli tenant:create "Acme Properties"
+
+# Note the tenant ID from the output, then add an owner user
+pnpm cli user:add admin@acme.com <tenantId> owner
+
+# Verify
+pnpm cli tenant:list
+pnpm cli user:list <tenantId>
+```
+
+### Database requirement
+
+The CLI connects directly to Postgres. Make sure `DATABASE_URL` is set in your environment (or `.env` file) before running any commands.
