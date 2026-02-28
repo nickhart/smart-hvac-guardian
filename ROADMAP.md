@@ -1,122 +1,175 @@
 # Roadmap
 
-## Zone-aware AC control via internal door sensors
+Forward-looking features and explorations. See [STATUS.md](./STATUS.md) for what's already been built.
 
-**Status: Implemented**
+---
 
-Per-zone HVAC control using interior door sensors to determine connected components. Zones connected by open interior doors form a single component; only HVAC units in components exposed to an open exterior opening get shut off. Includes per-HVAC-unit timers with proactive cancellation via Redis tokens.
+## Near-term
 
-- **Zone graph evaluation:** BFS over zones connected by open interior doors determines connected components.
-- **Cancellation tokens:** Each timer stores a UUID in Redis. Closing a door deletes the token; when QStash fires, a mismatched/missing token means the timer was cancelled.
-- **Per-sensor delays:** Each exterior sensor has its own `delaySeconds`. When multiple are open in a component, the minimum delay is used.
+### Analytics dashboard
 
-## Remote delay configuration
+Build a dashboard page showing shutoff history, frequency charts, and per-sensor breakdown using the existing Tinybird endpoints (`shutoffs_per_day`, `sensor_trigger_frequency`, `recent_activity`, `exposure_duration`).
 
-Ability to change per-sensor delay values without redeploying. Store delay overrides in Redis (`delay-override:{sensorId}` keys), falling back to `APP_CONFIG.sensorDelays` defaults when no override exists.
+- Time-range picker: past 24h, past week, specific date range
+- Per-sensor and per-unit drill-down
+- Trend visualization (are guests learning the system?)
 
-- Expose a simple API endpoint (`POST /api/config/delays`) for updating overrides.
-- Read overrides in `sensor-event` and `hvac-event` handlers when computing timer delays.
-- Future: integrate into web configuration UI.
+### HVAC state tracking in Redis
 
-## System on/off toggle
+Persist HVAC on/off state from `hvac-event` handler to avoid scheduling redundant turn-off timers.
 
-A Redis flag (`system:enabled`) checked at the top of `sensor-event` and `hvac-event` handlers. When disabled:
+- Store `hvac-state:{unitId}` in Redis on each on/off event
+- Check state before scheduling a timer — skip if unit is already off
+- Open concerns:
+  - Does a redundant IFTTT "off" command cause an extra beep?
+  - Race condition: user manually turns on AC, server fires a stale turn-off
 
-- All events are logged as usual.
-- No timers are scheduled and no turn-off commands are sent.
-- Active timers are not cancelled (they will expire naturally or be cancelled on re-enable).
+### Proactive timer cancellation on system disable
 
-Controllable via a simple API endpoint (`POST /api/system/toggle`) or future dashboard.
+When the system is toggled off, cancel all active timers in Redis (delete `timer:*` keys) rather than letting them fire and no-op.
 
-## Shutoff analytics (Upstash Redis)
+### Service outage auto-disable
 
-Track how often auto-shutoffs happen, which sensors trigger them, and observe patterns over time (e.g. guests learning the system).
+If IFTTT, Cielo, or YoLink is unreachable, temporarily disable AC shutoff to avoid locking guests out of AC. Re-enable automatically when services recover.
 
-Uses **Upstash Redis** (already an Upstash customer via QStash; free tier: 10K commands/day, 256 MB).
+---
 
-- **Storage model:** Each shutoff event is stored as a sorted-set entry (score = Unix timestamp).
-  - Key structure: `shutoffs:{YYYY-MM}` — monthly buckets for easy range queries and automatic expiry.
-  - Event payload: `{ timestamp, sensorId, sensorName, hvacUnitsAffected, triggerSource }` where `triggerSource` is `"hvac-on"` or `"sensor-open"`.
-- **Query patterns:** shutoffs per day/week, most-triggered sensor, frequency trends over time.
-- **Phase 1 — instrument:** Write events to Redis from `api/hvac-turn-off.ts` on each successful turn-off.
-- **Phase 2 — dashboard:** Build a simple Next.js page showing shutoff history, frequency charts, and per-sensor breakdown.
-- **Future:** Add guest/unit context (which HVAC unit was on that triggered the check).
+## Medium-term
 
-## Resend.dev integration
+### Email notifications
 
-Add [Resend](https://resend.com) as the transactional email provider for user-facing features.
-
-## User accounts and authentication
-
-- Email/OTP (magic link) login — no passwords
-- Account ties together a user's sensor and HVAC configuration
-
-## Web configuration UI
-
-- Browser-based UI to manage sensors, HVAC units, IFTTT event names, and delay timers
-- Replaces manual environment variable / config file editing
-
-## Web dashboard
-
-- Live view of sensor states (open/closed) and HVAC unit status (on/off)
-- Event history log (sensor events, HVAC commands, errors)
-
-## Email notifications
+Requires Resend (already integrated for auth).
 
 - Sensor open alerts (e.g. "Kitchen window has been open for 10 minutes")
 - HVAC turn-off confirmations
 - System error alerts (provider failures, QStash issues)
+- User preferences for which notifications to receive
 
-## handle offline sensors
+### Web configuration UI
 
-- if a sensor is offline treat it as closed
-- if IFTTT, Cielo, or YoLink is down, temporarily disable the AC shutoff system
-- we don't want dead batteries or service outages to result in guests being unable to use the AC
+Browser-based management to replace manual `APP_CONFIG` editing.
 
-## minimal web UI
+- Manage sensors (names, types, assignments to zones)
+- Manage HVAC units (names, IFTTT event names, default delays)
+- Manage zones (rooms, interior/exterior door assignments)
+- Live validation and preview of zone graph
 
-- have a basic index with an email login form
-- add OWNER_EMAIL to the environment (eg: OWNER_EMAIL=<nickhart@gmail.com>)
-- add support for email/OTP auth with resend.dev
-- for now we only support the OWNER_EMAIL
-- once logged in show a dashboard with the current state of the sensors and hvac units
-- if possible use the qstash/redis state to show any active timers for the hvac units
-- at some point plan a history view which shows sensor, hvac, timer, and shutoff activity
-- at some point plan a metrics view which shows how often shutoff activity occurs over a time period
-  - over a day, week, month, year?
-  - allow one to choose the exact time period
-  - eg: the past 24 hours, or a previous 24 hour period
-  - eg: over the past week, or a specific 7 day period
-  - etc...
+### Onboarding experience
 
-## tracking HVAC state in redis
+Web-based stepper wizard that walks a new client through the entire setup process, from hardware to working automations. Each step validates before allowing the user to continue. Progress is saved so the user can leave and come back.
 
-Your first question — valid concern. The system currently has no concept of HVAC power state. It treats "exposed" as "needs a turn-off timer" regardless of whether the unit is already off. So yes, if you open the front door, the living room AC gets turned off, and then you open the lanai door, it would schedule another turn-off for the already-off AC (which is harmless but wasteful — IFTTT just gets a redundant call).
+**Step 1 — Account creation**
 
-The system doesn't track HVAC on/off state in Redis today. The hvac-event endpoint receives on/off events but doesn't persist them. To skip unnecessary timers, you'd need to store HVAC power state and check it before scheduling. That's a production code change though — want me to look into it, or are you happy with the current "fire and forget" behavior since the redundant turn-off is a no-op?
+- Sign up with email (magic link)
+- Name your property (e.g. "Kona Beach House")
 
-concerns:
+**Step 2 — Install and connect YoLink hub**
 
-- potential side effects of firing an "off" to an already off hvac
-  - an extra unwanted "beep" from the hvac if it is already off? (not sure, need to test this!)
-  - race condition: maybe I turned it on locally and the turn off logic on the server fires at the same time, immediately shutting off the hvac that I just turned on. probably an edge case, but could be annoying
+- Guide: unbox hub, plug in, download YoLink app, create account
+- Enter YoLink API credentials (UA CID + secret key)
+- Test connection — fetch device list from YoLink API to confirm credentials work
 
-## improve login to use magic links
+**Step 3 — Install door/window sensors**
 
-- support magic links and don't require the user to enter the OTP
+- Guide: pair sensors in YoLink app, place on doors/windows
+- Auto-discover sensors from YoLink account (show device list)
+- Name each sensor (e.g. "Front Door", "Kitchen Window")
+- Mark each as interior or exterior
 
-## build an onboarding experience
+**Step 4 — Configure zones**
 
-- use a stepper flow (show how many steps are in the flow, show progress as each step is complete)
-- walk the user through adding keys/tokens for each service
-  - offer some basic how-to info on setting up an account with the service down below
-- walk the user through configuring zones
-- let the user pick a default delay for all the hvac units
-- walk the user through setting up all of the IFTTT applets
+- Guide: explain the zone concept (rooms connected by interior doors form a group)
+- Visual zone builder — drag sensors into zones, name each zone
+- Assign interior sensors as connections between zones
+- Preview the zone graph (show which zones connect to which)
 
-## better integrate system shutoff into the overall architecture
+**Step 5 — Install and connect Cielo Breez**
 
-- bug: shutoff was still sent when timer was fired!
-- system shutoff should cancel timers
-- system shutoff should prevent firing shutoff events, in case of a race condition
-- verify we keep performing analytics even when off
+- Guide: install Cielo Breez units, create Cielo account, pair with AC units
+- Name each HVAC unit (e.g. "Living Room AC", "Master Bedroom AC")
+- Assign each HVAC unit to a zone
+
+**Step 6 — Connect IFTTT**
+
+- Guide: create IFTTT account, enable webhooks service
+- Enter IFTTT webhook key
+- Test connection — fire a test webhook event
+
+**Step 7 — Create IFTTT applets**
+
+- For each HVAC unit, show exact step-by-step instructions to create the "turn off" applet
+  - Which IFTTT trigger (webhook event name) to use
+  - Which Cielo Breez action to configure
+- Ideally: deep-link into IFTTT applet creation with pre-filled values
+- Test each applet — fire the webhook event and ask user to confirm the AC responded
+
+**Step 8 — Set delays and preferences**
+
+- Pick a default shutoff delay for all units (e.g. 3 minutes)
+- Optionally customize per-unit delays
+- Enable/disable email notifications
+
+**Step 9 — Verify and go live**
+
+- Run a full end-to-end test: simulate a sensor open event, show the timer, confirm shutoff fires
+- Show a summary of the complete configuration
+- Enable the system
+
+### Migrate from environment config
+
+For existing single-tenant deployments (like ours), provide a migration path that imports the current `APP_CONFIG`, `ENV_SECRETS`, and related environment variables into a new tenant record.
+
+- Detect existing env-based config on first login (`APP_CONFIG` is set, no tenants in DB yet)
+- Offer to run the onboarding wizard with all fields pre-filled from the environment
+  - Zones, sensors, sensor names, delays — from `APP_CONFIG`
+  - YoLink credentials, IFTTT webhook key, Resend key — from env secrets
+  - Owner email — from `OWNER_EMAIL`
+- User walks through each step to review and confirm (not a silent import — they should see and understand what's configured)
+- On completion, tenant + config + credentials are stored in the database
+- The system switches to reading from DB; env vars are no longer consulted at runtime
+- Print a summary of which env vars are now safe to remove (or convert to example values in `.env.example`)
+
+---
+
+## Future — Multi-tenant hosted service
+
+Turn this into a hosted platform where multiple vacation rental owners can sign up, each with their own sensors, HVAC units, IFTTT account, YoLink account, etc.
+
+### Architecture assessment
+
+The codebase is well-structured (provider interfaces, dependency injection, `Dependencies` object), but is **end-to-end single-tenant by construction**. No tenant identifier flows through any request today. Major work areas:
+
+| Area | Current state | What changes | Effort |
+|------|--------------|--------------|--------|
+| **Database** | Redis only, no relational store | Add Postgres (Neon/Supabase) for `tenants`, `users`, `tenant_secrets` tables. Add ORM + migrations. | Large |
+| **Config system** | Global singleton from `process.env` | Per-tenant config loaded from DB at request time, replace module-level cache | Large |
+| **Auth / user model** | Single `OWNER_EMAIL` env var, no user table | Users table, tenant association, session carries `tenantId` | Large |
+| **API routes** | No tenant context in any request | All routes extract `tenantId` from session (browser) or URL (webhooks) and thread it through | Large |
+| **External credentials** | One global set of YoLink/IFTTT/Resend env vars | Per-tenant encrypted credential storage, per-request client instantiation | Large |
+| **Redis keys** | Flat global (`sensor:x`, `timer:x`, `system:enabled`) | Prefix all keys with `{tenantId}:`, scope SCAN patterns | Medium |
+| **QStash callbacks** | Fixed global `turnOffUrl`, no tenant in payload | Include `tenantId` in callback URL/payload, prefix deduplication IDs | Medium |
+| **Tinybird analytics** | No `tenant_id` column in any datasource | Add `tenant_id` to all schemas, ingest calls, and endpoint SQL | Medium |
+
+### Recommended approach (dependency order)
+
+1. **Add a relational database** — `tenants`, `users`, `tenant_secrets` tables. This unblocks everything else.
+2. **Namespace Redis keys** — prefix all keys with `{tenantId}:`. Mechanical but must happen before real tenants exist.
+3. **Refactor auth** — sessions carry `tenantId`, login looks up email across tenants.
+4. **Refactor API routes** — extract `tenantId` from session (dashboard) or URL (webhooks), thread through `createDependencies`.
+5. **Per-tenant credentials** — `createDependencies` receives tenant-specific secrets, instantiates per-tenant `IFTTTClient`, `YoLinkClient`, etc.
+6. **Update QStash** — tenant-scoped `turnOffUrl` and deduplication IDs.
+7. **Update Tinybird** — add `tenant_id` to all datasource schemas and endpoint queries.
+
+### Key strengths for multi-tenancy
+
+- Provider interfaces (`StateStore`, `Scheduler`, `AnalyticsProvider`) already abstract implementations
+- `Dependencies` object is passed through handlers — easy to make per-tenant
+- Zone graph, timer/cancellation logic, and analytics tracking are tenant-agnostic internally
+- Business logic doesn't directly touch Redis or external APIs — it goes through the dependency layer
+
+### Key risks
+
+- Credential management (encrypted storage, rotation, per-tenant secret scoping)
+- Webhook routing — IFTTT applets are configured per-user with hardcoded payloads; adding `tenantId` requires re-configuring every applet
+- Cost model — each tenant adds QStash, Redis, Tinybird, and IFTTT usage
+- Isolation — bugs in one tenant's config shouldn't affect others
