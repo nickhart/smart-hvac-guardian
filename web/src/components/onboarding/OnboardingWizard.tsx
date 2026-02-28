@@ -18,8 +18,8 @@ const STEP_TITLES = [
   "Welcome",
   "YoLink Credentials",
   "Sensors",
-  "Zones",
   "HVAC Units",
+  "Zones",
   "IFTTT Webhook",
   "Test Applets",
   "Review",
@@ -127,8 +127,8 @@ export function OnboardingWizard({ siteName, onComplete, onLogout }: OnboardingW
         {step === 1 && <Step1Account {...stepProps} />}
         {step === 2 && <Step2YoLink {...stepProps} />}
         {step === 3 && <Step3Sensors {...stepProps} />}
-        {step === 4 && <Step4Zones {...stepProps} />}
-        {step === 5 && <Step5HvacUnits {...stepProps} />}
+        {step === 4 && <Step5HvacUnits {...stepProps} />}
+        {step === 5 && <Step4Zones {...stepProps} />}
         {step === 6 && <Step6Ifttt {...stepProps} />}
         {step === 7 && <Step7TestApplets {...stepProps} />}
         {step === 8 && <Step8Review {...stepProps} />}

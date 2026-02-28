@@ -60,14 +60,14 @@ export default async function handler(request: Request): Promise<Response> {
       yolinkBaseUrl: (appConfig.yolink as Record<string, unknown>)?.baseUrl ?? "",
     });
 
-    // Step 4: Zones
+    // Step 4: HVAC Units
     await saveOnboardingStep(db, session.tenantId, 4, {
-      zones: appConfig.zones ?? {},
+      hvacUnits: appConfig.hvacUnits ?? {},
     });
 
-    // Step 5: HVAC Units
+    // Step 5: Zones
     await saveOnboardingStep(db, session.tenantId, 5, {
-      hvacUnits: appConfig.hvacUnits ?? {},
+      zones: appConfig.zones ?? {},
     });
 
     // Step 6: IFTTT credentials

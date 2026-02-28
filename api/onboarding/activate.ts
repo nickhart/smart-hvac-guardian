@@ -59,9 +59,9 @@ export default async function handler(request: Request): Promise<Response> {
       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
 
     const rawConfig = {
-      zones: step4["zones"] ?? {},
+      zones: step5["zones"] ?? {},
       sensorDelays: step3["sensorDelays"] ?? {},
-      hvacUnits: step5["hvacUnits"] ?? {},
+      hvacUnits: step4["hvacUnits"] ?? {},
       sensorNames: step3["sensorNames"] ?? {},
       sensorDefaults: step3["sensorDefaults"] ?? {},
       yolink: {

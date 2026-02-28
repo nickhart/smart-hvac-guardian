@@ -20,7 +20,6 @@ interface ZoneEntry {
 }
 
 export function Step4Zones({ data, allStepData, onSave }: StepProps) {
-  const [minisplitInputs, setMinisplitInputs] = useState<Record<number, string>>({});
   const [zones, setZones] = useState<ZoneEntry[]>(() => {
     const zonesObj = (data.zones ?? {}) as Record<
       string,
@@ -45,6 +44,11 @@ export function Step4Zones({ data, allStepData, onSave }: StepProps) {
   const step3 = allStepData["3"] ?? {};
   const sensorIds = Object.keys((step3.sensorDelays ?? {}) as Record<string, unknown>);
   const sensorNames = (step3.sensorNames ?? {}) as Record<string, string>;
+
+  // Available HVAC units from step 4 (HVAC Units step)
+  const step4 = allStepData["4"] ?? {};
+  const hvacUnits = (step4.hvacUnits ?? {}) as Record<string, { name?: string }>;
+  const hvacUnitIds = Object.keys(hvacUnits);
 
   function addZone() {
     setZones((prev) => [
@@ -76,25 +80,17 @@ export function Step4Zones({ data, allStepData, onSave }: StepProps) {
     );
   }
 
-  function commitMinisplits(zoneIndex: number, value: string) {
+  function toggleMinisplit(zoneIndex: number, unitId: string) {
     setZones((prev) =>
-      prev.map((z, i) =>
-        i === zoneIndex
-          ? {
-              ...z,
-              minisplits: value
-                .split(",")
-                .map((s) => s.trim())
-                .filter(Boolean),
-            }
-          : z,
-      ),
+      prev.map((z, i) => {
+        if (i !== zoneIndex) return z;
+        const has = z.minisplits.includes(unitId);
+        return {
+          ...z,
+          minisplits: has ? z.minisplits.filter((s) => s !== unitId) : [...z.minisplits, unitId],
+        };
+      }),
     );
-    setMinisplitInputs((prev) => {
-      const next = { ...prev };
-      delete next[zoneIndex];
-      return next;
-    });
   }
 
   function addInteriorDoor(zoneIndex: number) {
@@ -183,19 +179,28 @@ export function Step4Zones({ data, allStepData, onSave }: StepProps) {
               </div>
 
               <div>
-                <label className="text-xs font-medium text-gray-500">
-                  HVAC Unit IDs (comma-separated)
-                </label>
-                <input
-                  type="text"
-                  value={minisplitInputs[zi] ?? zone.minisplits.join(", ")}
-                  onChange={(e) =>
-                    setMinisplitInputs((prev) => ({ ...prev, [zi]: e.target.value }))
-                  }
-                  onBlur={(e) => commitMinisplits(zi, e.target.value)}
-                  placeholder="unit_1, unit_2"
-                  className="w-full border rounded px-2 py-1 text-sm mt-1"
-                />
+                <label className="text-xs font-medium text-gray-500">HVAC Units</label>
+                <div className="flex flex-wrap gap-1 mt-1">
+                  {hvacUnitIds.map((uid) => (
+                    <button
+                      key={uid}
+                      type="button"
+                      onClick={() => toggleMinisplit(zi, uid)}
+                      className={`text-xs px-2 py-1 rounded border ${
+                        zone.minisplits.includes(uid)
+                          ? "bg-blue-100 border-blue-300 text-blue-700"
+                          : "bg-gray-50 border-gray-200 text-gray-600"
+                      }`}
+                    >
+                      {hvacUnits[uid]?.name || uid}
+                    </button>
+                  ))}
+                  {hvacUnitIds.length === 0 && (
+                    <span className="text-xs text-gray-400">
+                      No HVAC units defined yet. Go back to add units.
+                    </span>
+                  )}
+                </div>
               </div>
 
               <div>
