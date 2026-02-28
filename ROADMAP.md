@@ -139,16 +139,16 @@ Turn this into a hosted platform where multiple vacation rental owners can sign 
 
 The codebase is well-structured (provider interfaces, dependency injection, `Dependencies` object), but is **end-to-end single-tenant by construction**. No tenant identifier flows through any request today. Major work areas:
 
-| Area | Current state | What changes | Effort |
-|------|--------------|--------------|--------|
-| **Database** | Redis only, no relational store | Add Postgres (Neon/Supabase) for `tenants`, `users`, `tenant_secrets` tables. Add ORM + migrations. | Large |
-| **Config system** | Global singleton from `process.env` | Per-tenant config loaded from DB at request time, replace module-level cache | Large |
-| **Auth / user model** | Single `OWNER_EMAIL` env var, no user table | Users table, tenant association, session carries `tenantId` | Large |
-| **API routes** | No tenant context in any request | All routes extract `tenantId` from session (browser) or URL (webhooks) and thread it through | Large |
-| **External credentials** | One global set of YoLink/IFTTT/Resend env vars | Per-tenant encrypted credential storage, per-request client instantiation | Large |
-| **Redis keys** | Flat global (`sensor:x`, `timer:x`, `system:enabled`) | Prefix all keys with `{tenantId}:`, scope SCAN patterns | Medium |
-| **QStash callbacks** | Fixed global `turnOffUrl`, no tenant in payload | Include `tenantId` in callback URL/payload, prefix deduplication IDs | Medium |
-| **Tinybird analytics** | No `tenant_id` column in any datasource | Add `tenant_id` to all schemas, ingest calls, and endpoint SQL | Medium |
+| Area                     | Current state                                         | What changes                                                                                        | Effort |
+| ------------------------ | ----------------------------------------------------- | --------------------------------------------------------------------------------------------------- | ------ |
+| **Database**             | Redis only, no relational store                       | Add Postgres (Neon/Supabase) for `tenants`, `users`, `tenant_secrets` tables. Add ORM + migrations. | Large  |
+| **Config system**        | Global singleton from `process.env`                   | Per-tenant config loaded from DB at request time, replace module-level cache                        | Large  |
+| **Auth / user model**    | Single `OWNER_EMAIL` env var, no user table           | Users table, tenant association, session carries `tenantId`                                         | Large  |
+| **API routes**           | No tenant context in any request                      | All routes extract `tenantId` from session (browser) or URL (webhooks) and thread it through        | Large  |
+| **External credentials** | One global set of YoLink/IFTTT/Resend env vars        | Per-tenant encrypted credential storage, per-request client instantiation                           | Large  |
+| **Redis keys**           | Flat global (`sensor:x`, `timer:x`, `system:enabled`) | Prefix all keys with `{tenantId}:`, scope SCAN patterns                                             | Medium |
+| **QStash callbacks**     | Fixed global `turnOffUrl`, no tenant in payload       | Include `tenantId` in callback URL/payload, prefix deduplication IDs                                | Medium |
+| **Tinybird analytics**   | No `tenant_id` column in any datasource               | Add `tenant_id` to all schemas, ingest calls, and endpoint SQL                                      | Medium |
 
 ### Recommended approach (dependency order)
 
