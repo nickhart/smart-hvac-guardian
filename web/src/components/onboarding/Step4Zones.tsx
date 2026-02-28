@@ -20,6 +20,7 @@ interface ZoneEntry {
 }
 
 export function Step4Zones({ data, allStepData, onSave }: StepProps) {
+  const [minisplitInputs, setMinisplitInputs] = useState<Record<number, string>>({});
   const [zones, setZones] = useState<ZoneEntry[]>(() => {
     const zonesObj = (data.zones ?? {}) as Record<
       string,
@@ -75,7 +76,7 @@ export function Step4Zones({ data, allStepData, onSave }: StepProps) {
     );
   }
 
-  function updateMinisplits(zoneIndex: number, value: string) {
+  function commitMinisplits(zoneIndex: number, value: string) {
     setZones((prev) =>
       prev.map((z, i) =>
         i === zoneIndex
@@ -89,6 +90,11 @@ export function Step4Zones({ data, allStepData, onSave }: StepProps) {
           : z,
       ),
     );
+    setMinisplitInputs((prev) => {
+      const next = { ...prev };
+      delete next[zoneIndex];
+      return next;
+    });
   }
 
   function addInteriorDoor(zoneIndex: number) {
@@ -182,8 +188,11 @@ export function Step4Zones({ data, allStepData, onSave }: StepProps) {
                 </label>
                 <input
                   type="text"
-                  value={zone.minisplits.join(", ")}
-                  onChange={(e) => updateMinisplits(zi, e.target.value)}
+                  value={minisplitInputs[zi] ?? zone.minisplits.join(", ")}
+                  onChange={(e) =>
+                    setMinisplitInputs((prev) => ({ ...prev, [zi]: e.target.value }))
+                  }
+                  onBlur={(e) => commitMinisplits(zi, e.target.value)}
                   placeholder="unit_1, unit_2"
                   className="w-full border rounded px-2 py-1 text-sm mt-1"
                 />
