@@ -10,7 +10,6 @@ interface StepProps {
 interface HvacEntry {
   id: string;
   name: string;
-  iftttEvent: string;
   delaySeconds: number;
 }
 
@@ -18,19 +17,18 @@ export function Step5HvacUnits({ data, onSave }: StepProps) {
   const [units, setUnits] = useState<HvacEntry[]>(() => {
     const hvacUnits = (data.hvacUnits ?? {}) as Record<
       string,
-      { name?: string; iftttEvent?: string; delaySeconds?: number }
+      { name?: string; delaySeconds?: number }
     >;
     const entries = Object.entries(hvacUnits).map(([id, u]) => ({
       id,
       name: u.name ?? "",
-      iftttEvent: u.iftttEvent ?? "",
       delaySeconds: u.delaySeconds ?? 300,
     }));
-    return entries.length > 0 ? entries : [{ id: "", name: "", iftttEvent: "", delaySeconds: 300 }];
+    return entries.length > 0 ? entries : [{ id: "", name: "", delaySeconds: 300 }];
   });
 
   function addUnit() {
-    setUnits((prev) => [...prev, { id: "", name: "", iftttEvent: "", delaySeconds: 300 }]);
+    setUnits((prev) => [...prev, { id: "", name: "", delaySeconds: 300 }]);
   }
 
   function removeUnit(index: number) {
@@ -45,8 +43,8 @@ export function Step5HvacUnits({ data, onSave }: StepProps) {
     <div>
       <h2 className="text-lg font-semibold mb-2">HVAC Units</h2>
       <p className="text-sm text-gray-600 mb-4">
-        Add your minisplit/HVAC units. Each unit needs an ID, display name, IFTTT event name (for
-        the turn-off trigger), and a default delay in seconds.
+        Add your minisplit/HVAC units. Each unit needs an ID, display name, and a default delay in
+        seconds. The IFTTT event name is auto-derived as turn_off_{"{unitId}"}.
       </p>
 
       <form
@@ -58,7 +56,7 @@ export function Step5HvacUnits({ data, onSave }: StepProps) {
             if (!u.id) continue;
             hvacUnits[u.id] = {
               name: u.name || u.id,
-              iftttEvent: u.iftttEvent,
+              iftttEvent: `turn_off_${u.id}`,
               delaySeconds: u.delaySeconds,
             };
           }
@@ -86,14 +84,6 @@ export function Step5HvacUnits({ data, onSave }: StepProps) {
                 />
               </div>
               <div className="flex gap-2 items-center">
-                <input
-                  type="text"
-                  value={unit.iftttEvent}
-                  onChange={(e) => updateUnit(i, "iftttEvent", e.target.value)}
-                  placeholder="IFTTT event name"
-                  className="flex-1 border rounded px-2 py-1 text-sm"
-                  required
-                />
                 <label className="text-xs text-gray-500">Delay:</label>
                 <input
                   type="number"
