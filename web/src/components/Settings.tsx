@@ -176,21 +176,23 @@ export function Settings({ onBack }: SettingsProps) {
   }
 
   // --- Zone helpers ---
-  function updateZoneField(
+  function toggleZoneItem(
     zoneId: string,
     field: "minisplits" | "exteriorOpenings",
-    value: string,
+    itemId: string,
   ) {
     if (!config) return;
-    const items = value
-      .split(",")
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const zone = config.zones[zoneId];
+    const current = zone[field];
+    const has = current.includes(itemId);
     setConfig({
       ...config,
       zones: {
         ...config.zones,
-        [zoneId]: { ...config.zones[zoneId], [field]: items },
+        [zoneId]: {
+          ...zone,
+          [field]: has ? current.filter((s) => s !== itemId) : [...current, itemId],
+        },
       },
     });
   }
@@ -443,49 +445,77 @@ export function Settings({ onBack }: SettingsProps) {
                 </div>
 
                 <div>
-                  <label className="text-xs font-medium text-gray-500">
-                    Minisplits (comma-separated IDs)
-                  </label>
-                  <input
-                    type="text"
-                    value={zone.minisplits.join(", ")}
-                    onChange={(e) => updateZoneField(zoneId, "minisplits", e.target.value)}
-                    className="w-full border rounded px-2 py-1 text-sm mt-1"
-                  />
+                  <label className="text-xs font-medium text-gray-500">HVAC Units</label>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {Object.entries(config.hvacUnits).map(([uid, unit]) => (
+                      <button
+                        key={uid}
+                        type="button"
+                        onClick={() => toggleZoneItem(zoneId, "minisplits", uid)}
+                        className={`text-xs px-2 py-1 rounded border ${
+                          zone.minisplits.includes(uid)
+                            ? "bg-blue-100 border-blue-300 text-blue-700"
+                            : "bg-gray-50 border-gray-200 text-gray-600"
+                        }`}
+                      >
+                        {unit.name || uid}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div>
-                  <label className="text-xs font-medium text-gray-500">
-                    Exterior sensors (comma-separated IDs)
-                  </label>
-                  <input
-                    type="text"
-                    value={zone.exteriorOpenings.join(", ")}
-                    onChange={(e) => updateZoneField(zoneId, "exteriorOpenings", e.target.value)}
-                    className="w-full border rounded px-2 py-1 text-sm mt-1"
-                  />
+                  <label className="text-xs font-medium text-gray-500">Exterior Sensors</label>
+                  <div className="flex flex-wrap gap-1 mt-1">
+                    {sensorIds.map((sid) => (
+                      <button
+                        key={sid}
+                        type="button"
+                        onClick={() => toggleZoneItem(zoneId, "exteriorOpenings", sid)}
+                        className={`text-xs px-2 py-1 rounded border ${
+                          zone.exteriorOpenings.includes(sid)
+                            ? "bg-blue-100 border-blue-300 text-blue-700"
+                            : "bg-gray-50 border-gray-200 text-gray-600"
+                        }`}
+                      >
+                        {config.sensorNames[sid] || sid}
+                      </button>
+                    ))}
+                  </div>
                 </div>
 
                 <div>
                   <label className="text-xs font-medium text-gray-500">Interior Doors</label>
                   {zone.interiorDoors.map((door, di) => (
                     <div key={di} className="flex gap-2 mt-1">
-                      <input
-                        type="text"
+                      <select
                         value={door.id}
                         onChange={(e) => updateInteriorDoor(zoneId, di, "id", e.target.value)}
-                        placeholder="Sensor ID"
                         className="flex-1 border rounded px-2 py-1 text-sm"
-                      />
-                      <input
-                        type="text"
+                      >
+                        <option value="">Select sensor...</option>
+                        {sensorIds.map((sid) => (
+                          <option key={sid} value={sid}>
+                            {config.sensorNames[sid] || sid}
+                          </option>
+                        ))}
+                      </select>
+                      <select
                         value={door.connectsTo}
                         onChange={(e) =>
                           updateInteriorDoor(zoneId, di, "connectsTo", e.target.value)
                         }
-                        placeholder="Connects to zone..."
                         className="flex-1 border rounded px-2 py-1 text-sm"
-                      />
+                      >
+                        <option value="">Connects to...</option>
+                        {zoneIds
+                          .filter((z) => z !== zoneId)
+                          .map((z) => (
+                            <option key={z} value={z}>
+                              {z}
+                            </option>
+                          ))}
+                      </select>
                       <button
                         type="button"
                         onClick={() => removeInteriorDoor(zoneId, di)}
