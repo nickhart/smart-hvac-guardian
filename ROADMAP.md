@@ -6,6 +6,11 @@ Forward-looking features and explorations. See [STATUS.md](./STATUS.md) for what
 
 ## Near-term
 
+### Onboarding UX improvements
+
+- **Interior door assignment rework**: Dedicated step or section where the user picks a sensor marked as interior, then selects which two zones it connects — instead of configuring interior doors within each zone's card. This makes the mental model clearer and avoids duplicate/conflicting entries.
+- **Zone-centric HVAC/sensor assignment**: Rather than toggling items per-zone, define which zone each HVAC unit and exterior sensor belongs to (single-owner), with validation that every item is assigned exactly once.
+
 ### Analytics dashboard
 
 Build a dashboard page showing shutoff history, frequency charts, and per-sensor breakdown using the existing Tinybird endpoints (`shutoffs_per_day`, `sensor_trigger_frequency`, `recent_activity`, `exposure_duration`).

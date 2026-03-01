@@ -86,6 +86,89 @@ export const AppConfigSchema = z
       return true;
     },
     { message: "Interior doors must be symmetric (door in zone A→B must also appear in zone B→A)" },
+  )
+  .refine(
+    (config) => {
+      // Each exterior sensor must appear in exactly one zone (not 2+)
+      const counts = new Map<string, number>();
+      for (const zone of Object.values(config.zones)) {
+        for (const sensorId of zone.exteriorOpenings) {
+          counts.set(sensorId, (counts.get(sensorId) ?? 0) + 1);
+        }
+      }
+      for (const count of counts.values()) {
+        if (count > 1) return false;
+      }
+      return true;
+    },
+    { message: "Each exterior sensor must belong to exactly one zone" },
+  )
+  .refine(
+    (config) => {
+      // Each interior door sensor must appear in exactly two zones
+      const counts = new Map<string, number>();
+      for (const zone of Object.values(config.zones)) {
+        for (const door of zone.interiorDoors) {
+          counts.set(door.id, (counts.get(door.id) ?? 0) + 1);
+        }
+      }
+      for (const count of counts.values()) {
+        if (count !== 2) return false;
+      }
+      return true;
+    },
+    { message: "Each interior door sensor must appear in exactly two zones" },
+  )
+  .refine(
+    (config) => {
+      // Every HVAC unit must be assigned to exactly one zone
+      const assigned = new Map<string, number>();
+      for (const unitId of Object.keys(config.hvacUnits)) {
+        assigned.set(unitId, 0);
+      }
+      for (const zone of Object.values(config.zones)) {
+        for (const unitId of zone.minisplits) {
+          assigned.set(unitId, (assigned.get(unitId) ?? 0) + 1);
+        }
+      }
+      for (const count of assigned.values()) {
+        if (count !== 1) return false;
+      }
+      return true;
+    },
+    { message: "Every HVAC unit must be assigned to exactly one zone" },
+  )
+  .refine(
+    (config) => {
+      // No duplicate HVAC unit names (case-insensitive)
+      const names = new Set<string>();
+      for (const unit of Object.values(config.hvacUnits)) {
+        const lower = unit.name.toLowerCase();
+        if (names.has(lower)) return false;
+        names.add(lower);
+      }
+      return true;
+    },
+    { message: "HVAC unit names must be unique (case-insensitive)" },
+  )
+  .refine(
+    (config) => {
+      // Every sensor in sensorDelays must be referenced in some zone
+      const usedSensors = new Set<string>();
+      for (const zone of Object.values(config.zones)) {
+        for (const sensorId of zone.exteriorOpenings) {
+          usedSensors.add(sensorId);
+        }
+        for (const door of zone.interiorDoors) {
+          usedSensors.add(door.id);
+        }
+      }
+      for (const sensorId of Object.keys(config.sensorDelays)) {
+        if (!usedSensors.has(sensorId)) return false;
+      }
+      return true;
+    },
+    { message: "Every sensor in sensorDelays must be used in at least one zone" },
   );
 
 export const EnvSecretsSchema = z.object({

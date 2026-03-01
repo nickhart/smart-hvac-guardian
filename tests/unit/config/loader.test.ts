@@ -134,6 +134,119 @@ describe("loadConfig", () => {
     expect(() => loadConfig(JSON.stringify(bad))).toThrow("APP_CONFIG validation failed");
   });
 
+  it("rejects exterior sensor assigned to two zones", () => {
+    const bad = {
+      ...validConfig,
+      zones: {
+        zone_a: {
+          minisplits: ["ac_living"],
+          exteriorOpenings: ["front_door"],
+          interiorDoors: [],
+        },
+        zone_b: {
+          minisplits: ["ac_bedroom"],
+          exteriorOpenings: ["front_door"], // same sensor in two zones
+          interiorDoors: [],
+        },
+      },
+      sensorDelays: { front_door: 90 },
+    };
+    expect(() => loadConfig(JSON.stringify(bad))).toThrow("APP_CONFIG validation failed");
+  });
+
+  it("rejects interior door sensor in only one zone", () => {
+    const bad = {
+      ...validConfig,
+      zones: {
+        zone_a: {
+          minisplits: ["ac_living"],
+          exteriorOpenings: ["front_door"],
+          interiorDoors: [{ id: "door_ab", connectsTo: "zone_b" }],
+        },
+        zone_b: {
+          minisplits: ["ac_bedroom"],
+          exteriorOpenings: ["bedroom_window"],
+          interiorDoors: [{ id: "door_ab", connectsTo: "zone_a" }],
+        },
+        zone_c: {
+          minisplits: [],
+          exteriorOpenings: [],
+          interiorDoors: [{ id: "door_ab", connectsTo: "zone_a" }], // 3rd zone has same door
+        },
+      },
+      sensorDelays: { front_door: 90, bedroom_window: 120, door_ab: 0 },
+    };
+    expect(() => loadConfig(JSON.stringify(bad))).toThrow("APP_CONFIG validation failed");
+  });
+
+  it("rejects HVAC unit not assigned to any zone", () => {
+    const bad = {
+      ...validConfig,
+      zones: {
+        living_room: {
+          minisplits: ["ac_living"],
+          exteriorOpenings: ["front_door"],
+          interiorDoors: [{ id: "door_bedroom", connectsTo: "bedroom" }],
+        },
+        bedroom: {
+          minisplits: [], // ac_bedroom not assigned
+          exteriorOpenings: ["bedroom_window"],
+          interiorDoors: [{ id: "door_bedroom", connectsTo: "living_room" }],
+        },
+      },
+      sensorDelays: { front_door: 90, bedroom_window: 120, door_bedroom: 0 },
+    };
+    expect(() => loadConfig(JSON.stringify(bad))).toThrow("APP_CONFIG validation failed");
+  });
+
+  it("rejects HVAC unit assigned to two zones", () => {
+    const bad = {
+      ...validConfig,
+      zones: {
+        living_room: {
+          minisplits: ["ac_living"],
+          exteriorOpenings: ["front_door"],
+          interiorDoors: [{ id: "door_bedroom", connectsTo: "bedroom" }],
+        },
+        bedroom: {
+          minisplits: ["ac_bedroom", "ac_living"], // ac_living in two zones
+          exteriorOpenings: ["bedroom_window"],
+          interiorDoors: [{ id: "door_bedroom", connectsTo: "living_room" }],
+        },
+      },
+      sensorDelays: { front_door: 90, bedroom_window: 120, door_bedroom: 0 },
+    };
+    expect(() => loadConfig(JSON.stringify(bad))).toThrow("APP_CONFIG validation failed");
+  });
+
+  it("rejects duplicate HVAC unit names (case-insensitive)", () => {
+    const bad = {
+      ...validConfig,
+      hvacUnits: {
+        ac_living: { name: "Living Room AC", iftttEvent: "turn_off_ac_living", delaySeconds: 300 },
+        ac_bedroom: {
+          name: "living room ac", // duplicate (case-insensitive)
+          iftttEvent: "turn_off_ac_bedroom",
+          delaySeconds: 300,
+        },
+      },
+    };
+    expect(() => loadConfig(JSON.stringify(bad))).toThrow("APP_CONFIG validation failed");
+  });
+
+  it("rejects unused sensor in sensorDelays", () => {
+    const bad = {
+      ...validConfig,
+      sensorDelays: {
+        front_door: 90,
+        bedroom_window: 120,
+        door_bedroom: 0,
+        orphan_sensor: 60, // not referenced in any zone
+      },
+    };
+    expect(() => loadConfig(JSON.stringify(bad))).toThrow("APP_CONFIG validation failed");
+  });
+
   it("rejects asymmetric interior doors", () => {
     const bad = {
       ...validConfig,
