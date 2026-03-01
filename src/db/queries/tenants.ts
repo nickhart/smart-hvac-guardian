@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import type { Database } from "../client.js";
-import { tenants, onboardingProgress } from "../schema.js";
+import { tenants, users, tenantConfig, tenantSecrets, onboardingProgress } from "../schema.js";
 import type { Tenant, NewTenant } from "../schema.js";
 
 export async function createTenant(
@@ -50,4 +50,13 @@ export async function getAllTenants(db: Database): Promise<Tenant[]> {
 export async function countTenants(db: Database): Promise<number> {
   const result = await db.select().from(tenants);
   return result.length;
+}
+
+export async function deleteTenant(db: Database, tenantId: string): Promise<void> {
+  // Delete related records first (foreign key order), then the tenant
+  await db.delete(users).where(eq(users.tenantId, tenantId));
+  await db.delete(tenantConfig).where(eq(tenantConfig.tenantId, tenantId));
+  await db.delete(tenantSecrets).where(eq(tenantSecrets.tenantId, tenantId));
+  await db.delete(onboardingProgress).where(eq(onboardingProgress.tenantId, tenantId));
+  await db.delete(tenants).where(eq(tenants.id, tenantId));
 }

@@ -29,3 +29,15 @@ export async function getUserById(db: Database, id: string): Promise<User | unde
 export async function getUsersByTenantId(db: Database, tenantId: string): Promise<User[]> {
   return db.query.users.findMany({ where: eq(users.tenantId, tenantId) });
 }
+
+export async function deleteUser(db: Database, userId: string): Promise<void> {
+  await db.delete(users).where(eq(users.id, userId));
+}
+
+export async function updateUserRole(
+  db: Database,
+  userId: string,
+  role: "owner" | "admin" | "viewer",
+): Promise<void> {
+  await db.update(users).set({ role }).where(eq(users.id, userId));
+}

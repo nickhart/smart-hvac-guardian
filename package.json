@@ -19,7 +19,8 @@
     "tinybird:deploy": "tinybird deploy",
     "tinybird:preview": "tinybird preview",
     "web:dev": "pnpm --filter smart-hvac-guardian-web dev",
-    "web:build": "pnpm --filter smart-hvac-guardian-web build"
+    "web:build": "pnpm --filter smart-hvac-guardian-web build",
+    "cli": "tsx scripts/cli.ts"
   },
   "dependencies": {
     "@neondatabase/serverless": "^1.0.2",
