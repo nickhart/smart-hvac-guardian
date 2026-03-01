@@ -221,14 +221,44 @@ export function Settings({ onBack }: SettingsProps) {
     value: string,
   ) {
     if (!config) return;
-    const zone = config.zones[zoneId];
-    const doors = zone.interiorDoors.map((d, i) =>
-      i === doorIndex ? { ...d, [field]: value } : d,
-    );
-    setConfig({
-      ...config,
-      zones: { ...config.zones, [zoneId]: { ...zone, interiorDoors: doors } },
-    });
+    const oldDoor = config.zones[zoneId].interiorDoors[doorIndex];
+    const newDoor = { ...oldDoor, [field]: value };
+
+    const zones = { ...config.zones };
+
+    // Update the source zone
+    zones[zoneId] = {
+      ...zones[zoneId],
+      interiorDoors: zones[zoneId].interiorDoors.map((d, i) => (i === doorIndex ? newDoor : d)),
+    };
+
+    // Remove old mirror if sensor or target changed
+    if (oldDoor.id && oldDoor.connectsTo && zones[oldDoor.connectsTo]) {
+      const otherZone = zones[oldDoor.connectsTo];
+      const filtered = otherZone.interiorDoors.filter(
+        (d) => !(d.id === oldDoor.id && d.connectsTo === zoneId),
+      );
+      if (filtered.length !== otherZone.interiorDoors.length) {
+        zones[oldDoor.connectsTo] = { ...otherZone, interiorDoors: filtered };
+      }
+    }
+
+    // Add new mirror if both fields are set
+    if (newDoor.id && newDoor.connectsTo && zones[newDoor.connectsTo]) {
+      const otherZone = zones[newDoor.connectsTo];
+      const mirror = { id: newDoor.id, connectsTo: zoneId };
+      const alreadyExists = otherZone.interiorDoors.some(
+        (d) => d.id === mirror.id && d.connectsTo === mirror.connectsTo,
+      );
+      if (!alreadyExists) {
+        zones[newDoor.connectsTo] = {
+          ...otherZone,
+          interiorDoors: [...otherZone.interiorDoors, mirror],
+        };
+      }
+    }
+
+    setConfig({ ...config, zones });
   }
 
   function addInteriorDoor(zoneId: string) {
@@ -248,17 +278,27 @@ export function Settings({ onBack }: SettingsProps) {
 
   function removeInteriorDoor(zoneId: string, doorIndex: number) {
     if (!config) return;
-    const zone = config.zones[zoneId];
-    setConfig({
-      ...config,
-      zones: {
-        ...config.zones,
-        [zoneId]: {
-          ...zone,
-          interiorDoors: zone.interiorDoors.filter((_, i) => i !== doorIndex),
-        },
-      },
-    });
+    const door = config.zones[zoneId].interiorDoors[doorIndex];
+    const zones = { ...config.zones };
+
+    // Remove from source zone
+    zones[zoneId] = {
+      ...zones[zoneId],
+      interiorDoors: zones[zoneId].interiorDoors.filter((_, i) => i !== doorIndex),
+    };
+
+    // Remove mirror from connected zone
+    if (door.id && door.connectsTo && zones[door.connectsTo]) {
+      const otherZone = zones[door.connectsTo];
+      zones[door.connectsTo] = {
+        ...otherZone,
+        interiorDoors: otherZone.interiorDoors.filter(
+          (d) => !(d.id === door.id && d.connectsTo === zoneId),
+        ),
+      };
+    }
+
+    setConfig({ ...config, zones });
   }
 
   if (loading) {

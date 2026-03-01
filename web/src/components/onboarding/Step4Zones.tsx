@@ -153,28 +153,66 @@ export function Step4Zones({ data, allStepData, onSave }: StepProps) {
     field: "id" | "connectsTo",
     value: string,
   ) {
-    setZones((prev) =>
-      prev.map((z, i) =>
-        i === zoneIndex
-          ? {
-              ...z,
-              interiorDoors: z.interiorDoors.map((d, di) =>
-                di === doorIndex ? { ...d, [field]: value } : d,
-              ),
-            }
-          : z,
-      ),
-    );
+    setZones((prev) => {
+      const srcZone = prev[zoneIndex];
+      const oldDoor = srcZone.interiorDoors[doorIndex];
+      const newDoor = { ...oldDoor, [field]: value };
+
+      return prev.map((z, i) => {
+        if (i === zoneIndex) {
+          return {
+            ...z,
+            interiorDoors: z.interiorDoors.map((d, di) => (di === doorIndex ? newDoor : d)),
+          };
+        }
+
+        // Remove old mirror if sensor or target changed
+        if (oldDoor.id && oldDoor.connectsTo && z.id === oldDoor.connectsTo) {
+          const filtered = z.interiorDoors.filter(
+            (d) => !(d.id === oldDoor.id && d.connectsTo === srcZone.id),
+          );
+          if (filtered.length !== z.interiorDoors.length) {
+            return { ...z, interiorDoors: filtered };
+          }
+        }
+
+        // Add new mirror if both fields are set
+        if (newDoor.id && newDoor.connectsTo && z.id === newDoor.connectsTo) {
+          const mirror = { id: newDoor.id, connectsTo: srcZone.id };
+          const alreadyExists = z.interiorDoors.some(
+            (d) => d.id === mirror.id && d.connectsTo === mirror.connectsTo,
+          );
+          if (!alreadyExists) {
+            return { ...z, interiorDoors: [...z.interiorDoors, mirror] };
+          }
+        }
+
+        return z;
+      });
+    });
   }
 
   function removeInteriorDoor(zoneIndex: number, doorIndex: number) {
-    setZones((prev) =>
-      prev.map((z, i) =>
-        i === zoneIndex
-          ? { ...z, interiorDoors: z.interiorDoors.filter((_, di) => di !== doorIndex) }
-          : z,
-      ),
-    );
+    setZones((prev) => {
+      const srcZone = prev[zoneIndex];
+      const door = srcZone.interiorDoors[doorIndex];
+
+      return prev.map((z, i) => {
+        if (i === zoneIndex) {
+          return { ...z, interiorDoors: z.interiorDoors.filter((_, di) => di !== doorIndex) };
+        }
+        // Remove mirror from the connected zone
+        if (door.id && door.connectsTo && z.id === door.connectsTo) {
+          return {
+            ...z,
+            interiorDoors: z.interiorDoors.filter(
+              (d) => !(d.id === door.id && d.connectsTo === srcZone.id),
+            ),
+          };
+        }
+        return z;
+      });
+    });
   }
 
   return (
