@@ -150,3 +150,6 @@ vite.config.ts.timestamp-*
 # Claude Code user data and runtime files
 .claude/
 skills-lock.json
+
+# Private business documents
+.private/
