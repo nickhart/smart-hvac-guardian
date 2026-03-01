@@ -1,0 +1,41 @@
+DESCRIPTION >
+    Duration each HVAC unit ran between on/off state changes
+
+NODE on_events
+SQL >
+    %
+    SELECT
+        timestamp AS started_at,
+        hvac_id
+    FROM hvac_state_events_v2
+    WHERE event = 'on'
+        AND timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
+        AND timestamp <= parseDateTimeBestEffort({{String(end_date, '2099-12-31')}})
+        AND ({{String(hvac_id_filter, '')}} = '' OR hvac_id = {{String(hvac_id_filter, '')}})
+        AND ({{String(tenant_id, '')}} = '' OR tenant_id = {{String(tenant_id, '')}})
+
+NODE off_events
+SQL >
+    %
+    SELECT
+        timestamp AS stopped_at,
+        hvac_id
+    FROM hvac_state_events_v2
+    WHERE event = 'off'
+        AND timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
+        AND timestamp <= parseDateTimeBestEffort({{String(end_date, '2099-12-31')}})
+        AND ({{String(tenant_id, '')}} = '' OR tenant_id = {{String(tenant_id, '')}})
+
+NODE runtime_sessions
+SQL >
+    SELECT
+        o.hvac_id,
+        o.started_at,
+        min(f.stopped_at) AS stopped_at,
+        dateDiff('minute', o.started_at, min(f.stopped_at)) AS runtime_minutes
+    FROM on_events o
+    ASOF LEFT JOIN off_events f
+        ON o.hvac_id = f.hvac_id
+        AND f.stopped_at >= o.started_at
+    GROUP BY o.hvac_id, o.started_at
+    ORDER BY o.started_at DESC

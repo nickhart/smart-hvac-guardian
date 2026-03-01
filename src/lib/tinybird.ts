@@ -260,11 +260,75 @@ export const exposureDuration = defineEndpoint("exposure_duration", {
 export type ExposureDurationParams = InferParams<typeof exposureDuration>;
 export type ExposureDurationOutput = InferOutputRow<typeof exposureDuration>;
 
+export const hvacRuntime = defineEndpoint("hvac_runtime", {
+  description: "Duration each HVAC unit ran between on/off state changes",
+  params: {
+    start_date: p.string().optional("2024-01-01").describe("Start date (YYYY-MM-DD)"),
+    end_date: p.string().optional("2099-12-31").describe("End date (YYYY-MM-DD)"),
+    hvac_id_filter: p.string().optional("").describe("Filter by HVAC unit ID (empty = all)"),
+    tenant_id: p.string().optional("").describe("Filter by tenant ID (empty = all)"),
+  },
+  nodes: [
+    node({
+      name: "on_events",
+      sql: `
+        SELECT
+          timestamp AS started_at,
+          hvac_id
+        FROM hvac_state_events_v2
+        WHERE event = 'on'
+          AND timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
+          AND timestamp <= parseDateTimeBestEffort({{String(end_date, '2099-12-31')}})
+          AND ({{String(hvac_id_filter, '')}} = '' OR hvac_id = {{String(hvac_id_filter, '')}})
+          AND ({{String(tenant_id, '')}} = '' OR tenant_id = {{String(tenant_id, '')}})
+      `,
+    }),
+    node({
+      name: "off_events",
+      sql: `
+        SELECT
+          timestamp AS stopped_at,
+          hvac_id
+        FROM hvac_state_events_v2
+        WHERE event = 'off'
+          AND timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
+          AND timestamp <= parseDateTimeBestEffort({{String(end_date, '2099-12-31')}})
+          AND ({{String(tenant_id, '')}} = '' OR tenant_id = {{String(tenant_id, '')}})
+      `,
+    }),
+    node({
+      name: "runtime_sessions",
+      sql: `
+        SELECT
+          o.hvac_id,
+          o.started_at,
+          min(f.stopped_at) AS stopped_at,
+          dateDiff('minute', o.started_at, min(f.stopped_at)) AS runtime_minutes
+        FROM on_events o
+        ASOF LEFT JOIN off_events f
+          ON o.hvac_id = f.hvac_id
+          AND f.stopped_at >= o.started_at
+        GROUP BY o.hvac_id, o.started_at
+        ORDER BY o.started_at DESC
+      `,
+    }),
+  ],
+  output: {
+    hvac_id: t.string(),
+    started_at: t.dateTime(),
+    stopped_at: t.dateTime().nullable(),
+    runtime_minutes: t.int32(),
+  },
+});
+
+export type HvacRuntimeParams = InferParams<typeof hvacRuntime>;
+export type HvacRuntimeOutput = InferOutputRow<typeof hvacRuntime>;
+
 // ============================================================================
 // Client
 // ============================================================================
 
 export const tinybird = new Tinybird({
   datasources: { sensorEvents, hvacCommands, hvacStateEvents },
-  pipes: { shutoffsPerDay, sensorTriggerFrequency, recentActivity, exposureDuration },
+  pipes: { shutoffsPerDay, sensorTriggerFrequency, recentActivity, exposureDuration, hvacRuntime },
 });
