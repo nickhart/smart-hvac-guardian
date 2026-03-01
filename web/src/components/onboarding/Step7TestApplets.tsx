@@ -12,8 +12,8 @@ export function Step7TestApplets({ allStepData, onSave }: StepProps) {
   const [results, setResults] = useState<Record<string, { ok: boolean; message: string }>>({});
   const [testing, setTesting] = useState<string | null>(null);
 
-  const step5 = allStepData["5"] ?? {};
-  const hvacUnits = (step5.hvacUnits ?? {}) as Record<
+  const step4 = allStepData["4"] ?? {};
+  const hvacUnits = (step4.hvacUnits ?? {}) as Record<
     string,
     { name?: string; iftttEvent?: string }
   >;

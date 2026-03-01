@@ -18,12 +18,12 @@ export function Step8Review({ allStepData, onSave }: StepProps) {
   } | null>(null);
 
   const step3 = allStepData["3"] ?? {};
-  const step4 = allStepData["4"] ?? {};
-  const step5 = allStepData["5"] ?? {};
+  const step4 = allStepData["4"] ?? {}; // HVAC units (Step5HvacUnits renders at step 4)
+  const step5 = allStepData["5"] ?? {}; // Zones (Step4Zones renders at step 5)
 
   const sensorCount = Object.keys((step3.sensorDelays ?? {}) as Record<string, unknown>).length;
-  const zoneCount = Object.keys((step4.zones ?? {}) as Record<string, unknown>).length;
-  const unitCount = Object.keys((step5.hvacUnits ?? {}) as Record<string, unknown>).length;
+  const zoneCount = Object.keys((step5.zones ?? {}) as Record<string, unknown>).length;
+  const unitCount = Object.keys((step4.hvacUnits ?? {}) as Record<string, unknown>).length;
 
   async function handleVerify() {
     setVerifying(true);
