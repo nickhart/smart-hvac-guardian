@@ -32,6 +32,37 @@ When the system is toggled off, cancel all active timers in Redis (delete `timer
 
 If IFTTT, Cielo, or YoLink is unreachable, temporarily disable AC shutoff to avoid locking guests out of AC. Re-enable automatically when services recover.
 
+### System bootstrap / first-run setup
+
+A first-run experience that configures the platform-level infrastructure secrets before any tenant exists. Today these are manually set as Vercel environment variables — this should be a guided flow.
+
+**Required secrets:**
+
+- `DATABASE_URL` — Neon Postgres connection string
+- `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN` — Redis for sessions, state, timers
+- `QSTASH_TOKEN` / `QSTASH_CURRENT_SIGNING_KEY` / `QSTASH_NEXT_SIGNING_KEY` — delayed job scheduling
+- `TINYBIRD_TOKEN` — analytics ingestion
+- `RESEND_API_KEY` — transactional email (magic links)
+- `APP_URL` — canonical deployment URL (for QStash callbacks, magic link URLs)
+- `SITE_NAME` — branding shown in UI and emails
+
+**Flow:**
+
+1. Deploy to Vercel (or similar) with no env vars set
+2. First visit detects no `DATABASE_URL` → shows a bootstrap wizard
+3. Wizard walks through each service: create account, paste credentials, test connection
+4. On completion, secrets are written to Vercel env vars (via Vercel API) or a `.env` file (self-hosted)
+5. Run DB migrations automatically
+6. Redirect to tenant creation → existing onboarding wizard
+
+**Migrate from existing env-based config:**
+
+- Detect pre-existing `APP_CONFIG` / `OWNER_EMAIL` / provider credentials
+- Pre-populate the bootstrap wizard fields from current env values
+- After bootstrap, offer to import the existing single-tenant setup as the first tenant (reuse the env-to-tenant migration)
+
+**Goal:** A new user can deploy, walk through system setup in a browser, create their first tenant, and go directly into the tenant onboarding flow — no manual env var editing required.
+
 ---
 
 ## Medium-term
