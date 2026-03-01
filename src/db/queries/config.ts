@@ -20,16 +20,59 @@ export async function getTenantConfig(
   return result.data;
 }
 
+/** Trim all Record keys and string values in config to prevent trailing-space bugs. */
+export function sanitizeConfig(config: AppConfig): AppConfig {
+  function trimRecord<V>(record: Record<string, V>): Record<string, V> {
+    const out: Record<string, V> = {};
+    for (const [key, value] of Object.entries(record)) {
+      out[key.trim()] = value;
+    }
+    return out;
+  }
+
+  const hvacUnits = Object.fromEntries(
+    Object.entries(config.hvacUnits).map(([k, v]) => [k.trim(), { ...v, name: v.name.trim() }]),
+  );
+
+  const sensorNames = Object.fromEntries(
+    Object.entries(config.sensorNames).map(([k, v]) => [k.trim(), v.trim()]),
+  );
+
+  const zones = Object.fromEntries(
+    Object.entries(config.zones).map(([k, z]) => [
+      k.trim(),
+      {
+        minisplits: z.minisplits.map((s) => s.trim()),
+        exteriorOpenings: z.exteriorOpenings.map((s) => s.trim()),
+        interiorDoors: z.interiorDoors.map((d) => ({
+          id: d.id.trim(),
+          connectsTo: d.connectsTo.trim(),
+        })),
+      },
+    ]),
+  );
+
+  return {
+    ...config,
+    hvacUnits,
+    sensorDelays: trimRecord(config.sensorDelays),
+    sensorNames,
+    sensorDefaults: trimRecord(config.sensorDefaults),
+    zones,
+  };
+}
+
 export async function upsertTenantConfig(
   db: Database,
   tenantId: string,
   config: AppConfig,
 ): Promise<void> {
+  const sanitized = sanitizeConfig(config);
   await db
     .insert(tenantConfig)
-    .values({ tenantId, config, updatedAt: new Date() })
+    .values({ tenantId, config: sanitized, updatedAt: new Date() })
     .onConflictDoUpdate({
       target: tenantConfig.tenantId,
-      set: { config, updatedAt: new Date() },
+      set: { config: sanitized, updatedAt: new Date() },
     });
 }

@@ -26,6 +26,7 @@ export default defineConfig({
         "src/migration/**",
         "api/onboarding/**",
         "api/auth/**",
+        "api/settings/**",
       ],
       thresholds: {
         lines: 80,

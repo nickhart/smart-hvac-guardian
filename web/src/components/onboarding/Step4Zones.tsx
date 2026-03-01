@@ -147,11 +147,14 @@ export function Step4Zones({ data, allStepData, onSave }: StepProps) {
           e.preventDefault();
           const zonesObj: Record<string, unknown> = {};
           for (const z of zones) {
-            if (!z.id) continue;
-            zonesObj[z.id] = {
-              minisplits: z.minisplits,
-              exteriorOpenings: z.exteriorOpenings,
-              interiorDoors: z.interiorDoors.filter((d) => d.id && d.connectsTo),
+            const zoneId = z.id.trim();
+            if (!zoneId) continue;
+            zonesObj[zoneId] = {
+              minisplits: z.minisplits.map((s) => s.trim()),
+              exteriorOpenings: z.exteriorOpenings.map((s) => s.trim()),
+              interiorDoors: z.interiorDoors
+                .filter((d) => d.id && d.connectsTo)
+                .map((d) => ({ id: d.id.trim(), connectsTo: d.connectsTo.trim() })),
             };
           }
           onSave({ zones: zonesObj });

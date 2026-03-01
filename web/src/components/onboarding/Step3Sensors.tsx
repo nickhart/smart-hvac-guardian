@@ -90,10 +90,11 @@ export function Step3Sensors({ data, onSave }: StepProps) {
           const sensorNames: Record<string, string> = {};
           const sensorDefaults: Record<string, string> = {};
           for (const s of sensors) {
-            if (!s.id) continue;
-            sensorDelays[s.id] = s.delay;
-            if (s.name) sensorNames[s.id] = s.name;
-            if (s.defaultState) sensorDefaults[s.id] = s.defaultState;
+            const id = s.id.trim();
+            if (!id) continue;
+            sensorDelays[id] = s.delay;
+            if (s.name) sensorNames[id] = s.name.trim();
+            if (s.defaultState) sensorDefaults[id] = s.defaultState;
           }
           onSave({ sensorDelays, sensorNames, sensorDefaults });
         }}

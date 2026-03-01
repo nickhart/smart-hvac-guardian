@@ -4,6 +4,7 @@ import { useRealtimeState } from "../hooks/useRealtimeState";
 import { SensorCard } from "./SensorCard";
 import { HvacUnitCard } from "./HvacUnitCard";
 import { SystemToggle } from "./SystemToggle";
+import { Settings } from "./Settings";
 
 interface DashboardProps {
   onLogout: () => void;
@@ -11,6 +12,7 @@ interface DashboardProps {
 }
 
 export function Dashboard({ onLogout, siteName }: DashboardProps) {
+  const [view, setView] = useState<"dashboard" | "settings">("dashboard");
   const { state, error, lastUpdate, refresh, setOptimisticState, setToggleGrace, sseActive } =
     useRealtimeState();
   const [mutationError, setMutationError] = useState("");
@@ -31,6 +33,10 @@ export function Dashboard({ onLogout, siteName }: DashboardProps) {
     },
     [refresh, setOptimisticState],
   );
+
+  if (view === "settings") {
+    return <Settings onBack={() => setView("dashboard")} />;
+  }
 
   if (!state) {
     return (
@@ -63,6 +69,12 @@ export function Dashboard({ onLogout, siteName }: DashboardProps) {
               setToggleGrace();
             }}
           />
+          <button
+            onClick={() => setView("settings")}
+            className="text-sm text-gray-500 hover:text-gray-700"
+          >
+            Settings
+          </button>
           <button onClick={onLogout} className="text-sm text-gray-500 hover:text-gray-700">
             Logout
           </button>

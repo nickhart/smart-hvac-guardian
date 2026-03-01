@@ -159,3 +159,17 @@ export async function activateOnboarding(): Promise<{
 export async function importEnvConfig(): Promise<{ status: string; message: string }> {
   return fetchJson("/api/onboarding/import-env", { method: "POST" });
 }
+
+// --- Settings API ---
+
+export async function getConfig(): Promise<{ status: string; config: Record<string, unknown> }> {
+  return fetchJson("/api/settings/config");
+}
+
+export async function updateConfig(config: Record<string, unknown>): Promise<{ status: string }> {
+  return fetchJson("/api/settings/config", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(config),
+  });
+}

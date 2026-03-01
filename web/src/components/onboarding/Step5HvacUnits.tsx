@@ -53,10 +53,12 @@ export function Step5HvacUnits({ data, onSave }: StepProps) {
           e.preventDefault();
           const hvacUnits: Record<string, unknown> = {};
           for (const u of units) {
-            if (!u.id) continue;
-            hvacUnits[u.id] = {
-              name: u.name || u.id,
-              iftttEvent: `turn_off_${u.id}`,
+            const id = u.id.trim();
+            if (!id) continue;
+            const name = (u.name || id).trim();
+            hvacUnits[id] = {
+              name,
+              iftttEvent: `turn_off_${id}`,
               delaySeconds: u.delaySeconds,
             };
           }
