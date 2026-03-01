@@ -114,7 +114,7 @@ export function OnboardingWizard({ siteName, onComplete, onLogout }: OnboardingW
           {Array.from({ length: TOTAL_STEPS }, (_, i) => (
             <div
               key={i}
-              className={`h-1 flex-1 rounded ${i < step ? "bg-blue-500" : "bg-gray-200"}`}
+              className={`h-1 flex-1 rounded ${i < step ? "bg-primary-500" : "bg-gray-200"}`}
             />
           ))}
         </div>

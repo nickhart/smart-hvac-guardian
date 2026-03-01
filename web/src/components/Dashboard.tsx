@@ -9,9 +9,10 @@ import { Settings } from "./Settings";
 interface DashboardProps {
   onLogout: () => void;
   siteName: string;
+  logoUrl?: string;
 }
 
-export function Dashboard({ onLogout, siteName }: DashboardProps) {
+export function Dashboard({ onLogout, siteName, logoUrl }: DashboardProps) {
   const [view, setView] = useState<"dashboard" | "settings">("dashboard");
   const { state, error, lastUpdate, refresh, setOptimisticState, setToggleGrace, sseActive } =
     useRealtimeState();
@@ -46,7 +47,7 @@ export function Dashboard({ onLogout, siteName }: DashboardProps) {
             <p className="text-red-600 mb-4">{error}</p>
             <button
               onClick={() => setView("settings")}
-              className="text-sm text-blue-600 hover:text-blue-800"
+              className="text-sm text-primary-600 hover:text-primary-800"
             >
               Open Settings to fix config
             </button>
@@ -68,7 +69,10 @@ export function Dashboard({ onLogout, siteName }: DashboardProps) {
   return (
     <div className="max-w-2xl mx-auto px-4 py-6">
       <header className="flex items-center justify-between mb-6">
-        <h1 className="text-lg font-semibold">{siteName}</h1>
+        <div className="flex items-center gap-2">
+          {logoUrl && <img src={logoUrl} alt={siteName} className="h-6" />}
+          <h1 className="text-lg font-semibold">{siteName}</h1>
+        </div>
         <div className="flex items-center gap-4">
           <SystemToggle
             enabled={state.systemEnabled}

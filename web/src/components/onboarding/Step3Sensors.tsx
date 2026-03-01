@@ -77,7 +77,7 @@ export function Step3Sensors({ data, onSave }: StepProps) {
         type="button"
         onClick={handleDiscover}
         disabled={discovering}
-        className="text-sm bg-blue-50 border border-blue-200 px-3 py-1.5 rounded hover:bg-blue-100 disabled:opacity-50 mb-4"
+        className="text-sm bg-primary-50 border border-primary-200 px-3 py-1.5 rounded hover:bg-primary-100 disabled:opacity-50 mb-4"
       >
         {discovering ? "Discovering..." : "Auto-discover from YoLink"}
       </button>
@@ -153,7 +153,7 @@ export function Step3Sensors({ data, onSave }: StepProps) {
         <button
           type="button"
           onClick={addSensor}
-          className="mt-3 text-sm text-blue-600 hover:text-blue-800"
+          className="mt-3 text-sm text-primary-600 hover:text-primary-800"
         >
           + Add sensor manually
         </button>

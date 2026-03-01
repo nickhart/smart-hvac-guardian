@@ -3,9 +3,10 @@ import * as api from "../lib/api";
 
 interface LoginFormProps {
   siteName: string;
+  logoUrl?: string;
 }
 
-export function LoginForm({ siteName }: LoginFormProps) {
+export function LoginForm({ siteName, logoUrl }: LoginFormProps) {
   const [email, setEmail] = useState("");
   const [sent, setSent] = useState(false);
   const [error, setError] = useState("");
@@ -28,6 +29,7 @@ export function LoginForm({ siteName }: LoginFormProps) {
   return (
     <div className="min-h-screen flex items-center justify-center">
       <div className="bg-white rounded-lg shadow-md p-8 w-full max-w-sm">
+        {logoUrl && <img src={logoUrl} alt={siteName} className="h-12 mx-auto mb-4" />}
         <h1 className="text-xl font-semibold mb-6 text-center">{siteName}</h1>
 
         {!sent ? (
@@ -37,7 +39,7 @@ export function LoginForm({ siteName }: LoginFormProps) {
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="w-full border rounded px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border rounded px-3 py-2 mb-4 focus:outline-none focus:ring-2 focus:ring-primary-500"
               placeholder="you@example.com"
               required
               autoFocus
@@ -46,7 +48,7 @@ export function LoginForm({ siteName }: LoginFormProps) {
             <button
               type="submit"
               disabled={sending}
-              className="w-full bg-blue-600 text-white rounded py-2 font-medium hover:bg-blue-700 disabled:opacity-50"
+              className="w-full bg-primary-600 text-white rounded py-2 font-medium hover:bg-primary-700 disabled:opacity-50"
             >
               {sending ? "Sending..." : "Send login link"}
             </button>
@@ -63,7 +65,7 @@ export function LoginForm({ siteName }: LoginFormProps) {
                 setSent(false);
                 setError("");
               }}
-              className="w-full bg-blue-600 text-white rounded py-2 font-medium hover:bg-blue-700"
+              className="w-full bg-primary-600 text-white rounded py-2 font-medium hover:bg-primary-700"
             >
               Resend
             </button>

@@ -6,6 +6,8 @@ interface AuthState {
   authenticated: boolean;
   email?: string;
   siteName: string;
+  logoUrl?: string;
+  primaryColor?: string;
   tenantId?: string;
   tenantStatus?: "onboarding" | "active" | "suspended";
 }
@@ -28,6 +30,8 @@ export function useAuth() {
           authenticated: res.authenticated,
           email: res.email,
           siteName,
+          logoUrl: res.logoUrl,
+          primaryColor: res.primaryColor,
           tenantId: res.tenantId,
           tenantStatus: res.tenantStatus,
         });

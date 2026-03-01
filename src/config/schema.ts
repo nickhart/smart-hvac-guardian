@@ -188,6 +188,8 @@ export const EnvSecretsSchema = z.object({
   ownerEmail: z.string().email().optional(),
   appUrl: z.string().url().optional(),
   siteName: z.string().min(1).optional(),
+  logoUrl: z.string().url().optional(),
+  primaryColor: z.string().optional(),
 });
 
 export type ZoneConfig = z.infer<typeof ZoneConfigSchema>;

@@ -281,7 +281,7 @@ export function Step4Zones({ data, allStepData, onSave }: StepProps) {
                       onClick={() => toggleMinisplit(zi, uid)}
                       className={`text-xs px-2 py-1 rounded border ${
                         zone.minisplits.includes(uid)
-                          ? "bg-blue-100 border-blue-300 text-blue-700"
+                          ? "bg-primary-100 border-primary-300 text-primary-700"
                           : "bg-gray-50 border-gray-200 text-gray-600"
                       }`}
                     >
@@ -306,7 +306,7 @@ export function Step4Zones({ data, allStepData, onSave }: StepProps) {
                       onClick={() => toggleExteriorOpening(zi, sid)}
                       className={`text-xs px-2 py-1 rounded border ${
                         zone.exteriorOpenings.includes(sid)
-                          ? "bg-blue-100 border-blue-300 text-blue-700"
+                          ? "bg-primary-100 border-primary-300 text-primary-700"
                           : "bg-gray-50 border-gray-200 text-gray-600"
                       }`}
                     >
@@ -358,7 +358,7 @@ export function Step4Zones({ data, allStepData, onSave }: StepProps) {
                 <button
                   type="button"
                   onClick={() => addInteriorDoor(zi)}
-                  className="text-xs text-blue-600 mt-1 hover:text-blue-800"
+                  className="text-xs text-primary-600 mt-1 hover:text-primary-800"
                 >
                   + Add interior door
                 </button>
@@ -370,7 +370,7 @@ export function Step4Zones({ data, allStepData, onSave }: StepProps) {
         <button
           type="button"
           onClick={addZone}
-          className="mt-3 text-sm text-blue-600 hover:text-blue-800"
+          className="mt-3 text-sm text-primary-600 hover:text-primary-800"
         >
           + Add zone
         </button>

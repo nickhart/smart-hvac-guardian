@@ -26,10 +26,12 @@ export async function handleSession(request: Request, deps?: SessionDeps): Promi
     }
 
     const siteName = process.env.SITE_NAME || "HVAC Guardian";
+    const logoUrl = process.env.LOGO_URL || null;
+    const primaryColor = process.env.PRIMARY_COLOR || null;
     const token = getSessionToken(request);
 
     if (!token) {
-      return jsonResponse({ authenticated: false, siteName });
+      return jsonResponse({ authenticated: false, siteName, logoUrl, primaryColor });
     }
 
     const authStore =
@@ -55,30 +57,32 @@ export async function handleSession(request: Request, deps?: SessionDeps): Promi
           tenantId: payload.tenantId,
           tenantStatus: payload.tenantStatus,
           siteName,
+          logoUrl,
+          primaryColor,
         });
       }
       // DB is configured but payload reconstruction failed — session is invalid
-      return jsonResponse({ authenticated: false, siteName });
+      return jsonResponse({ authenticated: false, siteName, logoUrl, primaryColor });
     }
 
     // Legacy fallback: session stores plain email (only when no DB)
     const email = await authStore.getSession(token);
 
     if (!email) {
-      return jsonResponse({ authenticated: false, siteName });
+      return jsonResponse({ authenticated: false, siteName, logoUrl, primaryColor });
     }
 
     // If it looks like JSON, it was a multi-tenant session but DB is unavailable
     try {
       JSON.parse(email);
       // It's JSON but we have no DB — can't validate
-      return jsonResponse({ authenticated: false, siteName });
+      return jsonResponse({ authenticated: false, siteName, logoUrl, primaryColor });
     } catch {
       // Plain email string — legacy single-tenant
     }
 
     logger.info("Session validated", { requestId, email });
-    return jsonResponse({ authenticated: true, email, siteName });
+    return jsonResponse({ authenticated: true, email, siteName, logoUrl, primaryColor });
   } catch (error) {
     logger.error("session check error", {
       requestId,

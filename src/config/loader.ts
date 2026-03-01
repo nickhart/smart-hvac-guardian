@@ -49,6 +49,8 @@ export function loadEnvSecrets(env?: Record<string, string | undefined>): EnvSec
     ownerEmail: source.OWNER_EMAIL || undefined,
     appUrl: source.APP_URL || undefined,
     siteName: source.SITE_NAME || undefined,
+    logoUrl: source.LOGO_URL || undefined,
+    primaryColor: source.PRIMARY_COLOR || undefined,
   };
 
   const result = EnvSecretsSchema.safeParse(raw);

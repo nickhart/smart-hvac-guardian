@@ -35,7 +35,7 @@ export function Step6Ifttt({ data, onSave, saving }: StepProps) {
           href="https://ifttt.com/maker_webhooks/settings"
           target="_blank"
           rel="noopener noreferrer"
-          className="text-blue-600 underline"
+          className="text-primary-600 underline"
         >
           IFTTT Webhooks Settings
         </a>
@@ -54,7 +54,7 @@ export function Step6Ifttt({ data, onSave, saving }: StepProps) {
           type="password"
           value={webhookKey}
           onChange={(e) => setWebhookKey(e.target.value)}
-          className="w-full border rounded px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full border rounded px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
           required
         />
 

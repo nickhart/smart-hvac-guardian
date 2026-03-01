@@ -312,7 +312,7 @@ export function Settings({ onBack }: SettingsProps) {
   if (!config) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-6">
-        <button onClick={onBack} className="text-sm text-blue-600 hover:text-blue-800 mb-4">
+        <button onClick={onBack} className="text-sm text-primary-600 hover:text-primary-800 mb-4">
           &larr; Back to Dashboard
         </button>
         <p className="text-red-600">{error || "Failed to load config"}</p>
@@ -396,7 +396,7 @@ export function Settings({ onBack }: SettingsProps) {
         <button
           type="button"
           onClick={addHvacUnit}
-          className="mt-2 text-sm text-blue-600 hover:text-blue-800"
+          className="mt-2 text-sm text-primary-600 hover:text-primary-800"
         >
           + Add HVAC unit
         </button>
@@ -459,7 +459,7 @@ export function Settings({ onBack }: SettingsProps) {
         <button
           type="button"
           onClick={addSensor}
-          className="mt-2 text-sm text-blue-600 hover:text-blue-800"
+          className="mt-2 text-sm text-primary-600 hover:text-primary-800"
         >
           + Add sensor
         </button>
@@ -494,7 +494,7 @@ export function Settings({ onBack }: SettingsProps) {
                         onClick={() => toggleZoneItem(zoneId, "minisplits", uid)}
                         className={`text-xs px-2 py-1 rounded border ${
                           zone.minisplits.includes(uid)
-                            ? "bg-blue-100 border-blue-300 text-blue-700"
+                            ? "bg-primary-100 border-primary-300 text-primary-700"
                             : "bg-gray-50 border-gray-200 text-gray-600"
                         }`}
                       >
@@ -514,7 +514,7 @@ export function Settings({ onBack }: SettingsProps) {
                         onClick={() => toggleZoneItem(zoneId, "exteriorOpenings", sid)}
                         className={`text-xs px-2 py-1 rounded border ${
                           zone.exteriorOpenings.includes(sid)
-                            ? "bg-blue-100 border-blue-300 text-blue-700"
+                            ? "bg-primary-100 border-primary-300 text-primary-700"
                             : "bg-gray-50 border-gray-200 text-gray-600"
                         }`}
                       >
@@ -568,7 +568,7 @@ export function Settings({ onBack }: SettingsProps) {
                   <button
                     type="button"
                     onClick={() => addInteriorDoor(zoneId)}
-                    className="text-xs text-blue-600 mt-1 hover:text-blue-800"
+                    className="text-xs text-primary-600 mt-1 hover:text-primary-800"
                   >
                     + Add interior door
                   </button>
@@ -580,7 +580,7 @@ export function Settings({ onBack }: SettingsProps) {
         <button
           type="button"
           onClick={addZone}
-          className="mt-2 text-sm text-blue-600 hover:text-blue-800"
+          className="mt-2 text-sm text-primary-600 hover:text-primary-800"
         >
           + Add zone
         </button>
@@ -617,7 +617,7 @@ export function Settings({ onBack }: SettingsProps) {
         <button
           onClick={handleSave}
           disabled={saving}
-          className="bg-blue-600 text-white px-4 py-2 rounded text-sm hover:bg-blue-700 disabled:opacity-50"
+          className="bg-primary-600 text-white px-4 py-2 rounded text-sm hover:bg-primary-700 disabled:opacity-50"
         >
           {saving ? "Saving..." : "Save Settings"}
         </button>

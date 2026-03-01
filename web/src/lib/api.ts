@@ -16,6 +16,8 @@ export interface SessionResponse {
   authenticated: boolean;
   email?: string;
   siteName?: string;
+  logoUrl?: string;
+  primaryColor?: string;
   tenantId?: string;
   tenantStatus?: "onboarding" | "active" | "suspended";
 }

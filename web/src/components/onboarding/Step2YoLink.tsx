@@ -46,7 +46,7 @@ export function Step2YoLink({ data, onSave, saving }: StepProps) {
           type="text"
           value={uaCid}
           onChange={(e) => setUaCid(e.target.value)}
-          className="w-full border rounded px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full border rounded px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
           placeholder="ua_xxxxxxxx"
           required
         />
@@ -56,7 +56,7 @@ export function Step2YoLink({ data, onSave, saving }: StepProps) {
           type="password"
           value={secretKey}
           onChange={(e) => setSecretKey(e.target.value)}
-          className="w-full border rounded px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-blue-500"
+          className="w-full border rounded px-3 py-2 mb-3 focus:outline-none focus:ring-2 focus:ring-primary-500"
           required
         />
 

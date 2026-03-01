@@ -140,7 +140,7 @@ export function Step5HvacUnits({ data, onSave }: StepProps) {
         <button
           type="button"
           onClick={addUnit}
-          className="mt-3 text-sm text-blue-600 hover:text-blue-800"
+          className="mt-3 text-sm text-primary-600 hover:text-primary-800"
         >
           + Add HVAC unit
         </button>

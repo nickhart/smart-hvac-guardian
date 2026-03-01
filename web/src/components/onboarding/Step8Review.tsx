@@ -81,7 +81,7 @@ export function Step8Review({ allStepData, onSave }: StepProps) {
         type="button"
         onClick={handleVerify}
         disabled={verifying}
-        className="w-full bg-blue-600 text-white rounded py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50 mb-3"
+        className="w-full bg-primary-600 text-white rounded py-2 text-sm font-medium hover:bg-primary-700 disabled:opacity-50 mb-3"
       >
         {verifying ? "Verifying..." : "Verify Configuration"}
       </button>

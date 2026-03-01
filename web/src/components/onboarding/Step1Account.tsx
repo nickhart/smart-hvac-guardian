@@ -29,8 +29,8 @@ export function Step1Account({ onSave }: StepProps) {
       </div>
 
       {hasLegacyConfig && (
-        <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded">
-          <p className="text-sm text-blue-800 mb-2">
+        <div className="mt-4 p-3 bg-primary-50 border border-primary-200 rounded">
+          <p className="text-sm text-primary-800 mb-2">
             Existing configuration detected. Would you like to import it?
           </p>
           <button
@@ -43,7 +43,7 @@ export function Step1Account({ onSave }: StepProps) {
                 // handled by parent error state
               }
             }}
-            className="text-sm bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
+            className="text-sm bg-primary-600 text-white px-3 py-1 rounded hover:bg-primary-700"
           >
             Import existing config
           </button>
