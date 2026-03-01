@@ -95,7 +95,7 @@ export async function handleSendMagic(request: Request, deps?: SendMagicDeps): P
       (async (to: string, subject: string, text: string) => {
         const resend = new Resend(secrets.resendApiKey);
         await resend.emails.send({
-          from: `${siteName} <onboarding@resend.dev>`,
+          from: `${siteName} <noreply@zolite.ai>`,
           to,
           subject,
           text,
