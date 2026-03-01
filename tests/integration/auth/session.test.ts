@@ -77,6 +77,31 @@ describe("session handler", () => {
     expect(deps.authStore.getSession).toHaveBeenCalledWith("valid-token");
   });
 
+  it("returns unauthenticated when DB is present but getSessionPayload returns null", async () => {
+    const mockDb = {
+      query: { users: { findFirst: vi.fn().mockResolvedValue(undefined) } },
+    } as unknown as import("@/db/client").Database;
+    const deps = createDeps({
+      db: mockDb,
+      authStore: {
+        setMagicToken: vi.fn(),
+        getMagicToken: vi.fn(),
+        deleteMagicToken: vi.fn(),
+        setSession: vi.fn(),
+        getSession: vi.fn().mockResolvedValue("owner@example.com"),
+        deleteSession: vi.fn(),
+      },
+    });
+    const req = new Request("https://example.com/api/auth/session", {
+      method: "GET",
+      headers: { Cookie: "session=some-token" },
+    });
+    const res = await handleSession(req, deps);
+    const body = (await res.json()) as Record<string, unknown>;
+    expect(res.status).toBe(200);
+    expect(body.authenticated).toBe(false);
+  });
+
   it("returns 500 on authStore failure", async () => {
     const deps = createDeps({
       authStore: {

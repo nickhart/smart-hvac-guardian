@@ -80,7 +80,7 @@ export async function handleMagic(request: Request, deps?: MagicDeps): Promise<R
     const db = deps?.db ?? (process.env.DATABASE_URL ? getDb() : undefined);
 
     if (db) {
-      const sessionResult = await createSession(authStore, email, db);
+      const sessionResult = await createSession(authStore, email, db, logger);
       if (sessionResult) {
         logger.info("Magic link login (multi-tenant)", { requestId, email });
         return new Response(null, {
@@ -91,9 +91,15 @@ export async function handleMagic(request: Request, deps?: MagicDeps): Promise<R
           },
         });
       }
+      // DB is available but session creation failed — don't fall through to legacy
+      logger.error("Session creation failed — user or tenant not found", { requestId, email });
+      return htmlPage(
+        "Login failed",
+        "Your account could not be found. Please contact support or start a new setup.",
+      );
     }
 
-    // Legacy single-tenant fallback: store plain email
+    // Legacy single-tenant fallback: store plain email (only when no DB)
     const sessionToken = crypto.randomUUID();
     await authStore.setSession(sessionToken, email, SESSION_TTL);
 

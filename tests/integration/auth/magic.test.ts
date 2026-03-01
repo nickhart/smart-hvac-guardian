@@ -110,6 +110,22 @@ describe("magic handler", () => {
     expect(cookie).toContain("Secure");
   });
 
+  it("returns error page when DB is present but createSession returns null", async () => {
+    const mockDb = {
+      query: { users: { findFirst: vi.fn().mockResolvedValue(undefined) } },
+    } as unknown as import("@/db/client").Database;
+    const deps = createDeps({ db: mockDb });
+    const res = await handleMagic(makeRequest(VALID_TOKEN), deps);
+    expect(res.status).toBe(400);
+    const body = await res.text();
+    expect(body).toContain("Login failed");
+    expect(body).toContain("could not be found");
+    expect(mockLogger.error).toHaveBeenCalledWith(
+      expect.stringContaining("Session creation failed"),
+      expect.objectContaining({ email: "owner@example.com" }),
+    );
+  });
+
   it("returns 500 on authStore failure", async () => {
     const deps = createDeps({
       authStore: {

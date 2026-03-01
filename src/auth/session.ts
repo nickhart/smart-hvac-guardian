@@ -3,6 +3,7 @@ import { getDb } from "../db/client.js";
 import { getUserByEmail } from "../db/queries/users.js";
 import { getTenantById } from "../db/queries/tenants.js";
 import type { Database } from "../db/client.js";
+import type { Logger } from "../utils/logger.js";
 
 export interface SessionPayload {
   email: string;
@@ -22,13 +23,20 @@ export async function createSession(
   authStore: AuthStore,
   email: string,
   db?: Database,
+  logger?: Logger,
 ): Promise<{ token: string; payload: SessionPayload } | null> {
   const database = db ?? getDb();
   const user = await getUserByEmail(database, email);
-  if (!user) return null;
+  if (!user) {
+    logger?.warn("createSession: user not found", { email });
+    return null;
+  }
 
   const tenant = await getTenantById(database, user.tenantId);
-  if (!tenant) return null;
+  if (!tenant) {
+    logger?.warn("createSession: tenant not found", { email, tenantId: user.tenantId });
+    return null;
+  }
 
   const payload: SessionPayload = {
     email: user.email,

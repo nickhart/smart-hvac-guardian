@@ -57,9 +57,11 @@ export async function handleSession(request: Request, deps?: SessionDeps): Promi
           siteName,
         });
       }
+      // DB is configured but payload reconstruction failed — session is invalid
+      return jsonResponse({ authenticated: false, siteName });
     }
 
-    // Legacy fallback: session stores plain email
+    // Legacy fallback: session stores plain email (only when no DB)
     const email = await authStore.getSession(token);
 
     if (!email) {
