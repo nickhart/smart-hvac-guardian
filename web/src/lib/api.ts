@@ -162,7 +162,14 @@ export async function importEnvConfig(): Promise<{ status: string; message: stri
 
 // --- Settings API ---
 
-export async function getConfig(): Promise<{ status: string; config: Record<string, unknown> }> {
+export interface ConfigResponse {
+  status: string;
+  config: Record<string, unknown>;
+  valid: boolean;
+  errors?: { formErrors: string[]; fieldErrors: Record<string, string[]> };
+}
+
+export async function getConfig(): Promise<ConfigResponse> {
   return fetchJson("/api/settings/config");
 }
 

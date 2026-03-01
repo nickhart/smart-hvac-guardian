@@ -1,7 +1,7 @@
 /**
  * CLI for tenant & user management.
  *
- * Usage: pnpm cli <command> [...args]
+ * Usage: pnpm cli [--env-file <path>] <command> [...args]
  *
  * Commands:
  *   tenant:create <name>                 Create a new tenant
@@ -14,8 +14,12 @@
  *   user:list <tenantId>                 List users for a tenant
  *   user:remove <userId>                 Remove a user
  *   user:set-role <userId> <role>        Change a user's role
+ *
+ *   redis:flush <tenantId>              Delete all Redis state keys for a tenant
  */
 
+import * as fs from "node:fs";
+import { Redis } from "@upstash/redis";
 import { getDb } from "../src/db/client.js";
 import {
   createTenant,
@@ -36,7 +40,7 @@ const VALID_ROLES = ["owner", "admin", "viewer"] as const;
 type Role = (typeof VALID_ROLES)[number];
 
 function usage(): never {
-  console.error(`Usage: pnpm cli <command> [...args]
+  console.error(`Usage: pnpm cli [--env-file <path>] <command> [...args]
 
 Tenant commands:
   tenant:create <name>                 Create a new tenant (auto-generates slug)
@@ -49,7 +53,10 @@ User commands:
   user:add <email> <tenantId> [role]   Add a user (role: owner|admin|viewer, default: viewer)
   user:list <tenantId>                 List users for a tenant
   user:remove <userId>                 Remove a user
-  user:set-role <userId> <role>        Change a user's role`);
+  user:set-role <userId> <role>        Change a user's role
+
+Redis commands:
+  redis:flush <tenantId>               Delete all Redis state keys (timers, sensors, delays) for a tenant`);
   process.exit(1);
 }
 
@@ -83,8 +90,39 @@ function isValidRole(role: string): role is Role {
   return VALID_ROLES.includes(role as Role);
 }
 
+/** Load a .env file into process.env (simple KEY=VALUE parser, ignores comments/blanks). */
+function loadEnvFile(filePath: string): void {
+  const content = fs.readFileSync(filePath, "utf-8");
+  for (const line of content.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eqIdx = trimmed.indexOf("=");
+    if (eqIdx === -1) continue;
+    const key = trimmed.slice(0, eqIdx).trim();
+    let value = trimmed.slice(eqIdx + 1).trim();
+    // Strip surrounding quotes
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    if (!process.env[key]) {
+      process.env[key] = value;
+    }
+  }
+}
+
 async function main(): Promise<void> {
-  const [command, ...args] = process.argv.slice(2);
+  const rawArgs = process.argv.slice(2);
+
+  // Support --env-file <path> before the command
+  if (rawArgs[0] === "--env-file" && rawArgs[1]) {
+    loadEnvFile(rawArgs[1]);
+    rawArgs.splice(0, 2);
+  }
+
+  const [command, ...args] = rawArgs;
 
   if (!command) usage();
 
@@ -241,6 +279,49 @@ async function main(): Promise<void> {
       }
       await updateUserRole(db, userId, role);
       console.log(`User ${userId} role updated to "${role}".`);
+      break;
+    }
+
+    case "redis:flush": {
+      const tenantId = args[0];
+      if (!tenantId) {
+        console.error("Error: tenantId is required");
+        usage();
+      }
+      const tenant = await getTenantById(db, tenantId);
+      if (!tenant) {
+        console.error(`Error: tenant ${tenantId} not found`);
+        process.exit(1);
+      }
+      const redisUrl = process.env.UPSTASH_REDIS_REST_URL;
+      const redisToken = process.env.UPSTASH_REDIS_REST_TOKEN;
+      if (!redisUrl || !redisToken) {
+        console.error(
+          "Error: UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN must be set.\n" +
+            "Hint: pnpm cli --env-file .env.prod redis:flush <tenantId>",
+        );
+        process.exit(1);
+      }
+      const redis = new Redis({ url: redisUrl, token: redisToken });
+      const prefix = `${tenantId}:`;
+      let totalDeleted = 0;
+      let cursor = "0";
+      do {
+        const result: [string, string[]] = await redis.scan(cursor, {
+          match: `${prefix}*`,
+          count: 100,
+        });
+        cursor = result[0];
+        const keys = result[1];
+        if (keys.length > 0) {
+          for (const key of keys) {
+            console.log(`  deleting ${key}`);
+          }
+          await redis.del(...keys);
+          totalDeleted += keys.length;
+        }
+      } while (cursor !== "0");
+      console.log(`Flushed ${totalDeleted} Redis key(s) for tenant ${tenantId} (${tenant.name}).`);
       break;
     }
 

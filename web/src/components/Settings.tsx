@@ -42,11 +42,17 @@ export function Settings({ onBack }: SettingsProps) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   useEffect(() => {
     api
       .getConfig()
-      .then((res) => setConfig(res.config as unknown as AppConfig))
+      .then((res) => {
+        setConfig(res.config as unknown as AppConfig);
+        if (!res.valid && res.errors) {
+          setValidationErrors(res.errors.formErrors);
+        }
+      })
       .catch((err) => setError(err instanceof Error ? err.message : "Failed to load config"))
       .finally(() => setLoading(false));
   }, []);
@@ -286,6 +292,17 @@ export function Settings({ onBack }: SettingsProps) {
 
       {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
       {success && <p className="text-green-600 text-sm mb-4">{success}</p>}
+      {validationErrors.length > 0 && (
+        <div className="bg-red-50 border border-red-300 rounded-lg p-3 mb-4 text-sm text-red-800">
+          <p className="font-semibold mb-1">Config validation errors:</p>
+          <ul className="list-disc pl-4">
+            {validationErrors.map((e, i) => (
+              <li key={i}>{e}</li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs">Fix these issues and save to restore normal operation.</p>
+        </div>
+      )}
 
       {/* HVAC Units */}
       <section className="mb-8">

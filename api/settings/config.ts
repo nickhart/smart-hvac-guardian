@@ -1,30 +1,61 @@
 export const config = { runtime: "edge" };
 
 import { getDb } from "../../src/db/client.js";
-import { getTenantConfig, upsertTenantConfig } from "../../src/db/queries/config.js";
-import { resolveTenantFromSession } from "../../src/middleware/tenant.js";
+import { getRawTenantConfig, upsertTenantConfig } from "../../src/db/queries/config.js";
+import { getSessionPayload, getSessionToken } from "../../src/auth/session.js";
+import { RedisStateStore } from "../../src/providers/redis/client.js";
+import { loadEnvSecrets } from "../../src/config/index.js";
 import { AppConfigSchema } from "../../src/config/schema.js";
 import { createLogger } from "../../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../../src/utils/response.js";
+
+/**
+ * Authenticate the session and return the tenantId.
+ * Unlike resolveTenantFromSession, this does NOT load or validate config,
+ * so the settings page remains accessible even when config is broken.
+ */
+async function authenticateTenant(request: Request): Promise<string | null> {
+  const envSecrets = loadEnvSecrets();
+  const db = getDb();
+  const authStore = new RedisStateStore({
+    url: envSecrets.upstashRedisUrl,
+    token: envSecrets.upstashRedisToken,
+  });
+
+  const token = getSessionToken(request);
+  if (!token) return null;
+
+  const session = await getSessionPayload(authStore, token, db);
+  if (!session) return null;
+
+  return session.tenantId;
+}
 
 export default async function handler(request: Request): Promise<Response> {
   const logger = createLogger();
   const requestId = crypto.randomUUID().slice(0, 8);
 
   try {
-    const ctx = await resolveTenantFromSession(request);
-    if (!ctx) {
+    const tenantId = await authenticateTenant(request);
+    if (!tenantId) {
       return errorResponse("Unauthorized", 401);
     }
 
     const db = getDb();
 
     if (request.method === "GET") {
-      const cfg = await getTenantConfig(db, ctx.tenantId);
-      if (!cfg) {
+      const raw = await getRawTenantConfig(db, tenantId);
+      if (!raw) {
         return errorResponse("Config not found", 404);
       }
-      return jsonResponse({ status: "ok", config: cfg });
+      // Include validation errors so the UI can show what's wrong
+      const validation = AppConfigSchema.safeParse(raw);
+      return jsonResponse({
+        status: "ok",
+        config: raw,
+        valid: validation.success,
+        errors: validation.success ? undefined : validation.error.flatten(),
+      });
     }
 
     if (request.method === "PUT") {
@@ -39,8 +70,8 @@ export default async function handler(request: Request): Promise<Response> {
         return errorResponse(parsed.error.message, 400);
       }
 
-      await upsertTenantConfig(db, ctx.tenantId, parsed.data);
-      logger.info("Config updated via settings", { requestId, tenantId: ctx.tenantId });
+      await upsertTenantConfig(db, tenantId, parsed.data);
+      logger.info("Config updated via settings", { requestId, tenantId });
       return jsonResponse({ status: "ok" });
     }
 

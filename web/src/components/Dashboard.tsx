@@ -40,9 +40,17 @@ export function Dashboard({ onLogout, siteName }: DashboardProps) {
 
   if (!state) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
+      <div className="max-w-2xl mx-auto px-4 py-6">
         {error ? (
-          <p className="text-red-600">{error}</p>
+          <div>
+            <p className="text-red-600 mb-4">{error}</p>
+            <button
+              onClick={() => setView("settings")}
+              className="text-sm text-blue-600 hover:text-blue-800"
+            >
+              Open Settings to fix config
+            </button>
+          </div>
         ) : (
           <p className="text-gray-500">Loading...</p>
         )}

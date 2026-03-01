@@ -20,6 +20,18 @@ export async function getTenantConfig(
   return result.data;
 }
 
+/** Return the raw config JSON without Zod validation (for the settings editor). */
+export async function getRawTenantConfig(
+  db: Database,
+  tenantId: string,
+): Promise<Record<string, unknown> | undefined> {
+  const row = await db.query.tenantConfig.findFirst({
+    where: eq(tenantConfig.tenantId, tenantId),
+  });
+  if (!row) return undefined;
+  return row.config as Record<string, unknown>;
+}
+
 /** Trim all Record keys and string values in config to prevent trailing-space bugs. */
 export function sanitizeConfig(config: AppConfig): AppConfig {
   function trimRecord<V>(record: Record<string, V>): Record<string, V> {
