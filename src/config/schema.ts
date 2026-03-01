@@ -89,9 +89,11 @@ export const AppConfigSchema = z
   );
 
 export const EnvSecretsSchema = z.object({
-  yolinkUaCid: z.string().min(1),
-  yolinkSecretKey: z.string().min(1),
-  iftttWebhookKey: z.string().min(1),
+  // Per-tenant credentials — optional when using multi-tenant DB
+  yolinkUaCid: z.string().default(""),
+  yolinkSecretKey: z.string().default(""),
+  iftttWebhookKey: z.string().default(""),
+  // Infrastructure secrets — always required
   qstashToken: z.string().min(1),
   qstashCurrentSigningKey: z.string().min(1),
   qstashNextSigningKey: z.string().min(1),

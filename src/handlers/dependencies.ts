@@ -41,9 +41,9 @@ export function createDependencies(
   options?: { tenantId?: string; tenantSecrets?: TenantSecrets },
 ): Dependencies {
   // Per-tenant credentials override env secrets for YoLink/IFTTT
-  const yolinkUaCid = options?.tenantSecrets?.yolinkUaCid ?? secrets.yolinkUaCid;
-  const yolinkSecretKey = options?.tenantSecrets?.yolinkSecretKey ?? secrets.yolinkSecretKey;
-  const iftttWebhookKey = options?.tenantSecrets?.iftttWebhookKey ?? secrets.iftttWebhookKey;
+  const yolinkUaCid = options?.tenantSecrets?.yolinkUaCid || secrets.yolinkUaCid;
+  const yolinkSecretKey = options?.tenantSecrets?.yolinkSecretKey || secrets.yolinkSecretKey;
+  const iftttWebhookKey = options?.tenantSecrets?.iftttWebhookKey || secrets.iftttWebhookKey;
 
   const yolinkClient = new YoLinkClient({
     baseUrl: config.yolink.baseUrl,
