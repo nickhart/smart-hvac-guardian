@@ -63,18 +63,26 @@ export async function getSessionPayload(
   const raw = await authStore.getSession(token);
   if (!raw) return null;
 
-  // Try parsing as JSON (new format)
-  try {
-    const parsed = JSON.parse(raw);
-    if (parsed && typeof parsed === "object" && parsed.tenantId && parsed.email) {
-      return parsed as SessionPayload;
-    }
-  } catch {
-    // Not JSON — old format (plain email string)
+  // Upstash Redis auto-deserializes JSON, so raw may already be an object
+  const parsed: unknown =
+    typeof raw === "object"
+      ? raw
+      : (() => {
+          try {
+            return JSON.parse(raw);
+          } catch {
+            return null;
+          }
+        })();
+
+  if (parsed && typeof parsed === "object" && "tenantId" in parsed && "email" in parsed) {
+    return parsed as SessionPayload;
   }
 
   // Backward compat: old sessions store just an email string.
   // Look up the user in DB to construct a full payload.
+  if (typeof raw !== "string") return null;
+
   const database = db ?? getDb();
   const user = await getUserByEmail(database, raw);
   if (!user) return null;
