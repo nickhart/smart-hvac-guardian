@@ -83,10 +83,8 @@ export default async function handler(request: Request): Promise<Response> {
       data?: { devices?: YoLinkDevice[] };
     };
 
-    // Filter to door/window sensors
-    const sensors = (devicesData.data?.devices ?? []).filter(
-      (d) => d.type === "DoorSensor" || d.type === "LeakSensor" || d.type.includes("Sensor"),
-    );
+    // Filter to door sensors only
+    const sensors = (devicesData.data?.devices ?? []).filter((d) => d.type === "DoorSensor");
 
     logger.info("YoLink devices discovered", {
       requestId,

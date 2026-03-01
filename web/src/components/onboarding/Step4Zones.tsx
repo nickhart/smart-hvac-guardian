@@ -14,9 +14,18 @@ interface InteriorDoor {
 
 interface ZoneEntry {
   id: string;
+  name: string;
   minisplits: string[];
   exteriorOpenings: string[];
   interiorDoors: InteriorDoor[];
+  idManuallyEdited: boolean;
+}
+
+function toSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
 }
 
 export function Step4Zones({ data, allStepData, onSave }: StepProps) {
@@ -24,6 +33,7 @@ export function Step4Zones({ data, allStepData, onSave }: StepProps) {
     const zonesObj = (data.zones ?? {}) as Record<
       string,
       {
+        name?: string;
         minisplits?: string[];
         exteriorOpenings?: string[];
         interiorDoors?: InteriorDoor[];
@@ -31,13 +41,24 @@ export function Step4Zones({ data, allStepData, onSave }: StepProps) {
     >;
     const entries = Object.entries(zonesObj).map(([id, z]) => ({
       id,
+      name: z.name ?? "",
       minisplits: z.minisplits ?? [],
       exteriorOpenings: z.exteriorOpenings ?? [],
       interiorDoors: z.interiorDoors ?? [],
+      idManuallyEdited: true,
     }));
     return entries.length > 0
       ? entries
-      : [{ id: "", minisplits: [], exteriorOpenings: [], interiorDoors: [] }];
+      : [
+          {
+            id: "",
+            name: "",
+            minisplits: [],
+            exteriorOpenings: [],
+            interiorDoors: [],
+            idManuallyEdited: false,
+          },
+        ];
   });
 
   // Available sensors from step 3
@@ -53,7 +74,14 @@ export function Step4Zones({ data, allStepData, onSave }: StepProps) {
   function addZone() {
     setZones((prev) => [
       ...prev,
-      { id: "", minisplits: [], exteriorOpenings: [], interiorDoors: [] },
+      {
+        id: "",
+        name: "",
+        minisplits: [],
+        exteriorOpenings: [],
+        interiorDoors: [],
+        idManuallyEdited: false,
+      },
     ]);
   }
 
@@ -61,8 +89,24 @@ export function Step4Zones({ data, allStepData, onSave }: StepProps) {
     setZones((prev) => prev.filter((_, i) => i !== index));
   }
 
+  function updateZoneName(index: number, name: string) {
+    setZones((prev) =>
+      prev.map((z, i) => {
+        if (i !== index) return z;
+        const id = z.idManuallyEdited ? z.id : toSlug(name);
+        return { ...z, name, id };
+      }),
+    );
+  }
+
   function updateZoneId(index: number, id: string) {
-    setZones((prev) => prev.map((z, i) => (i === index ? { ...z, id } : z)));
+    setZones((prev) =>
+      prev.map((z, i) => {
+        if (i !== index) return z;
+        const manuallyEdited = id !== "" || z.idManuallyEdited;
+        return { ...z, id, idManuallyEdited: manuallyEdited };
+      }),
+    );
   }
 
   function toggleExteriorOpening(zoneIndex: number, sensorId: string) {
@@ -150,6 +194,7 @@ export function Step4Zones({ data, allStepData, onSave }: StepProps) {
             const zoneId = z.id.trim();
             if (!zoneId) continue;
             zonesObj[zoneId] = {
+              name: z.name.trim() || zoneId,
               minisplits: z.minisplits.map((s) => s.trim()),
               exteriorOpenings: z.exteriorOpenings.map((s) => s.trim()),
               interiorDoors: z.interiorDoors
@@ -166,10 +211,17 @@ export function Step4Zones({ data, allStepData, onSave }: StepProps) {
               <div className="flex items-center gap-2">
                 <input
                   type="text"
+                  value={zone.name}
+                  onChange={(e) => updateZoneName(zi, e.target.value)}
+                  placeholder="Zone name (e.g. Living Room)"
+                  className="flex-1 border rounded px-2 py-1 text-sm"
+                />
+                <input
+                  type="text"
                   value={zone.id}
                   onChange={(e) => updateZoneId(zi, e.target.value)}
-                  placeholder="Zone ID (e.g., living_room)"
-                  className="flex-1 border rounded px-2 py-1 text-sm"
+                  placeholder="Zone ID"
+                  className="flex-1 border rounded px-2 py-1 text-sm font-mono text-gray-700 bg-gray-50"
                   required
                 />
                 <button
@@ -251,7 +303,7 @@ export function Step4Zones({ data, allStepData, onSave }: StepProps) {
                       {zones.map((z, i) =>
                         i !== zi && z.id ? (
                           <option key={z.id} value={z.id}>
-                            {z.id}
+                            {z.name || z.id}
                           </option>
                         ) : null,
                       )}

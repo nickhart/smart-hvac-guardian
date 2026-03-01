@@ -11,6 +11,14 @@ interface HvacEntry {
   id: string;
   name: string;
   delaySeconds: number;
+  idManuallyEdited: boolean;
+}
+
+function toSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_|_$/g, "");
 }
 
 export function Step5HvacUnits({ data, onSave }: StepProps) {
@@ -23,28 +31,51 @@ export function Step5HvacUnits({ data, onSave }: StepProps) {
       id,
       name: u.name ?? "",
       delaySeconds: u.delaySeconds ?? 300,
+      idManuallyEdited: true,
     }));
-    return entries.length > 0 ? entries : [{ id: "", name: "", delaySeconds: 300 }];
+    return entries.length > 0
+      ? entries
+      : [{ id: "", name: "", delaySeconds: 300, idManuallyEdited: false }];
   });
 
   function addUnit() {
-    setUnits((prev) => [...prev, { id: "", name: "", delaySeconds: 300 }]);
+    setUnits((prev) => [...prev, { id: "", name: "", delaySeconds: 300, idManuallyEdited: false }]);
   }
 
   function removeUnit(index: number) {
     setUnits((prev) => prev.filter((_, i) => i !== index));
   }
 
-  function updateUnit(index: number, field: keyof HvacEntry, value: string | number) {
-    setUnits((prev) => prev.map((u, i) => (i === index ? { ...u, [field]: value } : u)));
+  function updateName(index: number, name: string) {
+    setUnits((prev) =>
+      prev.map((u, i) => {
+        if (i !== index) return u;
+        const id = u.idManuallyEdited ? u.id : toSlug(name);
+        return { ...u, name, id };
+      }),
+    );
+  }
+
+  function updateId(index: number, id: string) {
+    setUnits((prev) =>
+      prev.map((u, i) => {
+        if (i !== index) return u;
+        const manuallyEdited = id !== "" || u.idManuallyEdited;
+        return { ...u, id, idManuallyEdited: manuallyEdited };
+      }),
+    );
+  }
+
+  function updateDelay(index: number, delaySeconds: number) {
+    setUnits((prev) => prev.map((u, i) => (i === index ? { ...u, delaySeconds } : u)));
   }
 
   return (
     <div>
       <h2 className="text-lg font-semibold mb-2">HVAC Units</h2>
       <p className="text-sm text-gray-600 mb-4">
-        Add your minisplit/HVAC units. Each unit needs an ID, display name, and a default delay in
-        seconds. The IFTTT event name is auto-derived as turn_off_{"{unitId}"}.
+        Add your minisplit/HVAC units. Each unit needs a display name and an ID (auto-generated from
+        the name). The IFTTT event name is auto-derived as turn_off_{"{unitId}"}.
       </p>
 
       <form
@@ -71,18 +102,18 @@ export function Step5HvacUnits({ data, onSave }: StepProps) {
               <div className="flex gap-2">
                 <input
                   type="text"
-                  value={unit.id}
-                  onChange={(e) => updateUnit(i, "id", e.target.value)}
-                  placeholder="Unit ID"
+                  value={unit.name}
+                  onChange={(e) => updateName(i, e.target.value)}
+                  placeholder="Display name (e.g. Master Bedroom AC)"
                   className="flex-1 border rounded px-2 py-1 text-sm"
-                  required
                 />
                 <input
                   type="text"
-                  value={unit.name}
-                  onChange={(e) => updateUnit(i, "name", e.target.value)}
-                  placeholder="Display name"
-                  className="flex-1 border rounded px-2 py-1 text-sm"
+                  value={unit.id}
+                  onChange={(e) => updateId(i, e.target.value)}
+                  placeholder="Unit ID"
+                  className="flex-1 border rounded px-2 py-1 text-sm font-mono text-gray-700 bg-gray-50"
+                  required
                 />
               </div>
               <div className="flex gap-2 items-center">
@@ -90,7 +121,7 @@ export function Step5HvacUnits({ data, onSave }: StepProps) {
                 <input
                   type="number"
                   value={unit.delaySeconds}
-                  onChange={(e) => updateUnit(i, "delaySeconds", parseInt(e.target.value) || 300)}
+                  onChange={(e) => updateDelay(i, parseInt(e.target.value) || 300)}
                   className="w-20 border rounded px-2 py-1 text-sm"
                   min={0}
                 />
