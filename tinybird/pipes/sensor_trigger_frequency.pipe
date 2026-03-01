@@ -9,11 +9,7 @@ SQL >
         count() AS open_count,
         min(timestamp) AS first_seen,
         max(timestamp) AS last_seen
-    FROM (
-        SELECT timestamp, sensor_id, event, '' AS tenant_id FROM sensor_events
-        UNION ALL
-        SELECT timestamp, sensor_id, event, tenant_id FROM sensor_events_v2
-    )
+    FROM sensor_events_v2
     WHERE event = 'open'
         AND timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
         AND ({{String(tenant_id, '')}} = '' OR tenant_id = {{String(tenant_id, '')}})

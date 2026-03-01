@@ -7,11 +7,7 @@ SQL >
     SELECT
         timestamp AS opened_at,
         arrayJoin(exposed_units) AS hvac_unit_id
-    FROM (
-        SELECT timestamp, exposed_units, '' AS tenant_id FROM sensor_events
-        UNION ALL
-        SELECT timestamp, exposed_units, tenant_id FROM sensor_events_v2
-    )
+    FROM sensor_events_v2
     WHERE length(exposed_units) > 0
         AND timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
         AND timestamp <= parseDateTimeBestEffort({{String(end_date, '2099-12-31')}})
@@ -24,11 +20,7 @@ SQL >
     SELECT
         timestamp AS closed_at,
         arrayJoin(unexposed_units) AS hvac_unit_id
-    FROM (
-        SELECT timestamp, unexposed_units, '' AS tenant_id FROM sensor_events
-        UNION ALL
-        SELECT timestamp, unexposed_units, tenant_id FROM sensor_events_v2
-    )
+    FROM sensor_events_v2
     WHERE length(unexposed_units) > 0
         AND timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
         AND timestamp <= parseDateTimeBestEffort({{String(end_date, '2099-12-31')}})
