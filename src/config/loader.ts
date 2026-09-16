@@ -46,6 +46,7 @@ export function loadEnvSecrets(env?: Record<string, string | undefined>): EnvSec
     tinybirdToken: source.TINYBIRD_TOKEN || undefined,
     tinybirdUrl: source.TINYBIRD_URL || undefined,
     resendApiKey: source.RESEND_API_KEY || undefined,
+    emailFrom: source.EMAIL_FROM || undefined,
     ownerEmail: source.OWNER_EMAIL || undefined,
     appUrl: source.APP_URL || undefined,
     siteName: source.SITE_NAME || undefined,

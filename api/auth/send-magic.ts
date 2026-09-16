@@ -1,7 +1,6 @@
 export const config = { runtime: "edge" };
 
 import { z } from "zod";
-import { Resend } from "resend";
 import { loadEnvSecrets } from "../../src/config/index.js";
 import type { EnvSecrets } from "../../src/config/index.js";
 import { RedisStateStore } from "../../src/providers/redis/index.js";
@@ -12,6 +11,7 @@ import type { Database } from "../../src/db/client.js";
 import { createLogger } from "../../src/utils/logger.js";
 import type { Logger } from "../../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../../src/utils/response.js";
+import { createResendSender } from "../../src/utils/email.js";
 
 const SendMagicPayload = z.object({
   email: z.string().email(),
@@ -90,17 +90,7 @@ export async function handleSendMagic(request: Request, deps?: SendMagicDeps): P
 
     const siteName = secrets.siteName ?? "HVAC Guardian";
 
-    const sendEmail =
-      deps?.sendEmail ??
-      (async (to: string, subject: string, text: string) => {
-        const resend = new Resend(secrets.resendApiKey);
-        await resend.emails.send({
-          from: `${siteName} <noreply@zolite.ai>`,
-          to,
-          subject,
-          text,
-        });
-      });
+    const sendEmail = deps?.sendEmail ?? createResendSender(secrets);
 
     await sendEmail(
       email,

@@ -45,14 +45,15 @@ Set these in your Vercel project (or `.env` file locally):
 
 #### Optional
 
-| Variable         | Description                                                               |
-| ---------------- | ------------------------------------------------------------------------- |
-| `RESEND_API_KEY` | Resend API key (required for magic link auth)                             |
-| `OWNER_EMAIL`    | Email address allowed to log in to the dashboard                          |
-| `APP_URL`        | Public app URL for magic link emails (e.g. `https://your-app.vercel.app`) |
-| `TINYBIRD_TOKEN` | Tinybird auth token (enables analytics tracking)                          |
-| `TINYBIRD_URL`   | Tinybird API base URL                                                     |
-| `SITE_NAME`      | Custom branding name (default: `HVAC Guardian`)                           |
+| Variable         | Description                                                                 |
+| ---------------- | --------------------------------------------------------------------------- |
+| `RESEND_API_KEY` | Resend API key (required for magic link auth)                               |
+| `OWNER_EMAIL`    | Email address allowed to log in to the dashboard                            |
+| `EMAIL_FROM`     | Sender address, on a Resend-verified domain (default: `noreply@zolite.app`) |
+| `APP_URL`        | Public app URL for magic link emails (e.g. `https://your-app.vercel.app`)   |
+| `TINYBIRD_TOKEN` | Tinybird auth token (enables analytics tracking)                            |
+| `TINYBIRD_URL`   | Tinybird API base URL                                                       |
+| `SITE_NAME`      | Custom branding name (default: `HVAC Guardian`)                             |
 
 ### APP_CONFIG Format
 
