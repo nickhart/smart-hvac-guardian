@@ -8,6 +8,7 @@ import { RedisStateStore } from "../../src/providers/redis/index.js";
 import { loadEnvSecrets } from "../../src/config/index.js";
 import { createLogger } from "../../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../../src/utils/response.js";
+import { createResendSender } from "../../src/utils/email.js";
 
 const StartPayload = z.object({
   email: z.string().email(),
@@ -76,15 +77,12 @@ export default async function handler(request: Request): Promise<Response> {
         (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
       const magicLink = `${appUrl}/api/auth/magic?token=${token}`;
 
-      const { Resend } = await import("resend");
-      const resend = new Resend(secrets.resendApiKey);
       const siteName = secrets.siteName ?? "HVAC Guardian";
-      await resend.emails.send({
-        from: `${siteName} <onboarding@resend.dev>`,
-        to: email,
-        subject: "Complete your setup",
-        text: `Welcome to ${siteName}! Click the link below to continue setting up "${propertyName}":\n\n${magicLink}\n\nThis link expires in 10 minutes.`,
-      });
+      await createResendSender(secrets)(
+        email,
+        "Complete your setup",
+        `Welcome to ${siteName}! Click the link below to continue setting up "${propertyName}":\n\n${magicLink}\n\nThis link expires in 10 minutes.`,
+      );
     }
 
     logger.info("Onboarding started", { requestId, email, tenantId: tenant.id, slug });
