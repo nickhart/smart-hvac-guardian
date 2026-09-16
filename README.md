@@ -49,7 +49,7 @@ Set these in your Vercel project (or `.env` file locally):
 | ---------------- | --------------------------------------------------------------------------- |
 | `RESEND_API_KEY` | Resend API key (required for magic link auth)                               |
 | `OWNER_EMAIL`    | Email address allowed to log in to the dashboard                            |
-| `EMAIL_FROM`     | Sender address, on a Resend-verified domain (default: `noreply@zolite.app`) |
+| `EMAIL_FROM`     | Sender address, on a Resend-verified domain (default: `noreply@acsavr.com`) |
 | `APP_URL`        | Public app URL for magic link emails (e.g. `https://your-app.vercel.app`)   |
 | `TINYBIRD_TOKEN` | Tinybird auth token (enables analytics tracking)                            |
 | `TINYBIRD_URL`   | Tinybird API base URL                                                       |

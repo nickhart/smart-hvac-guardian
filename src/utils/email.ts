@@ -2,12 +2,12 @@ import { Resend } from "resend";
 import type { EnvSecrets } from "../config/schema.js";
 
 /** Fallback sender. Must live on a domain verified in Resend, or sends 403. */
-export const DEFAULT_EMAIL_FROM = "noreply@zolite.app";
+export const DEFAULT_EMAIL_FROM = "noreply@acsavr.com";
 
 export type SendEmail = (to: string, subject: string, text: string) => Promise<void>;
 
 /**
- * Build the From header, e.g. `HVAC Guardian <noreply@zolite.app>`.
+ * Build the From header, e.g. `HVAC Guardian <noreply@acsavr.com>`.
  * EMAIL_FROM may be a bare address or already carry its own display name.
  */
 export function resolveFrom(secrets: EnvSecrets): string {

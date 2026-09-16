@@ -26,14 +26,14 @@ describe("resolveFrom", () => {
   });
 
   it("wraps a bare EMAIL_FROM in the configured site name", () => {
-    expect(resolveFrom({ ...baseSecrets, siteName: "Zolite", emailFrom: "hi@zolite.app" })).toBe(
-      "Zolite <hi@zolite.app>",
+    expect(resolveFrom({ ...baseSecrets, siteName: "Acsavr", emailFrom: "hi@acsavr.com" })).toBe(
+      "Acsavr <hi@acsavr.com>",
     );
   });
 
   it("passes through an EMAIL_FROM that already has a display name", () => {
-    const emailFrom = "Support <support@zolite.app>";
-    expect(resolveFrom({ ...baseSecrets, siteName: "Zolite", emailFrom })).toBe(emailFrom);
+    const emailFrom = "Support <support@acsavr.com>";
+    expect(resolveFrom({ ...baseSecrets, siteName: "Acsavr", emailFrom })).toBe(emailFrom);
   });
 });
 
