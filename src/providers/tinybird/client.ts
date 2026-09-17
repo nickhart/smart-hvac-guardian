@@ -1,5 +1,8 @@
 import type { AnalyticsProvider } from "../types.js";
 
+/** Analytics must never be slower than the control path it instruments. */
+const INGEST_TIMEOUT_MS = 2000;
+
 export class TinybirdAnalyticsProvider implements AnalyticsProvider {
   private baseUrl: string;
   private token: string;
@@ -87,6 +90,11 @@ export class TinybirdAnalyticsProvider implements AnalyticsProvider {
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
+        // Bounded so analytics can never stall the HVAC control path: these
+        // calls are awaited before the handler responds, and a hung request
+        // would let the function time out, which QStash reads as a failure and
+        // retries — firing a duplicate turn-off.
+        signal: AbortSignal.timeout(INGEST_TIMEOUT_MS),
       });
 
       if (!response.ok) {
