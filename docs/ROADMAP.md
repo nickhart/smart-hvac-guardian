@@ -42,6 +42,47 @@ IFTTT failures and skips calls for a cooldown, and QStash retries are capped so
 one turn-off cannot become four failure notifications. Still open: extending the
 breaker to YoLink, and surfacing circuit state in the dashboard.
 
+### Staging environment with simulated YoLink and IFTTT
+
+Merging control-path changes while guests are on site is the riskiest moment in
+this project. The goal is to exercise a real deployment end to end without any
+possibility of touching real HVAC.
+
+Three tiers, in increasing cost and fidelity:
+
+**1. Run the existing E2E suite in CI (cheap, do first).** `dev/e2e/scenarios.test.ts`
+already drives 7 full sensor-to-turn-off scenarios against the dev server, with
+`--delay-scale` compressing timers to milliseconds. `.github/workflows` runs
+`type-check`, `lint`, `format:check` and `test:coverage`, but **not**
+`pnpm test:e2e`. Adding it is one line and catches control-flow regressions on
+every PR.
+
+**2. Fault injection in the existing dev harness.** `dev/providers.ts` is already
+a full set of fakes. Add controllable failure modes — IFTTT returning 500 or
+401, YoLink timing out, the state store throwing — and write scenarios for the
+resilience behaviour that currently has only unit coverage: circuit opens after
+N failures, turn-offs are skipped while open, the circuit heals after cooldown,
+a terminal failure is not retried. No cloud infrastructure required.
+
+**3. A real staging deployment.** A second Vercel project deploying from a
+`staging` branch, with its own Upstash Redis and QStash instances and its own
+Tinybird workspace (or a reserved tenant prefix), seeded with a synthetic tenant
+and fake sensors.
+
+The critical constraint: staging must **never** reach real IFTTT, since that
+controls real HVAC. That requires a mock service impersonating the IFTTT Maker
+and YoLink APIs, with failure injection driven by a control endpoint.
+
+Prerequisite: `IFTTT_BASE_URL` is currently a hardcoded constant in
+`src/providers/cielo/client.ts`. It must become configurable before a staging
+environment can be safe. `yolink.baseUrl` is already config-driven.
+
+Expected cost: roughly zero — additional Vercel projects, a second Upstash free
+tier database, and the Tinybird free tier all fit existing plans.
+
+Watch for staging drift: keep the same repository, the same environment
+variable names, and deploy staging from a branch rather than a separate repo.
+
 ### Emergency kill switch
 
 A way to stop the system that does not depend on being able to log in. The
