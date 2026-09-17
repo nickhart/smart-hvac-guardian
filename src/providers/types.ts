@@ -46,6 +46,21 @@ export interface AnalyticsProvider {
     iftttEvent?: string;
   }): Promise<void>;
 
+  /**
+   * Provider health, as opposed to business events: did a call to an external
+   * service succeed, fail, or get skipped because its circuit was open.
+   */
+  trackProviderEvent(data: {
+    provider: "ifttt" | "yolink" | "qstash" | "redis" | "resend";
+    operation: string;
+    outcome: "ok" | "failed" | "skipped_circuit_open";
+    durationMs?: number;
+    statusCode?: number;
+    errorMessage?: string;
+    terminal?: boolean;
+    requestId?: string;
+  }): Promise<void>;
+
   trackHvacStateEvent(data: {
     requestId: string;
     hvacId: string;
@@ -73,6 +88,10 @@ export interface StateStore {
   getActiveTimerUnitIds(): Promise<string[]>;
   getSystemEnabled(): Promise<boolean>;
   setSystemEnabled(enabled: boolean): Promise<void>;
+  isCircuitOpen(name: string): Promise<boolean>;
+  openCircuit(name: string, cooldownSeconds: number): Promise<void>;
+  recordCircuitFailure(name: string, windowSeconds: number): Promise<number>;
+  resetCircuit(name: string): Promise<void>;
   getUnitDelay(hvacUnitId: string): Promise<number | null>;
   setUnitDelay(hvacUnitId: string, delaySeconds: number): Promise<void>;
 }

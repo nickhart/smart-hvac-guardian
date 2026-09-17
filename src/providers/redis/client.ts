@@ -65,6 +65,42 @@ export class RedisStateStore implements StateStore {
     await this.redis.set(this.key("system:enabled"), String(enabled));
   }
 
+  // --- Circuit breaker ---
+  // Two keys per circuit: a failure counter (rolling window) and an "open"
+  // marker whose TTL is the cooldown. Both expire on their own, so a circuit
+  // always heals without anything having to reset it.
+
+  async isCircuitOpen(name: string): Promise<boolean> {
+    const val = await this.redis.get(this.key(`circuit:${name}:open`));
+    return val !== null && val !== undefined;
+  }
+
+  async openCircuit(name: string, cooldownSeconds: number): Promise<void> {
+    await this.redis.set(this.key(`circuit:${name}:open`), "1", { ex: cooldownSeconds });
+    await this.redis.del(this.key(`circuit:${name}:failures`));
+  }
+
+  /** Increment the failure counter and return the new total. */
+  async recordCircuitFailure(name: string, windowSeconds: number): Promise<number> {
+    const failureKey = this.key(`circuit:${name}:failures`);
+    const count = await this.redis.incr(failureKey);
+    // Start the window on the first failure so it rolls rather than extending.
+    if (count === 1) {
+      await this.redis.expire(failureKey, windowSeconds);
+    }
+    return count;
+  }
+
+  async resetCircuit(name: string): Promise<void> {
+    await this.redis.del(this.key(`circuit:${name}:failures`));
+    await this.redis.del(this.key(`circuit:${name}:open`));
+  }
+
+  /** Liveness probe for /api/health. Throws if Redis is unreachable. */
+  async ping(): Promise<void> {
+    await this.redis.ping();
+  }
+
   // --- Auth helpers (not part of StateStore interface) ---
   // Auth keys are GLOBAL (no tenant prefix) — sessions/magic tokens are cross-tenant.
 

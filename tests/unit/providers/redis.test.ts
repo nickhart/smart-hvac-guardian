@@ -6,6 +6,9 @@ const mockGet = vi.fn().mockResolvedValue(null);
 const mockDel = vi.fn().mockResolvedValue(1);
 const mockMget = vi.fn().mockResolvedValue([]);
 const mockScan = vi.fn().mockResolvedValue(["0", []]);
+const mockIncr = vi.fn().mockResolvedValue(1);
+const mockExpire = vi.fn().mockResolvedValue(1);
+const mockPing = vi.fn().mockResolvedValue("PONG");
 
 vi.mock("@upstash/redis", () => {
   return {
@@ -15,6 +18,9 @@ vi.mock("@upstash/redis", () => {
       del: mockDel,
       mget: mockMget,
       scan: mockScan,
+      incr: mockIncr,
+      expire: mockExpire,
+      ping: mockPing,
     })),
   };
 });
@@ -139,5 +145,57 @@ describe("RedisStateStore", () => {
       const result = await store.getActiveTimerUnitIds();
       expect(result).toEqual([]);
     });
+  });
+});
+
+describe("RedisStateStore circuit breaker", () => {
+  let store: RedisStateStore;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    store = new RedisStateStore({
+      url: "https://redis.upstash.io",
+      token: "test-token",
+      tenantId: "tenant-1",
+    });
+  });
+
+  it("reports a circuit as closed when no marker exists", async () => {
+    mockGet.mockResolvedValueOnce(null);
+    await expect(store.isCircuitOpen("ifttt")).resolves.toBe(false);
+    expect(mockGet).toHaveBeenCalledWith("tenant-1:circuit:ifttt:open");
+  });
+
+  it("reports a circuit as open when the marker is present", async () => {
+    mockGet.mockResolvedValueOnce("1");
+    await expect(store.isCircuitOpen("ifttt")).resolves.toBe(true);
+  });
+
+  it("opens a circuit with a cooldown TTL and clears the counter", async () => {
+    await store.openCircuit("ifttt", 600);
+    expect(mockSet).toHaveBeenCalledWith("tenant-1:circuit:ifttt:open", "1", { ex: 600 });
+    expect(mockDel).toHaveBeenCalledWith("tenant-1:circuit:ifttt:failures");
+  });
+
+  it("sets the window TTL only on the first failure", async () => {
+    mockIncr.mockResolvedValueOnce(1);
+    await expect(store.recordCircuitFailure("ifttt", 900)).resolves.toBe(1);
+    expect(mockExpire).toHaveBeenCalledWith("tenant-1:circuit:ifttt:failures", 900);
+
+    vi.clearAllMocks();
+    mockIncr.mockResolvedValueOnce(2);
+    await expect(store.recordCircuitFailure("ifttt", 900)).resolves.toBe(2);
+    expect(mockExpire).not.toHaveBeenCalled();
+  });
+
+  it("resets both circuit keys", async () => {
+    await store.resetCircuit("ifttt");
+    expect(mockDel).toHaveBeenCalledWith("tenant-1:circuit:ifttt:failures");
+    expect(mockDel).toHaveBeenCalledWith("tenant-1:circuit:ifttt:open");
+  });
+
+  it("pings Redis for health checks", async () => {
+    await store.ping();
+    expect(mockPing).toHaveBeenCalled();
   });
 });

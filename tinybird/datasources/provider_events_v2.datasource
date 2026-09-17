@@ -1,0 +1,19 @@
+DESCRIPTION >
+    Health of calls to external providers (IFTTT, YoLink, QStash, Redis, Resend).
+    Records successes, failures, and calls deliberately skipped because a
+    circuit breaker was open — the signal for "an upstream service is down".
+
+SCHEMA >
+    timestamp DateTime `json:$.timestamp`,
+    tenant_id String `json:$.tenant_id`,
+    provider String `json:$.provider`,
+    operation String `json:$.operation`,
+    outcome String `json:$.outcome`,
+    duration_ms Nullable(Int32) `json:$.duration_ms`,
+    status_code Nullable(Int32) `json:$.status_code`,
+    error_message Nullable(String) `json:$.error_message`,
+    terminal UInt8 `json:$.terminal`,
+    request_id String `json:$.request_id`
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "tenant_id, provider, timestamp"

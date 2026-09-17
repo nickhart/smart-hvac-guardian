@@ -37,6 +37,41 @@ When the system is toggled off, cancel all active timers in Redis (delete `timer
 
 If IFTTT, Cielo, or YoLink is unreachable, temporarily disable AC shutoff to avoid locking guests out of AC. Re-enable automatically when services recover.
 
+**Partially shipped**: a Redis-backed circuit breaker now trips after repeated
+IFTTT failures and skips calls for a cooldown, and QStash retries are capped so
+one turn-off cannot become four failure notifications. Still open: extending the
+breaker to YoLink, and surfacing circuit state in the dashboard.
+
+### Emergency kill switch
+
+A way to stop the system that does not depend on being able to log in. The
+motivating incident: magic-link emails were silently failing, so the dashboard
+toggle — the only way to stop a flood of IFTTT failure notifications — was
+unreachable. Disabling the IFTTT applets by hand is impractical because there
+are several.
+
+Design agreed:
+
+- **Disable-only.** The emergency path can only set the system to disabled;
+  re-enabling stays behind normal session auth. Enabling schedules turn-offs
+  for every exposed unit, so a leaked credential that could enable is a real
+  risk, while one that can only disable costs money at worst.
+- **`api/emergency-stop.ts`**, deliberately bypassing `resolveTenantFromSession()`
+  since the premise is that sessions are unavailable.
+- **Token stored as a SHA-256 hash** in Postgres, not encrypted — a hash needs
+  no key management and cannot be reversed if the database leaks. Format
+  `<tenantShortId>.<secret>` so lookup hits one row instead of scanning.
+- **`GET` renders a confirmation page, `POST` performs the stop**, so the
+  bookmarkable URL cannot be fired by a prefetcher, scanner, or link preview.
+- **Redis rate limiting** per tenant and per IP, since this is a bearer secret
+  on a public endpoint.
+- Reuse `timingSafeEqual()` from `src/utils/crypto.ts`; show the token once at
+  generation; support rotate and revoke; audit every attempt and email on use.
+
+Known limitation: it still depends on Upstash, so it is not a true out-of-band
+control. Note also that `getSystemEnabled()` treats a missing key as enabled, so
+a Redis flush re-enables the system — `pnpm redis:flush` would undo a stop.
+
 ### System bootstrap / first-run setup
 
 A first-run experience that configures the platform-level infrastructure secrets before any tenant exists. Today these are manually set as Vercel environment variables — this should be a guided flow.

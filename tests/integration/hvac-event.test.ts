@@ -36,11 +36,16 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
       setSystemEnabled: vi.fn().mockResolvedValue(undefined),
       getUnitDelay: vi.fn().mockResolvedValue(null),
       setUnitDelay: vi.fn().mockResolvedValue(undefined),
+      isCircuitOpen: vi.fn().mockResolvedValue(false),
+      openCircuit: vi.fn().mockResolvedValue(undefined),
+      recordCircuitFailure: vi.fn().mockResolvedValue(1),
+      resetCircuit: vi.fn().mockResolvedValue(undefined),
     },
     analytics: {
       trackSensorEvent: vi.fn().mockResolvedValue(undefined),
       trackHvacCommand: vi.fn().mockResolvedValue(undefined),
       trackHvacStateEvent: vi.fn().mockResolvedValue(undefined),
+      trackProviderEvent: vi.fn().mockResolvedValue(undefined),
     },
     qstashReceiver: { verify: vi.fn() } as never,
     config: {
@@ -133,6 +138,10 @@ describe("hvac-event handler", () => {
         setSystemEnabled: vi.fn().mockResolvedValue(undefined),
         getUnitDelay: vi.fn().mockResolvedValue(null),
         setUnitDelay: vi.fn().mockResolvedValue(undefined),
+        isCircuitOpen: vi.fn().mockResolvedValue(false),
+        openCircuit: vi.fn().mockResolvedValue(undefined),
+        recordCircuitFailure: vi.fn().mockResolvedValue(1),
+        resetCircuit: vi.fn().mockResolvedValue(undefined),
       },
     });
 
@@ -175,6 +184,10 @@ describe("hvac-event handler", () => {
         setSystemEnabled: vi.fn(),
         getUnitDelay: vi.fn().mockResolvedValue(null),
         setUnitDelay: vi.fn(),
+        isCircuitOpen: vi.fn().mockResolvedValue(false),
+        openCircuit: vi.fn().mockResolvedValue(undefined),
+        recordCircuitFailure: vi.fn().mockResolvedValue(1),
+        resetCircuit: vi.fn().mockResolvedValue(undefined),
       },
     });
 
@@ -205,6 +218,10 @@ describe("hvac-event handler", () => {
         setSystemEnabled: vi.fn(),
         getUnitDelay: vi.fn().mockResolvedValue(null),
         setUnitDelay: vi.fn(),
+        isCircuitOpen: vi.fn().mockResolvedValue(false),
+        openCircuit: vi.fn().mockResolvedValue(undefined),
+        recordCircuitFailure: vi.fn().mockResolvedValue(1),
+        resetCircuit: vi.fn().mockResolvedValue(undefined),
       },
     });
     const res = await handleHvacEvent(makeRequest({ hvacId: "ac_living", event: "on" }), deps);

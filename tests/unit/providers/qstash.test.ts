@@ -55,7 +55,27 @@ describe("QStashScheduler", () => {
       body: { hvacUnitId: "ac_living", cancellationToken: "token-abc" },
       delay: 90,
       deduplicationId: "turnoff-ac_living-123",
+      retries: 1,
     });
+  });
+
+  it("caps delivery retries so an outage is not amplified", async () => {
+    // QStash defaults to 3 retries; each one re-fires the IFTTT webhook and
+    // produces another failure notification.
+    const scheduler = new QStashScheduler({
+      token: "test-token",
+      checkStateUrl: "https://example.com/api/check-state",
+      turnOffUrl: "https://example.com/api/hvac-turn-off",
+      logger: mockLogger,
+    });
+
+    await scheduler.scheduleUnitTurnOff("ac_living", "token-abc", 90, "dedup-1");
+    await scheduler.scheduleTurnOff("dedup-2");
+    await scheduler.scheduleDelayedCheck("front_door", 30);
+
+    for (const call of mockPublishJSON.mock.calls) {
+      expect(call[0].retries).toBe(1);
+    }
   });
 
   it("throws ProviderError on scheduleUnitTurnOff failure", async () => {
