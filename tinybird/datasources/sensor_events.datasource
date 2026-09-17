@@ -1,0 +1,20 @@
+DESCRIPTION >
+    FROZEN ARCHIVE — do not ingest to this datasource.
+
+    Pre-multi-tenancy data (no tenant_id). Ingestion moved to the _v2
+    datasource of the same name; this is kept only so historical rows remain
+    queryable and so `tinybird deploy` does not see a pending deletion.
+    Deleting it requires --allow-destructive-operations and loses the data.
+
+SCHEMA >
+    timestamp DateTime `json:$.timestamp`,
+    request_id String `json:$.request_id`,
+    sensor_id String `json:$.sensor_id`,
+    event String `json:$.event`,
+    exposed_units Array(String) `json:$.exposed_units[:]`,
+    unexposed_units Array(String) `json:$.unexposed_units[:]`,
+    timers_scheduled Array(String) `json:$.timers_scheduled[:]`,
+    timers_cancelled Array(String) `json:$.timers_cancelled[:]`
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "timestamp, sensor_id"
