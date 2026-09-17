@@ -37,15 +37,11 @@ describe("Tinybird ingest names match deployed datasources", () => {
     expect(missing).toEqual([]);
   });
 
-  it("never ingests to a frozen pre-multi-tenancy archive", () => {
-    const frozen = declaredDatasources.filter((n) => {
-      const body = readFileSync(resolve(repoRoot, `tinybird/datasources/${n}.datasource`), "utf8");
-      return body.includes("FROZEN ARCHIVE");
-    });
-
-    expect(frozen.length).toBeGreaterThan(0);
-    for (const name of frozen) {
-      expect(ingestNames).not.toContain(name);
-    }
+  it("declares only _v2 datasources", () => {
+    // The pre-multi-tenancy datasources were dropped. Their schemas had been
+    // inferred by the Events API on first ingest and could never be reconciled
+    // with a .datasource file, which is what failed every deploy for 30 runs.
+    const notV2 = declaredDatasources.filter((n) => !n.endsWith("_v2"));
+    expect(notV2).toEqual([]);
   });
 });

@@ -1,0 +1,50 @@
+name: Tinybird Destructive Deploy (manual)
+
+# Deliberately manual. `tinybird deploy` refuses to drop a datasource, which is
+# the right default: the regular CD workflow must never be able to delete a
+# production table by accident.
+#
+# This exists for the one case where dropping is the intent — reconciling a
+# workspace whose datasources were auto-created by the Events API with inferred
+# schemas that no .datasource file can match. Running it DESTROYS the data in
+# any datasource that is removed or recreated.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type DELETE to confirm dropping datasources and losing their data"
+        required: true
+        type: string
+
+env:
+  TINYBIRD_TOKEN: ${{ secrets.TINYBIRD_TOKEN }}
+
+jobs:
+  destructive-deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: "."
+    steps:
+      - name: Check confirmation
+        if: inputs.confirm != 'DELETE'
+        run: |
+          echo "::error::Confirmation failed. Type DELETE exactly to run this workflow."
+          exit 1
+
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: "pnpm"
+      - run: pnpm install --frozen-lockfile
+
+      - name: Show what will be deployed
+        run: |
+          echo "Datasources defined in this repo:"
+          ls -1 tinybird/datasources/
+
+      - name: Deploy with destructive operations allowed
+        run: pnpm exec tinybird deploy --allow-destructive-operations
