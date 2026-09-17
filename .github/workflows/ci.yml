@@ -33,3 +33,6 @@ jobs:
 
       - name: Test with coverage
         run: pnpm test:coverage
+
+      - name: E2E scenarios
+        run: pnpm test:e2e
