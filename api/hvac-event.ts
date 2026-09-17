@@ -64,22 +64,18 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
         event: "off",
         wasExposed: false,
         turnoffScheduled: false,
+        shutoffEnabled: await d.stateStore.getSystemEnabled(),
       });
       return jsonResponse({ status: "ok", action: "none" });
     }
 
-    // Check if system is enabled
+    // Check if system is enabled. When disabled the evaluation still runs and
+    // timers are still scheduled — "shadow mode". Only the turn-off handler
+    // refuses to call IFTTT, so nothing reaches the HVAC while every decision
+    // is still recorded.
     const systemEnabled = await d.stateStore.getSystemEnabled();
     if (!systemEnabled) {
-      logger.info("System disabled, skipping HVAC evaluation", { requestId });
-      await d.analytics.trackHvacStateEvent({
-        requestId,
-        hvacId,
-        event: "on",
-        wasExposed: false,
-        turnoffScheduled: false,
-      });
-      return jsonResponse({ status: "ok", action: "system_disabled" });
+      logger.info("System disabled — evaluating in shadow mode", { requestId });
     }
 
     if (!(hvacId in d.config.hvacUnits)) {
@@ -122,6 +118,7 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
         event: "on",
         wasExposed: false,
         turnoffScheduled: false,
+        shutoffEnabled: systemEnabled,
       });
       return jsonResponse({ status: "ok", action: "none" });
     }
@@ -151,6 +148,7 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
       event: "on",
       wasExposed: true,
       turnoffScheduled: true,
+      shutoffEnabled: systemEnabled,
     });
     await d.analytics.trackHvacCommand({
       requestId,
@@ -160,6 +158,7 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
       triggerSource: "hvac_on",
       delaySeconds,
       iftttEvent: unitConfig?.iftttEvent,
+      shutoffEnabled: systemEnabled,
     });
 
     return jsonResponse({

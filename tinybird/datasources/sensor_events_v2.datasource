@@ -10,7 +10,8 @@ SCHEMA >
     exposed_units Array(String) `json:$.exposed_units[:]`,
     unexposed_units Array(String) `json:$.unexposed_units[:]`,
     timers_scheduled Array(String) `json:$.timers_scheduled[:]`,
-    timers_cancelled Array(String) `json:$.timers_cancelled[:]`
+    timers_cancelled Array(String) `json:$.timers_cancelled[:]`,
+    shutoff_enabled UInt8 `json:$.shutoff_enabled`
 
 ENGINE "MergeTree"
 ENGINE_SORTING_KEY "tenant_id, timestamp, sensor_id"

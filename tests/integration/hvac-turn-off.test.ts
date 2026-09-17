@@ -225,14 +225,18 @@ describe("hvac-turn-off handler", () => {
     const body = (await res.json()) as Record<string, unknown>;
 
     expect(res.status).toBe(200);
-    expect(body.action).toBe("cancelled");
+    expect(body.action).toBe("not_executed");
     expect(body.reason).toBe("system_disabled");
     expect(deps.hvac.turnOff).not.toHaveBeenCalled();
     expect(deps.stateStore.deleteTimerToken).toHaveBeenCalledWith("ac_living");
+
+    // Shadow mode: the decision is recorded as a turn-off that was not
+    // executed, rather than discarded as a cancellation.
     expect(deps.analytics.trackHvacCommand).toHaveBeenCalledWith(
       expect.objectContaining({
         hvacUnitId: "ac_living",
-        action: "cancelled",
+        action: "turned_off",
+        shutoffEnabled: false,
       }),
     );
   });

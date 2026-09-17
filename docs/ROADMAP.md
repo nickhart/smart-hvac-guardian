@@ -29,9 +29,40 @@ Persist HVAC on/off state from `hvac-event` handler to avoid scheduling redundan
   - Does a redundant IFTTT "off" command cause an extra beep?
   - Race condition: user manually turns on AC, server fires a stale turn-off
 
-### Proactive timer cancellation on system disable
+### ~~Proactive timer cancellation on system disable~~ (superseded)
 
-When the system is toggled off, cancel all active timers in Redis (delete `timer:*` keys) rather than letting them fire and no-op.
+Dropped in favour of **shadow mode**, which needs those timers to keep firing.
+When the system is disabled it now still evaluates zones, schedules timers and
+records the turn-offs it _would_ have performed, flagged `shutoff_enabled = 0`.
+Only the IFTTT call is withheld. Cancelling the timers on disable would destroy
+exactly the signal shadow mode exists to capture.
+
+### Energy correlation dashboard
+
+Measure how long each HVAC unit runs _while exposed to the exterior_ — the
+wasted runtime the whole system exists to prevent — and correlate it with
+utility bills, with alerts when kWh over a period crosses a threshold.
+
+Most of the raw material already exists:
+
+- `exposure_duration` computes how long each unit was exposed, by ASOF-joining
+  open/close events in `sensor_events_v2`.
+- `hvac_runtime` computes how long each unit ran, by ASOF-joining on/off events
+  in `hvac_state_events_v2`.
+
+The missing piece is the **intersection** of those two interval sets: runtime
+that overlaps an exposure window. That is one more pipe, not a new pipeline.
+
+Then:
+
+- A per-unit kWh estimate needs a rated draw per unit, which is a config
+  addition (`hvacUnits[].wattsRated` or similar) — the system has no way to
+  know it otherwise, and without it the dashboard can report wasted _hours_ but
+  not wasted _dollars_.
+- Threshold alerts want a scheduled job reading the pipe, reusing the email
+  sender in `src/utils/email.ts`.
+- With `shutoff_enabled` now recorded, the same query answers the question that
+  justifies the project: wasted runtime with shutoff on versus off.
 
 ### Service outage auto-disable
 
