@@ -39,6 +39,36 @@ Tinybird project settings live in `tinybird.config.json`. Datasource and pipe de
 
 ## Datasources
 
+All ingestion targets the `_v2` datasources, which carry `tenant_id`. The
+unsuffixed `sensor_events`, `hvac_commands` and `hvac_state_events` are **frozen
+archives** of pre-multi-tenancy data — nothing writes to them. They are kept in
+the repo so historical rows stay queryable and so `tinybird deploy` does not see
+a pending deletion, which it refuses without `--allow-destructive-operations`.
+
+Ingest names are pinned to the deployed datasources by
+`tests/unit/providers/tinybird-datasource-names.test.ts`. Ingestion is raw HTTP
+(`/v0/events?name=...`), so a wrong name is a silent 404 at runtime rather than
+a compile error — that test is what makes the mismatch visible.
+
+### `provider_events_v2`
+
+Health of calls to external providers: successes, failures, and calls skipped
+because a circuit breaker was open. This is the signal that distinguishes "an
+upstream service is down" from "nothing happened".
+
+| Column          | Type               | Description                                      |
+| --------------- | ------------------ | ------------------------------------------------ |
+| `timestamp`     | `DateTime`         | When the call completed                          |
+| `tenant_id`     | `String`           | Tenant the call belongs to                       |
+| `provider`      | `String`           | `ifttt`, `yolink`, `qstash`, `redis` or `resend` |
+| `operation`     | `String`           | Operation attempted, e.g. `trigger:turn_off_ac`  |
+| `outcome`       | `String`           | `ok`, `failed` or `skipped_circuit_open`         |
+| `duration_ms`   | `Nullable(Int32)`  | Wall-clock duration of the call                  |
+| `status_code`   | `Nullable(Int32)`  | HTTP status, when the provider returned one      |
+| `error_message` | `Nullable(String)` | Failure reason                                   |
+| `terminal`      | `UInt8`            | 1 when retrying could not succeed                |
+| `request_id`    | `String`           | Correlates with the request logs                 |
+
 ### `sensor_events_v2`
 
 Door/window sensor open/close events.
