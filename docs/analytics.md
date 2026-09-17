@@ -60,24 +60,40 @@ to act, and to compare wasted runtime with shutoff on versus off. The guarantee
 that disabled never reaches the HVAC is pinned by
 `tests/integration/shadow-mode.test.ts`.
 
+### Changing a datasource schema
+
+`tinybird deploy` detects datasources **appearing and disappearing**, but not
+changes to the schema of one that already exists. Adding a column to a
+`.datasource` file deploys as:
+
+```
+Deploying to main workspace...
+△ Not deploying. No changes.
+```
+
+`--allow-destructive-operations` behaves identically — the flag controls what is
+_permitted_, not what is _detected_. So a schema change needs to be turned into
+a presence change: drop the datasource, then deploy to recreate it.
+
+The **Tinybird Recreate Datasource** workflow does both in one run, dropping via
+the Datasources API and then deploying, so ingestion only 404s for a few
+seconds. It refuses to drop anything without a matching `.datasource` file in
+the repo, so it cannot leave a datasource the deploy is unable to rebuild.
+
+**It destroys every row in those datasources.** Export first if the data matters.
+
 ### A note on schema drift
 
-The Events API **creates a datasource by inferring its schema** when the name
-does not exist. An inferred schema rarely matches the explicit `.datasource`
-definition — `Array(String)` and `Nullable` columns in particular — and once the
-two differ, `tinybird deploy` computes a replacement, which requires a drop, and
-refuses. That is recoverable only by dropping the datasource.
+The Events API creates a datasource by inferring its schema when the name does
+not exist — but only if the token carries `DATASOURCE:CREATE`. This workspace's
+token does not, so ingesting to an unknown name returns a 404 instead, which
+`TinybirdAnalyticsProvider.ingest` logs.
 
-This is not hypothetical: it is what happened to `sensor_events`,
-`hvac_commands` and `hvac_state_events`, and it failed every deploy of this
-workflow for its first 30 runs.
-
-The practical rule: **never ingest to a name that has no `.datasource` file.**
-The test above enforces it. If a deploy ever fails with "Data sources can't be
-deleted", a datasource has drifted, and the recovery is the manual
-`Tinybird Destructive Deploy` workflow — never adding
-`--allow-destructive-operations` to the regular CD workflow, which would let a
-routine deploy silently drop a production table.
+Either way the rule is the same: **never ingest to a name that has no
+`.datasource` file.** `tests/unit/providers/tinybird-datasource-names.test.ts`
+enforces it. The unsuffixed `sensor_events`, `hvac_commands` and
+`hvac_state_events` had drifted out of sync with their definitions and failed
+every deploy for 30 runs before being dropped.
 
 ### `provider_events_v2`
 
