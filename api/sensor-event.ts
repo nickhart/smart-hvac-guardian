@@ -73,18 +73,13 @@ export async function handleSensorEvent(request: Request, deps?: Dependencies): 
     await d.stateStore.setSensorState(sensorId, state);
     logger.info("Sensor state written to Redis", { requestId, sensorId, state });
 
+    // When the system is disabled the evaluation still runs and timers are
+    // still scheduled — "shadow mode". The turn-off handler is what refuses to
+    // call IFTTT while disabled, so nothing reaches the HVAC, but every
+    // decision the system would have made is recorded. That is what makes it
+    // possible to watch the system behave for a while before trusting it.
     if (!systemEnabled) {
-      logger.info("System disabled, skipping zone evaluation", { requestId });
-      await d.analytics.trackSensorEvent({
-        requestId,
-        sensorId,
-        event,
-        exposedUnits: [],
-        unexposedUnits: [],
-        timersScheduled: [],
-        timersCancelled: [],
-      });
-      return jsonResponse({ status: "ok", action: "system_disabled" });
+      logger.info("System disabled — evaluating in shadow mode", { requestId });
     }
 
     // 2. Read all sensor states from Redis, applying defaults for sensors without state
@@ -154,6 +149,7 @@ export async function handleSensorEvent(request: Request, deps?: Dependencies): 
       unexposedUnits: [...unexposedUnits],
       timersScheduled: schedule,
       timersCancelled: cancel,
+      shutoffEnabled: systemEnabled,
     });
 
     return jsonResponse({
@@ -161,6 +157,7 @@ export async function handleSensorEvent(request: Request, deps?: Dependencies): 
       action: schedule.length > 0 || cancel.length > 0 ? "updated" : "none",
       scheduled: schedule,
       cancelled: cancel,
+      shutoffEnabled: systemEnabled,
     });
   } catch (error) {
     logger.error("sensor-event handler error", {

@@ -10,7 +10,8 @@ SCHEMA >
     action String `json:$.action`,
     trigger_source String `json:$.trigger_source`,
     delay_seconds Nullable(Int32) `json:$.delay_seconds`,
-    ifttt_event Nullable(String) `json:$.ifttt_event`
+    ifttt_event Nullable(String) `json:$.ifttt_event`,
+    shutoff_enabled UInt8 `json:$.shutoff_enabled`
 
 ENGINE "MergeTree"
 ENGINE_SORTING_KEY "tenant_id, timestamp, hvac_unit_id"

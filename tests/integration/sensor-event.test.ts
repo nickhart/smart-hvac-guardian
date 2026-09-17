@@ -357,11 +357,13 @@ describe("sensor-event handler", () => {
     const deps = createMockDeps({
       stateStore: {
         setSensorState: vi.fn().mockResolvedValue(undefined),
-        getAllSensorStates: vi.fn().mockResolvedValue(new Map()),
-        setTimerToken: vi.fn(),
+        // front_door open, so a unit really is exposed and shadow mode has a
+        // decision to make.
+        getAllSensorStates: vi.fn().mockResolvedValue(new Map([["front_door", "open"]])),
+        setTimerToken: vi.fn().mockResolvedValue(undefined),
         getTimerToken: vi.fn(),
         deleteTimerToken: vi.fn(),
-        getActiveTimerUnitIds: vi.fn(),
+        getActiveTimerUnitIds: vi.fn().mockResolvedValue([]),
         getSystemEnabled: vi.fn().mockResolvedValue(false),
         setSystemEnabled: vi.fn(),
         getUnitDelay: vi.fn().mockResolvedValue(null),
@@ -380,9 +382,15 @@ describe("sensor-event handler", () => {
     const body = (await res.json()) as Record<string, unknown>;
 
     expect(res.status).toBe(200);
-    expect(body.action).toBe("system_disabled");
     expect(deps.stateStore.setSensorState).toHaveBeenCalledWith("front_door", "open");
-    expect(deps.scheduler.scheduleUnitTurnOff).not.toHaveBeenCalled();
+
+    // Shadow mode: evaluation and scheduling still run while disabled, flagged
+    // so live and shadow decisions can be told apart.
+    expect(body.shutoffEnabled).toBe(false);
+    expect(deps.scheduler.scheduleUnitTurnOff).toHaveBeenCalled();
+    expect(deps.analytics.trackSensorEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ shutoffEnabled: false }),
+    );
   });
 
   it("merges zones when interior door is open", async () => {

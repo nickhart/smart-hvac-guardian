@@ -34,6 +34,8 @@ export interface AnalyticsProvider {
     unexposedUnits: string[];
     timersScheduled: string[];
     timersCancelled: string[];
+    /** False when the decision was made in shadow mode and not executed. */
+    shutoffEnabled: boolean;
   }): Promise<void>;
 
   trackHvacCommand(data: {
@@ -44,6 +46,8 @@ export interface AnalyticsProvider {
     triggerSource: "sensor_open" | "hvac_on";
     delaySeconds?: number;
     iftttEvent?: string;
+    /** False when the decision was made in shadow mode and not executed. */
+    shutoffEnabled: boolean;
   }): Promise<void>;
 
   /**
@@ -67,6 +71,8 @@ export interface AnalyticsProvider {
     event: "on" | "off";
     wasExposed: boolean;
     turnoffScheduled: boolean;
+    /** False when the decision was made in shadow mode and not executed. */
+    shutoffEnabled: boolean;
   }): Promise<void>;
 }
 

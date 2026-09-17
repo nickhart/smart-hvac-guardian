@@ -47,6 +47,19 @@ Ingest names are pinned to the deployed datasources by
 (`/v0/events?name=...`), so a wrong name is a silent 404 at runtime rather than
 a compile error — that test is what makes the mismatch visible.
 
+### Shadow mode
+
+`shutoff_enabled` records whether the system was armed when a decision was made.
+When it is switched off the system still evaluates zones, schedules timers and
+records the turn-offs it would have performed — only the IFTTT call is withheld,
+by the guard in `api/hvac-turn-off.ts`. Rows with `shutoff_enabled = 0` are
+decisions that were made but not executed.
+
+This makes it possible to watch the system behave for a while before trusting it
+to act, and to compare wasted runtime with shutoff on versus off. The guarantee
+that disabled never reaches the HVAC is pinned by
+`tests/integration/shadow-mode.test.ts`.
+
 ### A note on schema drift
 
 The Events API **creates a datasource by inferring its schema** when the name
@@ -89,17 +102,18 @@ upstream service is down" from "nothing happened".
 
 Door/window sensor open/close events.
 
-| Column             | Type            | Description                                       |
-| ------------------ | --------------- | ------------------------------------------------- |
-| `timestamp`        | `DateTime`      | When the event occurred                           |
-| `request_id`       | `String`        | Unique request correlation ID                     |
-| `tenant_id`        | `String`        | Tenant identifier                                 |
-| `sensor_id`        | `String`        | Sensor that triggered the event                   |
-| `event`            | `String`        | `"open"` or `"close"`                             |
-| `exposed_units`    | `Array(String)` | HVAC unit IDs now exposed to open openings        |
-| `unexposed_units`  | `Array(String)` | HVAC unit IDs no longer exposed                   |
-| `timers_scheduled` | `Array(String)` | Unit IDs for which turn-off timers were scheduled |
-| `timers_cancelled` | `Array(String)` | Unit IDs for which turn-off timers were cancelled |
+| Column             | Type            | Description                                               |
+| ------------------ | --------------- | --------------------------------------------------------- |
+| `timestamp`        | `DateTime`      | When the event occurred                                   |
+| `request_id`       | `String`        | Unique request correlation ID                             |
+| `tenant_id`        | `String`        | Tenant identifier                                         |
+| `sensor_id`        | `String`        | Sensor that triggered the event                           |
+| `event`            | `String`        | `"open"` or `"close"`                                     |
+| `exposed_units`    | `Array(String)` | HVAC unit IDs now exposed to open openings                |
+| `unexposed_units`  | `Array(String)` | HVAC unit IDs no longer exposed                           |
+| `timers_scheduled` | `Array(String)` | Unit IDs for which turn-off timers were scheduled         |
+| `timers_cancelled` | `Array(String)` | Unit IDs for which turn-off timers were cancelled         |
+| `shutoff_enabled`  | `UInt8`         | 1 when the system was armed; 0 for a shadow-mode decision |
 
 Sorting key: `tenant_id, timestamp, sensor_id`
 
@@ -107,17 +121,18 @@ Sorting key: `tenant_id, timestamp, sensor_id`
 
 HVAC turn-off, cancellation, and scheduling commands.
 
-| Column           | Type               | Description                                                 |
-| ---------------- | ------------------ | ----------------------------------------------------------- |
-| `timestamp`      | `DateTime`         | When the command was issued                                 |
-| `request_id`     | `String`           | Unique request correlation ID                               |
-| `tenant_id`      | `String`           | Tenant identifier                                           |
-| `hvac_unit_id`   | `String`           | Target HVAC unit                                            |
-| `unit_name`      | `String`           | Human-readable unit name                                    |
-| `action`         | `String`           | `"turned_off"`, `"cancelled"`, or `"scheduled"`             |
-| `trigger_source` | `String`           | What caused the command (e.g. `"sensor_open"`, `"hvac_on"`) |
-| `delay_seconds`  | `Nullable(Int32)`  | Delay before turn-off (for scheduled actions)               |
-| `ifttt_event`    | `Nullable(String)` | IFTTT webhook event name used to execute the turn-off       |
+| Column            | Type               | Description                                                 |
+| ----------------- | ------------------ | ----------------------------------------------------------- |
+| `timestamp`       | `DateTime`         | When the command was issued                                 |
+| `request_id`      | `String`           | Unique request correlation ID                               |
+| `tenant_id`       | `String`           | Tenant identifier                                           |
+| `hvac_unit_id`    | `String`           | Target HVAC unit                                            |
+| `unit_name`       | `String`           | Human-readable unit name                                    |
+| `action`          | `String`           | `"turned_off"`, `"cancelled"`, or `"scheduled"`             |
+| `trigger_source`  | `String`           | What caused the command (e.g. `"sensor_open"`, `"hvac_on"`) |
+| `delay_seconds`   | `Nullable(Int32)`  | Delay before turn-off (for scheduled actions)               |
+| `ifttt_event`     | `Nullable(String)` | IFTTT webhook event name used to execute the turn-off       |
+| `shutoff_enabled` | `UInt8`            | 1 when the system was armed; 0 for a shadow-mode decision   |
 
 Sorting key: `tenant_id, timestamp, hvac_unit_id`
 
@@ -125,15 +140,16 @@ Sorting key: `tenant_id, timestamp, hvac_unit_id`
 
 HVAC unit on/off state change events.
 
-| Column              | Type       | Description                                              |
-| ------------------- | ---------- | -------------------------------------------------------- |
-| `timestamp`         | `DateTime` | When the state change was reported                       |
-| `request_id`        | `String`   | Unique request correlation ID                            |
-| `tenant_id`         | `String`   | Tenant identifier                                        |
-| `hvac_id`           | `String`   | HVAC unit identifier                                     |
-| `event`             | `String`   | `"on"` or `"off"`                                        |
-| `was_exposed`       | `UInt8`    | `1` if the unit was exposed to open openings at the time |
-| `turnoff_scheduled` | `UInt8`    | `1` if a turn-off timer was scheduled in response        |
+| Column              | Type       | Description                                               |
+| ------------------- | ---------- | --------------------------------------------------------- |
+| `timestamp`         | `DateTime` | When the state change was reported                        |
+| `request_id`        | `String`   | Unique request correlation ID                             |
+| `tenant_id`         | `String`   | Tenant identifier                                         |
+| `hvac_id`           | `String`   | HVAC unit identifier                                      |
+| `event`             | `String`   | `"on"` or `"off"`                                         |
+| `was_exposed`       | `UInt8`    | `1` if the unit was exposed to open openings at the time  |
+| `turnoff_scheduled` | `UInt8`    | `1` if a turn-off timer was scheduled in response         |
+| `shutoff_enabled`   | `UInt8`    | 1 when the system was armed; 0 for a shadow-mode decision |
 
 Sorting key: `tenant_id, timestamp, hvac_id`
 

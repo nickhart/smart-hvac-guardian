@@ -26,6 +26,7 @@ export class TinybirdAnalyticsProvider implements AnalyticsProvider {
       unexposed_units: data.unexposedUnits,
       timers_scheduled: data.timersScheduled,
       timers_cancelled: data.timersCancelled,
+      shutoff_enabled: data.shutoffEnabled ? 1 : 0,
       ...(this.tenantId ? { tenant_id: this.tenantId } : {}),
     });
   }
@@ -42,6 +43,7 @@ export class TinybirdAnalyticsProvider implements AnalyticsProvider {
       trigger_source: data.triggerSource,
       delay_seconds: data.delaySeconds ?? null,
       ifttt_event: data.iftttEvent ?? null,
+      shutoff_enabled: data.shutoffEnabled ? 1 : 0,
       ...(this.tenantId ? { tenant_id: this.tenantId } : {}),
     });
   }
@@ -56,6 +58,7 @@ export class TinybirdAnalyticsProvider implements AnalyticsProvider {
       event: data.event,
       was_exposed: data.wasExposed ? 1 : 0,
       turnoff_scheduled: data.turnoffScheduled ? 1 : 0,
+      shutoff_enabled: data.shutoffEnabled ? 1 : 0,
       ...(this.tenantId ? { tenant_id: this.tenantId } : {}),
     });
   }

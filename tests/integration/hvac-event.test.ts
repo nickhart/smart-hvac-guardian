@@ -195,8 +195,13 @@ describe("hvac-event handler", () => {
     const body = (await res.json()) as Record<string, unknown>;
 
     expect(res.status).toBe(200);
-    expect(body.action).toBe("system_disabled");
-    expect(deps.scheduler.scheduleUnitTurnOff).not.toHaveBeenCalled();
+    expect(body.action).toBe("scheduled");
+    expect(deps.analytics.trackHvacCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ shutoffEnabled: false }),
+    );
+    // Shadow mode schedules the timer; only the turn-off handler withholds
+    // the IFTTT call.
+    expect(deps.scheduler.scheduleUnitTurnOff).toHaveBeenCalled();
   });
 
   it("returns 404 for unknown hvacId", async () => {

@@ -91,6 +91,7 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
         unitName: d.config.hvacUnits[hvacUnitId]?.name ?? hvacUnitId,
         action: "cancelled",
         triggerSource: "sensor_open",
+        shutoffEnabled: true,
       });
 
       return jsonResponse({
@@ -100,21 +101,30 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
       });
     }
 
-    // Check if system is enabled before executing turn-off
+    // The one guard that keeps the HVAC safe: while the system is disabled,
+    // execution stops here and IFTTT is never reached. Everything above this
+    // point still ran, so the decision is real — it is recorded as a turn-off
+    // that was not executed rather than thrown away as a cancellation, which
+    // is what makes shadow mode observable.
     const systemEnabled = await d.stateStore.getSystemEnabled();
     if (!systemEnabled) {
-      logger.info("Turn-off skipped: system disabled", { requestId, hvacUnitId });
+      logger.info("Turn-off recorded but not executed: system disabled", {
+        requestId,
+        hvacUnitId,
+      });
       await d.stateStore.deleteTimerToken(hvacUnitId);
       await d.analytics.trackHvacCommand({
         requestId,
         hvacUnitId,
         unitName: d.config.hvacUnits[hvacUnitId]?.name ?? hvacUnitId,
-        action: "cancelled",
+        action: "turned_off",
         triggerSource: "sensor_open",
+        iftttEvent: d.config.hvacUnits[hvacUnitId]?.iftttEvent,
+        shutoffEnabled: false,
       });
       return jsonResponse({
         status: "ok",
-        action: "cancelled",
+        action: "not_executed",
         hvacUnitId,
         reason: "system_disabled",
       });
@@ -145,6 +155,7 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
       action: "turned_off",
       triggerSource: "sensor_open",
       iftttEvent: unitConfig.iftttEvent,
+      shutoffEnabled: true,
     });
 
     return jsonResponse({

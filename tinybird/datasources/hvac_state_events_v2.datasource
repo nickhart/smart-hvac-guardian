@@ -8,7 +8,8 @@ SCHEMA >
     hvac_id String `json:$.hvac_id`,
     event String `json:$.event`,
     was_exposed UInt8 `json:$.was_exposed`,
-    turnoff_scheduled UInt8 `json:$.turnoff_scheduled`
+    turnoff_scheduled UInt8 `json:$.turnoff_scheduled`,
+    shutoff_enabled UInt8 `json:$.shutoff_enabled`
 
 ENGINE "MergeTree"
 ENGINE_SORTING_KEY "tenant_id, timestamp, hvac_id"
