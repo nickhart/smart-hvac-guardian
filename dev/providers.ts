@@ -234,7 +234,7 @@ export class LocalScheduler implements SchedulerProvider {
     const scaledDelay = delaySeconds * this.delayScale;
     const firesAt = Date.now() + scaledDelay * 1000;
 
-    const timeout = setTimeout(async () => {
+    const fireTimer = async () => {
       this.pendingTimers.delete(deduplicationId);
       this.onChange?.("timer-fired", { hvacUnitId, deduplicationId });
       try {
@@ -249,6 +249,14 @@ export class LocalScheduler implements SchedulerProvider {
       } catch (err) {
         console.error(`[LocalScheduler] Failed to POST hvac-turn-off for ${hvacUnitId}:`, err);
       }
+    };
+
+    // setTimeout expects a void callback: an async one would turn any throw
+    // into an unhandled rejection instead of surfacing here.
+    const timeout = setTimeout(() => {
+      void fireTimer().catch((err) => {
+        console.error(`[LocalScheduler] Timer for ${hvacUnitId} failed:`, err);
+      });
     }, scaledDelay * 1000);
 
     this.pendingTimers.set(deduplicationId, {

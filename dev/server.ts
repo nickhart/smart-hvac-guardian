@@ -176,7 +176,7 @@ export async function createDevServer(options: DevServerOptions = {}): Promise<D
   // HTTP Server
   // ---------------------------------------------------------------------------
 
-  const server = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+  const handleRequest = async (req: IncomingMessage, res: ServerResponse) => {
     const url = new URL(req.url ?? "/", baseUrl);
     const path = url.pathname;
     const method = req.method ?? "GET";
@@ -273,6 +273,19 @@ export async function createDevServer(options: DevServerOptions = {}): Promise<D
       res.writeHead(500, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "Internal server error" }));
     }
+  };
+
+  // createServer expects a void callback. Passing an async function directly
+  // would turn a rejection into an unhandled rejection with the socket left
+  // hanging, rather than a 500.
+  const server = createServer((req: IncomingMessage, res: ServerResponse) => {
+    void handleRequest(req, res).catch((err) => {
+      console.error("[DevServer] Unhandled request error:", err);
+      if (!res.headersSent) {
+        res.writeHead(500, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "Internal server error" }));
+      }
+    });
   });
 
   // Start listening
@@ -351,16 +364,14 @@ async function main(): Promise<void> {
   console.log(`  API base:     http://localhost:${dev.port}/api`);
   console.log(`\n  Press Ctrl+C to stop.\n`);
 
-  process.on("SIGINT", async () => {
-    console.log("\nShutting down...");
+  const shutdown = async (announce: boolean) => {
+    if (announce) console.log("\nShutting down...");
     await dev.close();
     process.exit(0);
-  });
+  };
 
-  process.on("SIGTERM", async () => {
-    await dev.close();
-    process.exit(0);
-  });
+  process.on("SIGINT", () => void shutdown(true));
+  process.on("SIGTERM", () => void shutdown(false));
 }
 
 // Run CLI if this is the entrypoint
