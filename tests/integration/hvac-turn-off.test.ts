@@ -2,6 +2,7 @@ import { describe, it, expect, vi } from "vitest";
 import { handleHvacTurnOff } from "../../api/hvac-turn-off";
 import type { Dependencies } from "@/handlers/dependencies";
 import type { Logger } from "@/utils/logger";
+import { CircuitOpenError, ProviderError, TerminalProviderError } from "@/utils/errors";
 
 const mockLogger: Logger = {
   debug: vi.fn(),
@@ -30,11 +31,16 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
       setSystemEnabled: vi.fn(),
       getUnitDelay: vi.fn().mockResolvedValue(null),
       setUnitDelay: vi.fn(),
+      isCircuitOpen: vi.fn().mockResolvedValue(false),
+      openCircuit: vi.fn().mockResolvedValue(undefined),
+      recordCircuitFailure: vi.fn().mockResolvedValue(1),
+      resetCircuit: vi.fn().mockResolvedValue(undefined),
     },
     analytics: {
       trackSensorEvent: vi.fn().mockResolvedValue(undefined),
       trackHvacCommand: vi.fn().mockResolvedValue(undefined),
       trackHvacStateEvent: vi.fn().mockResolvedValue(undefined),
+      trackProviderEvent: vi.fn().mockResolvedValue(undefined),
     },
     qstashReceiver: { verify: vi.fn().mockResolvedValue(true) } as never,
     config: {
@@ -110,6 +116,10 @@ describe("hvac-turn-off handler", () => {
         setSystemEnabled: vi.fn(),
         getUnitDelay: vi.fn().mockResolvedValue(null),
         setUnitDelay: vi.fn(),
+        isCircuitOpen: vi.fn().mockResolvedValue(false),
+        openCircuit: vi.fn().mockResolvedValue(undefined),
+        recordCircuitFailure: vi.fn().mockResolvedValue(1),
+        resetCircuit: vi.fn().mockResolvedValue(undefined),
       },
     });
 
@@ -139,6 +149,10 @@ describe("hvac-turn-off handler", () => {
         setSystemEnabled: vi.fn(),
         getUnitDelay: vi.fn().mockResolvedValue(null),
         setUnitDelay: vi.fn(),
+        isCircuitOpen: vi.fn().mockResolvedValue(false),
+        openCircuit: vi.fn().mockResolvedValue(undefined),
+        recordCircuitFailure: vi.fn().mockResolvedValue(1),
+        resetCircuit: vi.fn().mockResolvedValue(undefined),
       },
     });
 
@@ -166,6 +180,10 @@ describe("hvac-turn-off handler", () => {
         setSystemEnabled: vi.fn(),
         getUnitDelay: vi.fn().mockResolvedValue(null),
         setUnitDelay: vi.fn(),
+        isCircuitOpen: vi.fn().mockResolvedValue(false),
+        openCircuit: vi.fn().mockResolvedValue(undefined),
+        recordCircuitFailure: vi.fn().mockResolvedValue(1),
+        resetCircuit: vi.fn().mockResolvedValue(undefined),
       },
     });
 
@@ -193,6 +211,10 @@ describe("hvac-turn-off handler", () => {
         setSystemEnabled: vi.fn(),
         getUnitDelay: vi.fn().mockResolvedValue(null),
         setUnitDelay: vi.fn(),
+        isCircuitOpen: vi.fn().mockResolvedValue(false),
+        openCircuit: vi.fn().mockResolvedValue(undefined),
+        recordCircuitFailure: vi.fn().mockResolvedValue(1),
+        resetCircuit: vi.fn().mockResolvedValue(undefined),
       },
     });
 
@@ -228,6 +250,10 @@ describe("hvac-turn-off handler", () => {
         setSystemEnabled: vi.fn(),
         getUnitDelay: vi.fn().mockResolvedValue(null),
         setUnitDelay: vi.fn(),
+        isCircuitOpen: vi.fn().mockResolvedValue(false),
+        openCircuit: vi.fn().mockResolvedValue(undefined),
+        recordCircuitFailure: vi.fn().mockResolvedValue(1),
+        resetCircuit: vi.fn().mockResolvedValue(undefined),
       },
     });
 
@@ -236,5 +262,101 @@ describe("hvac-turn-off handler", () => {
       deps,
     );
     expect(res.status).toBe(404);
+  });
+});
+
+describe("hvac-turn-off retry suppression", () => {
+  function validTokenStore() {
+    return {
+      setSensorState: vi.fn(),
+      getAllSensorStates: vi.fn(),
+      setTimerToken: vi.fn(),
+      getTimerToken: vi.fn().mockResolvedValue("valid-token"),
+      deleteTimerToken: vi.fn().mockResolvedValue(undefined),
+      getActiveTimerUnitIds: vi.fn(),
+      getSystemEnabled: vi.fn().mockResolvedValue(true),
+      setSystemEnabled: vi.fn(),
+      getUnitDelay: vi.fn().mockResolvedValue(null),
+      setUnitDelay: vi.fn(),
+      isCircuitOpen: vi.fn().mockResolvedValue(false),
+      openCircuit: vi.fn().mockResolvedValue(undefined),
+      recordCircuitFailure: vi.fn().mockResolvedValue(1),
+      resetCircuit: vi.fn().mockResolvedValue(undefined),
+    };
+  }
+
+  // QStash retries any non-2xx, and each retry is another IFTTT invocation —
+  // and another failure notification. Failures that cannot succeed on retry
+  // must be acknowledged with a 200.
+  it("returns 200 when the provider circuit is open", async () => {
+    const deps = createMockDeps({
+      stateStore: validTokenStore(),
+      hvac: { turnOff: vi.fn().mockRejectedValue(new CircuitOpenError("ifttt")) },
+    });
+
+    const res = await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "valid-token" }),
+      deps,
+    );
+    const body = (await res.json()) as Record<string, unknown>;
+
+    expect(res.status).toBe(200);
+    expect(body.reason).toBe("circuit_open");
+  });
+
+  it("returns 200 on a terminal provider failure", async () => {
+    const deps = createMockDeps({
+      stateStore: validTokenStore(),
+      hvac: {
+        turnOff: vi.fn().mockRejectedValue(new TerminalProviderError("IFTTT", "401 bad key")),
+      },
+    });
+
+    const res = await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "valid-token" }),
+      deps,
+    );
+    const body = (await res.json()) as Record<string, unknown>;
+
+    expect(res.status).toBe(200);
+    expect(body.reason).toBe("terminal_provider_error");
+  });
+
+  it("still returns 500 for a retryable failure so QStash retries", async () => {
+    const deps = createMockDeps({
+      stateStore: validTokenStore(),
+      hvac: { turnOff: vi.fn().mockRejectedValue(new ProviderError("IFTTT", "503 upstream")) },
+    });
+
+    const res = await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "valid-token" }),
+      deps,
+    );
+
+    expect(res.status).toBe(500);
+  });
+
+  it("awaits analytics before responding so the event is not dropped", async () => {
+    // A floating promise can be cut off when an edge function returns.
+    let settled = false;
+    const deps = createMockDeps({
+      stateStore: validTokenStore(),
+      analytics: {
+        trackSensorEvent: vi.fn().mockResolvedValue(undefined),
+        trackHvacCommand: vi.fn().mockImplementation(async () => {
+          await new Promise((r) => setTimeout(r, 5));
+          settled = true;
+        }),
+        trackHvacStateEvent: vi.fn().mockResolvedValue(undefined),
+        trackProviderEvent: vi.fn().mockResolvedValue(undefined),
+      },
+    });
+
+    await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "valid-token" }),
+      deps,
+    );
+
+    expect(settled).toBe(true);
   });
 });

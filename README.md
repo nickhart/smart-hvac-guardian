@@ -167,6 +167,28 @@ The app uses **magic link** login — no passwords. When a user submits their em
 
 Only the `OWNER_EMAIL` address is allowed to log in. Requires `RESEND_API_KEY`, `OWNER_EMAIL`, and `APP_URL` to be set.
 
+## Health & Monitoring
+
+`GET /api/health` is an unauthenticated probe for an external uptime monitor
+(Better Stack, UptimeRobot, Grafana Cloud). It reports per-dependency status
+without exposing config values or credentials:
+
+```json
+{
+  "status": "ok",
+  "checks": { "config": "ok", "redis": "ok", "analytics": "ok", "email": "ok" },
+  "durationMs": 42
+}
+```
+
+Redis is the only hard dependency — it returns **503** when Redis is unreachable
+or config fails to validate, so a monitor can alert on status code alone.
+Unconfigured optional services report `not_configured` rather than failing.
+
+Provider health is also recorded to the Tinybird `provider_events` datasource
+(success, failure, or `skipped_circuit_open`), which is what shows an upstream
+outage rather than just an endpoint being down.
+
 ## Local Development
 
 ### Commands

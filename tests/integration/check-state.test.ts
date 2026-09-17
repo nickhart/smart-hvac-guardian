@@ -35,11 +35,16 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
       setSystemEnabled: vi.fn().mockResolvedValue(undefined),
       getUnitDelay: vi.fn().mockResolvedValue(null),
       setUnitDelay: vi.fn().mockResolvedValue(undefined),
+      isCircuitOpen: vi.fn().mockResolvedValue(false),
+      openCircuit: vi.fn().mockResolvedValue(undefined),
+      recordCircuitFailure: vi.fn().mockResolvedValue(1),
+      resetCircuit: vi.fn().mockResolvedValue(undefined),
     },
     analytics: {
       trackSensorEvent: vi.fn().mockResolvedValue(undefined),
       trackHvacCommand: vi.fn().mockResolvedValue(undefined),
       trackHvacStateEvent: vi.fn().mockResolvedValue(undefined),
+      trackProviderEvent: vi.fn().mockResolvedValue(undefined),
     },
     qstashReceiver: { verify: vi.fn().mockResolvedValue(true) } as never,
     config: {
@@ -113,6 +118,10 @@ describe("check-state diagnostic handler", () => {
         setSystemEnabled: vi.fn(),
         getUnitDelay: vi.fn().mockResolvedValue(null),
         setUnitDelay: vi.fn(),
+        isCircuitOpen: vi.fn().mockResolvedValue(false),
+        openCircuit: vi.fn().mockResolvedValue(undefined),
+        recordCircuitFailure: vi.fn().mockResolvedValue(1),
+        resetCircuit: vi.fn().mockResolvedValue(undefined),
       },
     });
     const req = new Request("https://example.com/api/check-state", { method: "GET" });

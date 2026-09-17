@@ -57,11 +57,40 @@ export class InMemoryStateStore implements StateStore {
   private sensors = new Map<string, SensorState>();
   private timers = new Map<string, TimerEntry>();
   private unitDelays = new Map<string, number>();
+  private circuitFailures = new Map<string, number>();
+  private circuitOpenUntil = new Map<string, number>();
   private systemEnabled = true;
   private onChange: ((type: string, data: unknown) => void) | undefined;
 
   constructor(onChange?: (type: string, data: unknown) => void) {
     this.onChange = onChange;
+  }
+
+  async isCircuitOpen(name: string): Promise<boolean> {
+    const until = this.circuitOpenUntil.get(name);
+    if (until === undefined) return false;
+    if (Date.now() >= until) {
+      this.circuitOpenUntil.delete(name);
+      return false;
+    }
+    return true;
+  }
+
+  async openCircuit(name: string, cooldownSeconds: number): Promise<void> {
+    this.circuitOpenUntil.set(name, Date.now() + cooldownSeconds * 1000);
+    this.circuitFailures.delete(name);
+    this.onChange?.("circuit-open", { name, cooldownSeconds });
+  }
+
+  async recordCircuitFailure(name: string): Promise<number> {
+    const count = (this.circuitFailures.get(name) ?? 0) + 1;
+    this.circuitFailures.set(name, count);
+    return count;
+  }
+
+  async resetCircuit(name: string): Promise<void> {
+    this.circuitFailures.delete(name);
+    this.circuitOpenUntil.delete(name);
   }
 
   async setSensorState(sensorId: string, state: SensorState): Promise<void> {
@@ -367,4 +396,5 @@ export class NoopAnalyticsProvider implements AnalyticsProvider {
   async trackSensorEvent(): Promise<void> {}
   async trackHvacCommand(): Promise<void> {}
   async trackHvacStateEvent(): Promise<void> {}
+  async trackProviderEvent(): Promise<void> {}
 }

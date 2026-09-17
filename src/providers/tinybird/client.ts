@@ -1,5 +1,8 @@
 import type { AnalyticsProvider } from "../types.js";
 
+/** Analytics must never be slower than the control path it instruments. */
+const INGEST_TIMEOUT_MS = 2000;
+
 export class TinybirdAnalyticsProvider implements AnalyticsProvider {
   private baseUrl: string;
   private token: string;
@@ -57,19 +60,50 @@ export class TinybirdAnalyticsProvider implements AnalyticsProvider {
     });
   }
 
+  async trackProviderEvent(
+    data: Parameters<AnalyticsProvider["trackProviderEvent"]>[0],
+  ): Promise<void> {
+    await this.ingest("provider_events", {
+      timestamp: new Date().toISOString(),
+      provider: data.provider,
+      operation: data.operation,
+      outcome: data.outcome,
+      duration_ms: data.durationMs ?? null,
+      status_code: data.statusCode ?? null,
+      error_message: data.errorMessage ?? null,
+      terminal: data.terminal ? 1 : 0,
+      request_id: data.requestId ?? "",
+      ...(this.tenantId ? { tenant_id: this.tenantId } : {}),
+    });
+  }
+
   private async ingest(datasource: string, payload: Record<string, unknown>): Promise<void> {
+    // Analytics failures must never break the HVAC control path, so everything
+    // here is swallowed — but the reason is logged. `fetch` does not reject on
+    // a non-2xx, so the status is checked explicitly: a bad token or an unknown
+    // datasource would otherwise look exactly like a successful ingest.
     try {
-      await fetch(`${this.baseUrl}/v0/events?name=${datasource}`, {
+      const response = await fetch(`${this.baseUrl}/v0/events?name=${datasource}`, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${this.token}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(payload),
+        // Bounded so analytics can never stall the HVAC control path: these
+        // calls are awaited before the handler responds, and a hung request
+        // would let the function time out, which QStash reads as a failure and
+        // retries — firing a duplicate turn-off.
+        signal: AbortSignal.timeout(INGEST_TIMEOUT_MS),
       });
-    } catch {
-      // Analytics failures must never break the HVAC control path
-      console.warn(`[Tinybird] Failed to ingest to ${datasource}`);
+
+      if (!response.ok) {
+        console.warn(`[Tinybird] Ingest to ${datasource} rejected: HTTP ${response.status}`);
+      }
+    } catch (error) {
+      console.warn(
+        `[Tinybird] Ingest to ${datasource} failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 }

@@ -3,6 +3,14 @@ import type { SchedulerProvider } from "../types.js";
 import { ProviderError } from "../../utils/errors.js";
 import type { Logger } from "../../utils/logger.js";
 
+/**
+ * QStash retries a non-2xx endpoint up to 3 times by default, so one logical
+ * turn-off could become four IFTTT invocations — and four failure
+ * notifications — during an outage. One retry covers a transient blip without
+ * amplifying a sustained one.
+ */
+const DELIVERY_RETRIES = 1;
+
 interface QStashSchedulerOptions {
   token: string;
   checkStateUrl: string;
@@ -38,6 +46,7 @@ export class QStashScheduler implements SchedulerProvider {
         url: this.checkStateUrl,
         body: { sensorId, ...(this.tenantId ? { tenantId: this.tenantId } : {}) },
         delay: delaySeconds,
+        retries: DELIVERY_RETRIES,
         ...(deduplicationId ? { deduplicationId } : {}),
       });
 
@@ -58,6 +67,7 @@ export class QStashScheduler implements SchedulerProvider {
         url: this.turnOffUrl,
         body: { ...(this.tenantId ? { tenantId: this.tenantId } : {}) },
         deduplicationId,
+        retries: DELIVERY_RETRIES,
       });
 
       this.logger.info("HVAC turn-off scheduled successfully", { deduplicationId });
@@ -96,6 +106,7 @@ export class QStashScheduler implements SchedulerProvider {
         },
         delay: delaySeconds,
         deduplicationId: scopedDedupId,
+        retries: DELIVERY_RETRIES,
       });
 
       this.logger.info("Per-unit HVAC turn-off scheduled successfully", {

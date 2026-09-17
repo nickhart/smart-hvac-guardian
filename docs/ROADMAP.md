@@ -37,6 +37,82 @@ When the system is toggled off, cancel all active timers in Redis (delete `timer
 
 If IFTTT, Cielo, or YoLink is unreachable, temporarily disable AC shutoff to avoid locking guests out of AC. Re-enable automatically when services recover.
 
+**Partially shipped**: a Redis-backed circuit breaker now trips after repeated
+IFTTT failures and skips calls for a cooldown, and QStash retries are capped so
+one turn-off cannot become four failure notifications. Still open: extending the
+breaker to YoLink, and surfacing circuit state in the dashboard.
+
+### Staging environment with simulated YoLink and IFTTT
+
+Merging control-path changes while guests are on site is the riskiest moment in
+this project. The goal is to exercise a real deployment end to end without any
+possibility of touching real HVAC.
+
+Three tiers, in increasing cost and fidelity:
+
+**1. Run the existing E2E suite in CI (cheap, do first).** `dev/e2e/scenarios.test.ts`
+already drives 7 full sensor-to-turn-off scenarios against the dev server, with
+`--delay-scale` compressing timers to milliseconds. `.github/workflows` runs
+`type-check`, `lint`, `format:check` and `test:coverage`, but **not**
+`pnpm test:e2e`. Adding it is one line and catches control-flow regressions on
+every PR.
+
+**2. Fault injection in the existing dev harness.** `dev/providers.ts` is already
+a full set of fakes. Add controllable failure modes — IFTTT returning 500 or
+401, YoLink timing out, the state store throwing — and write scenarios for the
+resilience behaviour that currently has only unit coverage: circuit opens after
+N failures, turn-offs are skipped while open, the circuit heals after cooldown,
+a terminal failure is not retried. No cloud infrastructure required.
+
+**3. A real staging deployment.** A second Vercel project deploying from a
+`staging` branch, with its own Upstash Redis and QStash instances and its own
+Tinybird workspace (or a reserved tenant prefix), seeded with a synthetic tenant
+and fake sensors.
+
+The critical constraint: staging must **never** reach real IFTTT, since that
+controls real HVAC. That requires a mock service impersonating the IFTTT Maker
+and YoLink APIs, with failure injection driven by a control endpoint.
+
+Prerequisite: `IFTTT_BASE_URL` is currently a hardcoded constant in
+`src/providers/cielo/client.ts`. It must become configurable before a staging
+environment can be safe. `yolink.baseUrl` is already config-driven.
+
+Expected cost: roughly zero — additional Vercel projects, a second Upstash free
+tier database, and the Tinybird free tier all fit existing plans.
+
+Watch for staging drift: keep the same repository, the same environment
+variable names, and deploy staging from a branch rather than a separate repo.
+
+### Emergency kill switch
+
+A way to stop the system that does not depend on being able to log in. The
+motivating incident: magic-link emails were silently failing, so the dashboard
+toggle — the only way to stop a flood of IFTTT failure notifications — was
+unreachable. Disabling the IFTTT applets by hand is impractical because there
+are several.
+
+Design agreed:
+
+- **Disable-only.** The emergency path can only set the system to disabled;
+  re-enabling stays behind normal session auth. Enabling schedules turn-offs
+  for every exposed unit, so a leaked credential that could enable is a real
+  risk, while one that can only disable costs money at worst.
+- **`api/emergency-stop.ts`**, deliberately bypassing `resolveTenantFromSession()`
+  since the premise is that sessions are unavailable.
+- **Token stored as a SHA-256 hash** in Postgres, not encrypted — a hash needs
+  no key management and cannot be reversed if the database leaks. Format
+  `<tenantShortId>.<secret>` so lookup hits one row instead of scanning.
+- **`GET` renders a confirmation page, `POST` performs the stop**, so the
+  bookmarkable URL cannot be fired by a prefetcher, scanner, or link preview.
+- **Redis rate limiting** per tenant and per IP, since this is a bearer secret
+  on a public endpoint.
+- Reuse `timingSafeEqual()` from `src/utils/crypto.ts`; show the token once at
+  generation; support rotate and revoke; audit every attempt and email on use.
+
+Known limitation: it still depends on Upstash, so it is not a true out-of-band
+control. Note also that `getSystemEnabled()` treats a missing key as enabled, so
+a Redis flush re-enables the system — `pnpm redis:flush` would undo a stop.
+
 ### System bootstrap / first-run setup
 
 A first-run experience that configures the platform-level infrastructure secrets before any tenant exists. Today these are manually set as Vercel environment variables — this should be a guided flow.

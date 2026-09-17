@@ -8,7 +8,11 @@ import { resolveTenantFromWebhook } from "../src/middleware/tenant.js";
 import { verifyQStashSignature } from "../src/providers/qstash/verify.js";
 import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
-import { WebhookValidationError } from "../src/utils/errors.js";
+import {
+  CircuitOpenError,
+  TerminalProviderError,
+  WebhookValidationError,
+} from "../src/utils/errors.js";
 
 const TurnOffPayload = z.object({
   hvacUnitId: z.string().min(1),
@@ -134,7 +138,7 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
 
     logger.info("HVAC unit turned off successfully", { requestId, hvacUnitId });
 
-    d.analytics.trackHvacCommand({
+    await d.analytics.trackHvacCommand({
       requestId,
       hvacUnitId,
       unitName: unitConfig.name,
@@ -152,6 +156,26 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
     if (error instanceof WebhookValidationError) {
       logger.warn("QStash signature verification failed", { requestId });
       return errorResponse("Unauthorized", 401);
+    }
+
+    // QStash retries any non-2xx. A terminal failure (bad webhook key, unknown
+    // event) and a deliberately skipped call will both fail identically on
+    // every retry, so acknowledge them with a 200 and stop the cycle — each
+    // extra attempt is another IFTTT failure notification.
+    if (error instanceof CircuitOpenError) {
+      logger.warn("Turn-off skipped: provider circuit open", {
+        requestId,
+        circuit: error.circuit,
+      });
+      return jsonResponse({ status: "ok", action: "skipped", reason: "circuit_open" });
+    }
+
+    if (error instanceof TerminalProviderError) {
+      logger.error("Turn-off failed permanently — not retrying", {
+        requestId,
+        error: error.message,
+      });
+      return jsonResponse({ status: "ok", action: "failed", reason: "terminal_provider_error" });
     }
 
     logger.error("hvac-turn-off handler error", {

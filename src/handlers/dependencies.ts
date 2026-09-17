@@ -66,9 +66,19 @@ export function createDependencies(
         })
       : new NoopAnalyticsProvider();
 
+  const stateStore = new RedisStateStore({
+    url: secrets.upstashRedisUrl,
+    token: secrets.upstashRedisToken,
+    tenantId: options?.tenantId,
+  });
+
   return {
     sensor: new YoLinkSensorProvider(yolinkClient, logger),
-    hvac: new CieloIFTTTProvider(iftttClient),
+    hvac: new CieloIFTTTProvider(iftttClient, {
+      circuitStore: stateStore,
+      analytics,
+      logger,
+    }),
     scheduler: new QStashScheduler({
       token: secrets.qstashToken,
       checkStateUrl: "unused",
@@ -76,11 +86,7 @@ export function createDependencies(
       logger,
       tenantId: options?.tenantId,
     }),
-    stateStore: new RedisStateStore({
-      url: secrets.upstashRedisUrl,
-      token: secrets.upstashRedisToken,
-      tenantId: options?.tenantId,
-    }),
+    stateStore,
     analytics,
     qstashReceiver: createQStashReceiver({
       currentSigningKey: secrets.qstashCurrentSigningKey,
