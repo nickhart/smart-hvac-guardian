@@ -83,6 +83,51 @@ describe("Tinybird datasource definitions", () => {
   });
 });
 
+/**
+ * The read-only token is a deployed resource too. Tinybird Forward refuses to
+ * create or modify a resource-scoped token through the Tokens API ("can only
+ * be done via deployments"), so its scopes exist only as `tokens: [...]` grants
+ * on each definition below. A datasource or endpoint added without a grant is
+ * invisible to anything holding that token, and the failure is a 403 at query
+ * time rather than anything a deploy complains about.
+ */
+describe("the read-only MCP token can read everything that gets deployed", () => {
+  const grantCount = [...tsDefinitions.matchAll(/token: mcpReadonly, scope: "READ"/g)].length;
+
+  it("is defined as a deployable token", () => {
+    expect(tsDefinitions).toContain('defineToken("claude_mcp_readonly")');
+  });
+
+  it("is granted READ on every datasource and endpoint", () => {
+    expect(grantCount).toBe(deployedNames.length + deployedPipes.length);
+  });
+
+  it("is never granted anything beyond READ", () => {
+    const scopes = [...tsDefinitions.matchAll(/token: mcpReadonly, scope: "(\w+)"/g)].map(
+      (m) => m[1],
+    );
+    expect([...new Set(scopes)]).toEqual(["READ"]);
+  });
+
+  it.each([...documentedNames.map((n) => `tinybird/datasources/${n}.datasource`)])(
+    "%s documents the grant",
+    (file) => {
+      expect(readFileSync(resolve(repoRoot, file), "utf8")).toContain(
+        "TOKEN claude_mcp_readonly READ",
+      );
+    },
+  );
+
+  it.each([...documentedPipes.map((n) => `tinybird/pipes/${n}.pipe`)])(
+    "%s documents the grant",
+    (file) => {
+      expect(readFileSync(resolve(repoRoot, file), "utf8")).toContain(
+        "TOKEN claude_mcp_readonly READ",
+      );
+    },
+  );
+});
+
 describe("Tinybird schemas agree between the deployed definition and its .datasource file", () => {
   it.each(["sensor_events_v2", "hvac_commands_v2", "hvac_state_events_v2", "provider_events_v2"])(
     "%s has the same columns in both",

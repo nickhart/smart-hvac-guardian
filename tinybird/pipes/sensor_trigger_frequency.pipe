@@ -17,3 +17,5 @@ SQL >
     ORDER BY open_count DESC
 
 TYPE endpoint
+
+TOKEN claude_mcp_readonly READ

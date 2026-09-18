@@ -21,3 +21,5 @@ SQL >
     ORDER BY last_seen DESC
 
 TYPE endpoint
+
+TOKEN claude_mcp_readonly READ

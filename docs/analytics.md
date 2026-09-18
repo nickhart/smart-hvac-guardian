@@ -103,6 +103,31 @@ in the workspace with no TypeScript definition, so every deploy computed them as
 deletions and refused, failing for 30 consecutive runs until they were dropped
 with the manual destructive deploy.
 
+### Tokens are deployed, not created
+
+Resource-scoped tokens are deployed resources like everything else. The Tokens
+API refuses to make one:
+
+```json
+{
+  "error": "Adding or modifying resource-scoped tokens to this workspace can only be done via deployments."
+}
+```
+
+So `claude_mcp_readonly` is a `defineToken()` in `src/lib/tinybird.ts`, and every
+datasource and endpoint grants it `READ` through `tokens: [...]`. A deploy
+creates it. Read its value afterwards with the admin token:
+
+```bash
+curl -H "Authorization: Bearer $TB_ADMIN" \
+  https://api.us-east.aws.tinybird.co/v0/tokens/claude_mcp_readonly
+```
+
+This is the same trap as the schema drift above: a new datasource added without
+a grant is unreadable by that token, and the symptom is a 403 at query time
+rather than anything the deploy complains about. `tests/unit/providers/tinybird-datasource-names.test.ts`
+counts the grants against the number of definitions so the two cannot diverge.
+
 ### `provider_health` endpoint
 
 Groups provider calls by provider and outcome over a date range — the query that

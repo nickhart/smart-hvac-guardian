@@ -7,6 +7,7 @@
 import {
   defineDatasource,
   defineEndpoint,
+  defineToken,
   Tinybird,
   node,
   t,
@@ -16,6 +17,25 @@ import {
   type InferParams,
   type InferOutputRow,
 } from "@tinybirdco/sdk";
+
+// ============================================================================
+// Tokens
+// ============================================================================
+
+/**
+ * Read-only token for ad-hoc querying (the Claude MCP connector).
+ *
+ * Tinybird Forward will not let the Tokens API create or modify a
+ * resource-scoped token — "can only be done via deployments" — so the token,
+ * like everything else here, exists because `tinybird deploy` creates it.
+ * Every datasource and endpoint below grants it READ and nothing more; it
+ * cannot append rows or drop a datasource the way the admin token in CI can.
+ *
+ * Read its value with the admin token after a deploy:
+ *   curl -H "Authorization: Bearer $TB_ADMIN" \
+ *     https://api.us-east.aws.tinybird.co/v0/tokens/claude_mcp_readonly
+ */
+export const mcpReadonly = defineToken("claude_mcp_readonly");
 
 // ============================================================================
 // Datasources
@@ -38,6 +58,7 @@ export const sensorEvents = defineDatasource("sensor_events_v2", {
   engine: engine.mergeTree({
     sortingKey: ["tenant_id", "timestamp", "sensor_id"],
   }),
+  tokens: [{ token: mcpReadonly, scope: "READ" }],
 });
 
 export type SensorEventsRow = InferRow<typeof sensorEvents>;
@@ -59,6 +80,7 @@ export const hvacCommands = defineDatasource("hvac_commands_v2", {
   engine: engine.mergeTree({
     sortingKey: ["tenant_id", "timestamp", "hvac_unit_id"],
   }),
+  tokens: [{ token: mcpReadonly, scope: "READ" }],
 });
 
 export type HvacCommandsRow = InferRow<typeof hvacCommands>;
@@ -78,6 +100,7 @@ export const hvacStateEvents = defineDatasource("hvac_state_events_v2", {
   engine: engine.mergeTree({
     sortingKey: ["tenant_id", "timestamp", "hvac_id"],
   }),
+  tokens: [{ token: mcpReadonly, scope: "READ" }],
 });
 
 export type HvacStateEventsRow = InferRow<typeof hvacStateEvents>;
@@ -100,6 +123,7 @@ export const providerEvents = defineDatasource("provider_events_v2", {
   engine: engine.mergeTree({
     sortingKey: ["tenant_id", "provider", "timestamp"],
   }),
+  tokens: [{ token: mcpReadonly, scope: "READ" }],
 });
 
 export type ProviderEventsRow = InferRow<typeof providerEvents>;
@@ -140,6 +164,7 @@ export const shutoffsPerDay = defineEndpoint("shutoffs_per_day", {
     units_affected: t.array(t.string()),
     trigger_sources: t.array(t.string()),
   },
+  tokens: [{ token: mcpReadonly, scope: "READ" }],
 });
 
 export type ShutoffsPerDayParams = InferParams<typeof shutoffsPerDay>;
@@ -175,6 +200,7 @@ export const sensorTriggerFrequency = defineEndpoint("sensor_trigger_frequency",
     first_seen: t.dateTime(),
     last_seen: t.dateTime(),
   },
+  tokens: [{ token: mcpReadonly, scope: "READ" }],
 });
 
 export type SensorTriggerFrequencyParams = InferParams<typeof sensorTriggerFrequency>;
@@ -216,6 +242,7 @@ export const recentActivity = defineEndpoint("recent_activity", {
     timers_scheduled: t.array(t.string()),
     timers_cancelled: t.array(t.string()),
   },
+  tokens: [{ token: mcpReadonly, scope: "READ" }],
 });
 
 export type RecentActivityParams = InferParams<typeof recentActivity>;
@@ -280,6 +307,7 @@ export const exposureDuration = defineEndpoint("exposure_duration", {
     closed_at: t.dateTime().nullable(),
     duration_minutes: t.int32(),
   },
+  tokens: [{ token: mcpReadonly, scope: "READ" }],
 });
 
 export type ExposureDurationParams = InferParams<typeof exposureDuration>;
@@ -344,6 +372,7 @@ export const hvacRuntime = defineEndpoint("hvac_runtime", {
     stopped_at: t.dateTime().nullable(),
     runtime_minutes: t.int32(),
   },
+  tokens: [{ token: mcpReadonly, scope: "READ" }],
 });
 
 export type HvacRuntimeParams = InferParams<typeof hvacRuntime>;
@@ -387,6 +416,7 @@ export const providerHealth = defineEndpoint("provider_health", {
     avg_duration_ms: t.int32().nullable(),
     last_error: t.string().nullable(),
   },
+  tokens: [{ token: mcpReadonly, scope: "READ" }],
 });
 
 export type ProviderHealthParams = InferParams<typeof providerHealth>;

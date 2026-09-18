@@ -39,3 +39,5 @@ SQL >
         AND f.stopped_at >= o.started_at
     GROUP BY o.hvac_id, o.started_at
     ORDER BY o.started_at DESC
+
+TOKEN claude_mcp_readonly READ
