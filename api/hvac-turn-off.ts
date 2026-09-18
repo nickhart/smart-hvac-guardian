@@ -8,6 +8,7 @@ import { resolveTenantFromWebhook } from "../src/middleware/tenant.js";
 import { verifyQStashSignature } from "../src/providers/qstash/verify.js";
 import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
+import { verifyExposureStillHolds } from "../src/handlers/verify-exposure.js";
 import {
   CircuitOpenError,
   TerminalProviderError,
@@ -101,12 +102,64 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
       });
     }
 
+    // Validate the target before doing any external work. An unknown unit is
+    // never in the zone graph, so the exposure check below would always find it
+    // unexposed and abort with a benign 200 — hiding a configuration error
+    // behind a result that looks like a correctly avoided shutoff.
+    const unitConfig = d.config.hvacUnits[hvacUnitId];
+    if (!unitConfig) {
+      logger.warn("Unknown HVAC unit in turn-off", { requestId, hvacUnitId });
+      return errorResponse("Unknown HVAC unit", 404);
+    }
+
+    const systemEnabled = await d.stateStore.getSystemEnabled();
+
+    // The timer says this unit was exposed ten minutes ago. Before acting on
+    // that, check the reason still holds — a close webhook that never arrived
+    // leaves us shutting off a guest's AC for a door that has been shut the
+    // whole time, and nothing downstream can tell that decision from a correct
+    // one. Runs before the shadow-mode gate, so a disabled system still records
+    // whether the shutoff it decided on would have been justified.
+    const exposure = await verifyExposureStillHolds({
+      hvacUnitId,
+      config: d.config,
+      stateStore: d.stateStore,
+      sensor: d.sensor,
+      analytics: d.analytics,
+      logger,
+      requestId,
+    });
+
+    if (!exposure.stillExposed) {
+      logger.warn("Turn-off aborted: sensors say the exposure is over", {
+        requestId,
+        hvacUnitId,
+        drifted: exposure.drifted,
+        corrected: exposure.corrected,
+      });
+      await d.stateStore.deleteTimerToken(hvacUnitId);
+      await d.analytics.trackHvacCommand({
+        requestId,
+        hvacUnitId,
+        unitName: unitConfig.name,
+        action: "aborted_stale_state",
+        triggerSource: "sensor_open",
+        iftttEvent: unitConfig.iftttEvent,
+        shutoffEnabled: systemEnabled,
+      });
+      return jsonResponse({
+        status: "ok",
+        action: "aborted_stale_state",
+        hvacUnitId,
+        drifted: exposure.drifted,
+      });
+    }
+
     // The one guard that keeps the HVAC safe: while the system is disabled,
     // execution stops here and IFTTT is never reached. Everything above this
     // point still ran, so the decision is real — it is recorded as a turn-off
     // that was not executed rather than thrown away as a cancellation, which
     // is what makes shadow mode observable.
-    const systemEnabled = await d.stateStore.getSystemEnabled();
     if (!systemEnabled) {
       logger.info("Turn-off recorded but not executed: system disabled", {
         requestId,
@@ -116,10 +169,10 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
       await d.analytics.trackHvacCommand({
         requestId,
         hvacUnitId,
-        unitName: d.config.hvacUnits[hvacUnitId]?.name ?? hvacUnitId,
+        unitName: unitConfig.name,
         action: "turned_off",
         triggerSource: "sensor_open",
-        iftttEvent: d.config.hvacUnits[hvacUnitId]?.iftttEvent,
+        iftttEvent: unitConfig.iftttEvent,
         shutoffEnabled: false,
       });
       return jsonResponse({
@@ -128,13 +181,6 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
         hvacUnitId,
         reason: "system_disabled",
       });
-    }
-
-    // Token matches — turn off the unit
-    const unitConfig = d.config.hvacUnits[hvacUnitId];
-    if (!unitConfig) {
-      logger.warn("Unknown HVAC unit in turn-off", { requestId, hvacUnitId });
-      return errorResponse("Unknown HVAC unit", 404);
     }
 
     logger.info("Turning off HVAC unit", {
