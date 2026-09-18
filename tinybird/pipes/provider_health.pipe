@@ -1,0 +1,23 @@
+DESCRIPTION >
+    Provider call outcomes grouped by provider and outcome — the signal that
+    distinguishes an upstream service being down from nothing happening
+
+NODE by_outcome
+SQL >
+    %
+    SELECT
+        provider,
+        outcome,
+        count() AS calls,
+        max(timestamp) AS last_seen,
+        toInt32(round(avg(duration_ms))) AS avg_duration_ms,
+        anyLast(error_message) AS last_error
+    FROM provider_events_v2
+    WHERE timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
+        AND timestamp <= parseDateTimeBestEffort({{String(end_date, '2099-12-31')}})
+        AND ({{String(provider_filter, '')}} = '' OR provider = {{String(provider_filter, '')}})
+        AND ({{String(tenant_id, '')}} = '' OR tenant_id = {{String(tenant_id, '')}})
+    GROUP BY provider, outcome
+    ORDER BY last_seen DESC
+
+TYPE endpoint
