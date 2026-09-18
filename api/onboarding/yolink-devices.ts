@@ -7,6 +7,14 @@ import { RedisStateStore } from "../../src/providers/redis/index.js";
 import { loadEnvSecrets } from "../../src/config/index.js";
 import { createLogger } from "../../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../../src/utils/response.js";
+import { fetchWithTimeout } from "../../src/utils/http.js";
+
+/**
+ * Onboarding is interactive and one-off, so it can afford to wait longer
+ * than anything on the control path — but a hung setup step still has to
+ * fail with a message rather than a function timeout.
+ */
+const ONBOARDING_TIMEOUT_MS = 10000;
 
 interface YoLinkDevice {
   deviceId: string;
@@ -46,15 +54,19 @@ export default async function handler(request: Request): Promise<Response> {
     }
 
     // Get access token
-    const tokenResponse = await fetch("https://api.yosmart.com/open/yolink/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "client_credentials",
-        client_id: step2.uaCid,
-        client_secret: step2.secretKey,
-      }),
-    });
+    const tokenResponse = await fetchWithTimeout(
+      "https://api.yosmart.com/open/yolink/token",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "client_credentials",
+          client_id: step2.uaCid,
+          client_secret: step2.secretKey,
+        }),
+      },
+      ONBOARDING_TIMEOUT_MS,
+    );
 
     if (!tokenResponse.ok) {
       return errorResponse("Failed to authenticate with YoLink", 502);
@@ -66,18 +78,22 @@ export default async function handler(request: Request): Promise<Response> {
     }
 
     // Get device list
-    const devicesResponse = await fetch("https://api.yosmart.com/open/yolink/v2/api", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${tokenData.access_token}`,
+    const devicesResponse = await fetchWithTimeout(
+      "https://api.yosmart.com/open/yolink/v2/api",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${tokenData.access_token}`,
+        },
+        body: JSON.stringify({
+          method: "Home.getDeviceList",
+          time: Date.now(),
+          msgid: crypto.randomUUID(),
+        }),
       },
-      body: JSON.stringify({
-        method: "Home.getDeviceList",
-        time: Date.now(),
-        msgid: crypto.randomUUID(),
-      }),
-    });
+      ONBOARDING_TIMEOUT_MS,
+    );
 
     const devicesData = (await devicesResponse.json()) as {
       data?: { devices?: YoLinkDevice[] };

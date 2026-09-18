@@ -1,5 +1,14 @@
 import { ProviderError, TerminalProviderError } from "../../utils/errors.js";
 import type { Logger } from "../../utils/logger.js";
+import { fetchWithTimeout } from "../../utils/http.js";
+
+/**
+ * The control path's budget. A turn-off that takes longer than this has
+ * already lost: QStash treats the function timeout as a failure and retries,
+ * which fires a duplicate. Giving up early turns a hang into a recorded
+ * failure the circuit breaker can actually see.
+ */
+const IFTTT_TIMEOUT_MS = 5000;
 
 const IFTTT_BASE_URL = "https://maker.ifttt.com/trigger";
 
@@ -34,7 +43,7 @@ export class IFTTTClient {
 
     let response: Response;
     try {
-      response = await fetch(url, { method: "POST" });
+      response = await fetchWithTimeout(url, { method: "POST" }, IFTTT_TIMEOUT_MS);
     } catch (error) {
       // Network-level failure: worth retrying.
       throw new ProviderError(

@@ -5,6 +5,15 @@ import type {
 } from "./types.js";
 import { ProviderError } from "../../utils/errors.js";
 import type { Logger } from "../../utils/logger.js";
+import { fetchWithTimeout } from "../../utils/http.js";
+
+/**
+ * Sensor reads are off the control path, so they can wait longer than an
+ * IFTTT trigger — but not indefinitely. Reading one sensor can cost three
+ * calls (token, device list, state), so this is a per-call budget and a
+ * caller checking several sensors needs a total deadline of its own.
+ */
+const YOLINK_TIMEOUT_MS = 4000;
 
 const TOKEN_URL = "https://api.yosmart.com/open/yolink/token";
 
@@ -44,11 +53,15 @@ export class YoLinkClient {
       client_secret: this.secretKey,
     });
 
-    const response = await fetch(TOKEN_URL, {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: params.toString(),
-    });
+    const response = await fetchWithTimeout(
+      TOKEN_URL,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: params.toString(),
+      },
+      YOLINK_TIMEOUT_MS,
+    );
 
     if (!response.ok) {
       throw new ProviderError("YoLink", `Token request failed: ${response.status}`);
@@ -79,17 +92,21 @@ export class YoLinkClient {
 
     this.logger.info("Fetching YoLink device list for device tokens");
 
-    const response = await fetch(this.baseUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
+    const response = await fetchWithTimeout(
+      this.baseUrl,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          method: "Home.getDeviceList",
+          time: Date.now(),
+        }),
       },
-      body: JSON.stringify({
-        method: "Home.getDeviceList",
-        time: Date.now(),
-      }),
-    });
+      YOLINK_TIMEOUT_MS,
+    );
 
     if (!response.ok) {
       throw new ProviderError("YoLink", `Device list request failed: ${response.status}`);
@@ -118,19 +135,23 @@ export class YoLinkClient {
 
     this.logger.info("Querying YoLink device state", { deviceId });
 
-    const response = await fetch(this.baseUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
+    const response = await fetchWithTimeout(
+      this.baseUrl,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${accessToken}`,
+        },
+        body: JSON.stringify({
+          method: "DoorSensor.getState",
+          targetDevice: deviceId,
+          token: deviceToken,
+          time: Date.now(),
+        }),
       },
-      body: JSON.stringify({
-        method: "DoorSensor.getState",
-        targetDevice: deviceId,
-        token: deviceToken,
-        time: Date.now(),
-      }),
-    });
+      YOLINK_TIMEOUT_MS,
+    );
 
     if (!response.ok) {
       throw new ProviderError("YoLink", `Device state request failed: ${response.status}`);
