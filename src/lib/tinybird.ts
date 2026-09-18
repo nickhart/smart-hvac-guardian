@@ -33,6 +33,7 @@ export const sensorEvents = defineDatasource("sensor_events_v2", {
     unexposed_units: t.array(t.string()).jsonPath("$.unexposed_units[:]"),
     timers_scheduled: t.array(t.string()).jsonPath("$.timers_scheduled[:]"),
     timers_cancelled: t.array(t.string()).jsonPath("$.timers_cancelled[:]"),
+    shutoff_enabled: t.uint8(),
   },
   engine: engine.mergeTree({
     sortingKey: ["tenant_id", "timestamp", "sensor_id"],
@@ -53,6 +54,7 @@ export const hvacCommands = defineDatasource("hvac_commands_v2", {
     trigger_source: t.string(),
     delay_seconds: t.int32().nullable(),
     ifttt_event: t.string().nullable(),
+    shutoff_enabled: t.uint8(),
   },
   engine: engine.mergeTree({
     sortingKey: ["tenant_id", "timestamp", "hvac_unit_id"],
@@ -71,6 +73,7 @@ export const hvacStateEvents = defineDatasource("hvac_state_events_v2", {
     event: t.string(),
     was_exposed: t.uint8(),
     turnoff_scheduled: t.uint8(),
+    shutoff_enabled: t.uint8(),
   },
   engine: engine.mergeTree({
     sortingKey: ["tenant_id", "timestamp", "hvac_id"],
@@ -78,6 +81,28 @@ export const hvacStateEvents = defineDatasource("hvac_state_events_v2", {
 });
 
 export type HvacStateEventsRow = InferRow<typeof hvacStateEvents>;
+
+export const providerEvents = defineDatasource("provider_events_v2", {
+  description:
+    "Health of calls to external providers: successes, failures, and calls skipped because a circuit breaker was open",
+  schema: {
+    timestamp: t.dateTime(),
+    tenant_id: t.string(),
+    provider: t.string(),
+    operation: t.string(),
+    outcome: t.string(),
+    duration_ms: t.int32().nullable(),
+    status_code: t.int32().nullable(),
+    error_message: t.string().nullable(),
+    terminal: t.uint8(),
+    request_id: t.string(),
+  },
+  engine: engine.mergeTree({
+    sortingKey: ["tenant_id", "provider", "timestamp"],
+  }),
+});
+
+export type ProviderEventsRow = InferRow<typeof providerEvents>;
 
 // ============================================================================
 // Endpoints

@@ -60,40 +60,48 @@ to act, and to compare wasted runtime with shutoff on versus off. The guarantee
 that disabled never reaches the HVAC is pinned by
 `tests/integration/shadow-mode.test.ts`.
 
-### Changing a datasource schema
+### `src/lib/tinybird.ts` is the source of truth
 
-`tinybird deploy` detects datasources **appearing and disappearing**, but not
-changes to the schema of one that already exists. Adding a column to a
-`.datasource` file deploys as:
+`tinybird.config.json` lists `src/lib/tinybird.ts` under `include`, and the CLI
+reads **nothing else**. The TypeScript `defineDatasource()` calls in that file
+are what get deployed.
+
+The `.datasource` files in `tinybird/datasources/` are documentation. They look
+authoritative and are not. Editing one changes nothing: the deploy reports
 
 ```
 Deploying to main workspace...
 △ Not deploying. No changes.
 ```
 
-`--allow-destructive-operations` behaves identically — the flag controls what is
-_permitted_, not what is _detected_. So a schema change needs to be turned into
-a presence change: drop the datasource, then deploy to recreate it.
+...which is accurate, because from the CLI's point of view nothing did change.
+`--allow-destructive-operations` makes no difference, because there is no
+change to permit.
 
-The **Tinybird Recreate Datasource** workflow does both in one run, dropping via
-the Datasources API and then deploying, so ingestion only 404s for a few
-seconds. It refuses to drop anything without a matching `.datasource` file in
-the repo, so it cannot leave a datasource the deploy is unable to rebuild.
+**To add a column or a datasource, edit `src/lib/tinybird.ts`.** Update the
+matching `.datasource` file too, so the documentation stays honest;
+`tests/unit/providers/tinybird-datasource-names.test.ts` fails if the two
+disagree, if a datasource the app ingests to has no TypeScript definition, or
+if the two sets of names diverge.
 
-**It destroys every row in those datasources.** Export first if the data matters.
+That test exists because every one of those has already happened here:
+ingestion writing to `sensor_events` while the pipes read `sensor_events_v2`;
+`provider_events_v2` living only as a `.datasource` file and therefore never
+being deployed, so the circuit-breaker telemetry 404'd on every write; and
+`shutoff_enabled` being added to the `.datasource` files alone, which deployed
+as a no-op.
 
 ### A note on schema drift
 
 The Events API creates a datasource by inferring its schema when the name does
-not exist — but only if the token carries `DATASOURCE:CREATE`. This workspace's
-token does not, so ingesting to an unknown name returns a 404 instead, which
+not exist — but only with a `DATASOURCE:CREATE` token. This workspace's token
+does not have it, so ingesting to an unknown name returns 404, which
 `TinybirdAnalyticsProvider.ingest` logs.
 
-Either way the rule is the same: **never ingest to a name that has no
-`.datasource` file.** `tests/unit/providers/tinybird-datasource-names.test.ts`
-enforces it. The unsuffixed `sensor_events`, `hvac_commands` and
-`hvac_state_events` had drifted out of sync with their definitions and failed
-every deploy for 30 runs before being dropped.
+The unsuffixed `sensor_events`, `hvac_commands` and `hvac_state_events` existed
+in the workspace with no TypeScript definition, so every deploy computed them as
+deletions and refused, failing for 30 consecutive runs until they were dropped
+with the manual destructive deploy.
 
 ### `provider_events_v2`
 
