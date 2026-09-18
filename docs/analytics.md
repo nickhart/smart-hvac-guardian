@@ -174,6 +174,33 @@ disable every shutoff in the system.
 A correction is written back to Redis, so a dropped webhook heals instead of
 persisting until the next event.
 
+### Unknown devices vs. outages
+
+A verification failure is split two ways, because the remedies differ:
+
+| Field            | Meaning                               | Remedy         |
+| ---------------- | ------------------------------------- | -------------- |
+| `unavailable`    | Could not reach the device            | wait           |
+| `unknownDevices` | The provider answered: no such device | fix the config |
+
+`unknownDevices` is the only place a well-formed but wrong configuration shows
+up. `AppConfigSchema` enforces nine structural invariants on the zone graph, but
+a sensor ID that is correctly spelled and simply does not exist any more — a
+device removed or replaced — passes all of them. Only the provider knows.
+
+It is recorded with `terminal: 1` in `provider_events_v2`, so a config error is
+not read as a transient failure:
+
+```sql
+SELECT provider, operation, terminal, count()
+FROM provider_events_v2
+WHERE outcome = 'failed'
+GROUP BY provider, operation, terminal
+```
+
+Both still fail open — neither can confirm or deny an exposure, so the shutoff
+proceeds.
+
 ### `sensor_state_drift_v2`
 
 What we believe a sensor is doing, next to what the device says when asked

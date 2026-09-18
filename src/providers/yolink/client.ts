@@ -3,7 +3,7 @@ import type {
   YoLinkDeviceListResponse,
   YoLinkDeviceStateResponse,
 } from "./types.js";
-import { ProviderError } from "../../utils/errors.js";
+import { ProviderError, UnknownDeviceError } from "../../utils/errors.js";
 import type { Logger } from "../../utils/logger.js";
 import { fetchWithTimeout } from "../../utils/http.js";
 
@@ -123,7 +123,7 @@ export class YoLinkClient {
 
     const deviceToken = this.deviceTokens.get(deviceId);
     if (!deviceToken) {
-      throw new ProviderError("YoLink", `Device ${deviceId} not found in device list`);
+      throw new UnknownDeviceError("YoLink", deviceId);
     }
 
     return deviceToken;

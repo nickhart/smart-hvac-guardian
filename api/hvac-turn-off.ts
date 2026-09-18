@@ -136,6 +136,7 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
         hvacUnitId,
         drifted: exposure.drifted,
         corrected: exposure.corrected,
+        unknownDevices: exposure.unknownDevices,
       });
       await d.stateStore.deleteTimerToken(hvacUnitId);
       await d.analytics.trackHvacCommand({

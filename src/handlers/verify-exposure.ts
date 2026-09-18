@@ -19,6 +19,8 @@ export interface ExposureCheck {
   drifted: SensorDrift[];
   /** Sensors we could not reach, so whose believed state still stands. */
   unavailable: string[];
+  /** Configured sensors the provider does not have. A config error, not an outage. */
+  unknownDevices: string[];
   /** Sensors whose Redis state we corrected from what the device reported. */
   corrected: string[];
 }
@@ -78,6 +80,7 @@ export async function verifyExposureStillHolds(options: {
       stillExposed: exposedUnits.has(hvacUnitId),
       drifted: [],
       unavailable: [],
+      unknownDevices: [],
       corrected: [],
     };
   }
@@ -122,6 +125,7 @@ export async function verifyExposureStillHolds(options: {
     stillExposed: exposedUnits.has(hvacUnitId),
     drifted: verification.drifted,
     unavailable: verification.unavailable,
+    unknownDevices: verification.unknownDevices,
     corrected,
   };
 }

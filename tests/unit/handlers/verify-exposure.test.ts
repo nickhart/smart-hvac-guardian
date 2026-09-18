@@ -3,6 +3,7 @@ import { verifyExposureStillHolds } from "@/handlers/verify-exposure.js";
 import type { AnalyticsProvider, SensorProvider, StateStore } from "@/providers/types.js";
 import type { AppConfig } from "@/config/index.js";
 import type { Logger } from "@/utils/logger.js";
+import { UnknownDeviceError } from "@/utils/errors.js";
 
 const logger: Logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
@@ -175,5 +176,23 @@ describe("verifyExposureStillHolds", () => {
     expect(analytics.trackSensorStateDrift).toHaveBeenCalledWith(
       expect.objectContaining({ sensorId: "front_door", agreed: false, actualState: "closed" }),
     );
+  });
+
+  /**
+   * A device the account does not have cannot confirm or deny the exposure, so
+   * the shutoff proceeds — same fail-open rule as an outage. It is reported
+   * separately because the remedy is different: someone has to fix the config.
+   */
+  it("proceeds, but flags a configured sensor the provider does not have", async () => {
+    const result = await run({
+      states: { front_door: "open", side_door: "closed" },
+      sensor: {
+        getState: vi.fn().mockRejectedValue(new UnknownDeviceError("YoLink", "front_door")),
+      },
+    });
+
+    expect(result.stillExposed).toBe(true);
+    expect(result.unknownDevices).toEqual(["front_door"]);
+    expect(result.corrected).toEqual([]);
   });
 });
