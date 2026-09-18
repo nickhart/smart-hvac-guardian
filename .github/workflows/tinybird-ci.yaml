@@ -3,8 +3,9 @@ name: Tinybird CI
 on:
   pull_request:
     paths:
-      - "tinybird/**"
+      - "src/lib/tinybird.ts"
       - "tinybird.config.*"
+      - "tinybird/**"
 
 env:
   TINYBIRD_TOKEN: ${{ secrets.TINYBIRD_TOKEN }}
