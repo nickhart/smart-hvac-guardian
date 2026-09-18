@@ -7,6 +7,14 @@ import { RedisStateStore } from "../../src/providers/redis/index.js";
 import { loadEnvSecrets } from "../../src/config/index.js";
 import { createLogger } from "../../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../../src/utils/response.js";
+import { fetchWithTimeout } from "../../src/utils/http.js";
+
+/**
+ * Onboarding runs interactively and one-off, so it can wait longer than the
+ * control path — but a hung setup step still has to fail with a message
+ * rather than a function timeout.
+ */
+const ONBOARDING_TIMEOUT_MS = 10000;
 
 const YoLinkTestPayload = z.object({
   uaCid: z.string().min(1),
@@ -42,26 +50,34 @@ export default async function handler(request: Request): Promise<Response> {
     const { uaCid, secretKey } = parsed.data;
 
     // Test credentials by calling the YoLink API
-    const response = await fetch("https://api.yosmart.com/open/yolink/v2/api", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        method: "Home.getGeneralInfo",
-        time: Date.now(),
-        msgid: crypto.randomUUID(),
-      }),
-    });
+    const response = await fetchWithTimeout(
+      "https://api.yosmart.com/open/yolink/v2/api",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          method: "Home.getGeneralInfo",
+          time: Date.now(),
+          msgid: crypto.randomUUID(),
+        }),
+      },
+      ONBOARDING_TIMEOUT_MS,
+    );
 
     // Get access token first
-    const tokenResponse = await fetch("https://api.yosmart.com/open/yolink/token", {
-      method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
-      body: new URLSearchParams({
-        grant_type: "client_credentials",
-        client_id: uaCid,
-        client_secret: secretKey,
-      }),
-    });
+    const tokenResponse = await fetchWithTimeout(
+      "https://api.yosmart.com/open/yolink/token",
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          grant_type: "client_credentials",
+          client_id: uaCid,
+          client_secret: secretKey,
+        }),
+      },
+      ONBOARDING_TIMEOUT_MS,
+    );
 
     if (!tokenResponse.ok) {
       return jsonResponse({ status: "error", message: "Invalid YoLink credentials" }, 400);
@@ -73,18 +89,22 @@ export default async function handler(request: Request): Promise<Response> {
     }
 
     // Attempt to get device list to verify full access
-    const devicesResponse = await fetch("https://api.yosmart.com/open/yolink/v2/api", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${tokenData.access_token}`,
+    const devicesResponse = await fetchWithTimeout(
+      "https://api.yosmart.com/open/yolink/v2/api",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${tokenData.access_token}`,
+        },
+        body: JSON.stringify({
+          method: "Home.getDeviceList",
+          time: Date.now(),
+          msgid: crypto.randomUUID(),
+        }),
       },
-      body: JSON.stringify({
-        method: "Home.getDeviceList",
-        time: Date.now(),
-        msgid: crypto.randomUUID(),
-      }),
-    });
+      ONBOARDING_TIMEOUT_MS,
+    );
 
     if (!devicesResponse.ok) {
       return jsonResponse({ status: "error", message: "Could not list YoLink devices" }, 400);

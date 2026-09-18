@@ -8,6 +8,14 @@ import { RedisStateStore } from "../../src/providers/redis/index.js";
 import { loadEnvSecrets } from "../../src/config/index.js";
 import { createLogger } from "../../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../../src/utils/response.js";
+import { fetchWithTimeout } from "../../src/utils/http.js";
+
+/**
+ * Onboarding runs interactively and one-off, so it can wait longer than the
+ * control path — but a hung setup step still has to fail with a message
+ * rather than a function timeout.
+ */
+const ONBOARDING_TIMEOUT_MS = 10000;
 
 const TestAppletPayload = z.object({
   iftttEvent: z.string().min(1),
@@ -50,7 +58,7 @@ export default async function handler(request: Request): Promise<Response> {
     }
 
     // Fire test webhook
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://maker.ifttt.com/trigger/${encodeURIComponent(iftttEvent)}/with/key/${encodeURIComponent(step6.webhookKey)}`,
       {
         method: "POST",
@@ -61,6 +69,7 @@ export default async function handler(request: Request): Promise<Response> {
           value3: new Date().toISOString(),
         }),
       },
+      ONBOARDING_TIMEOUT_MS,
     );
 
     if (!response.ok) {

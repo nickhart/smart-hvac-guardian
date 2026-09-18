@@ -26,8 +26,39 @@ describe("IFTTTClient", () => {
 
     expect(fetchSpy).toHaveBeenCalledWith(
       "https://maker.ifttt.com/trigger/turn_off_ac/with/key/mykey",
-      { method: "POST" },
+      expect.objectContaining({ method: "POST" }),
     );
+  });
+
+  // The control path's call is bounded. Without it a slow IFTTT hangs the
+  // handler until the function times out, which QStash reads as a failure and
+  // retries — and because failures are only recorded in a catch, a hang never
+  // trips the circuit breaker either.
+  it("bounds the request so a hang cannot stall the control path", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(new Response("Congratulations!"));
+
+    const client = new IFTTTClient({ webhookKey: "mykey", logger: mockLogger });
+    await client.trigger("turn_off_ac");
+
+    const init = fetchSpy.mock.calls[0][1] as RequestInit;
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("surfaces a timeout as a retryable provider error, so the breaker sees it", async () => {
+    const timeout = new Error("The operation was aborted due to timeout");
+    timeout.name = "TimeoutError";
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(timeout);
+
+    const client = new IFTTTClient({ webhookKey: "mykey", logger: mockLogger });
+    const error = await client.trigger("turn_off_ac").catch((e: unknown) => e);
+
+    // Retryable, not terminal: a slow provider is exactly what the breaker's
+    // failure window is for, and a terminal error would stop QStash retrying.
+    expect(error).toBeInstanceOf(ProviderError);
+    expect(error).not.toBeInstanceOf(TerminalProviderError);
+    expect((error as Error).message).toContain("timed out after");
   });
 
   it("throws on non-OK response", async () => {
