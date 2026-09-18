@@ -19,6 +19,31 @@ Build a dashboard page showing shutoff history, frequency charts, and per-sensor
 - Per-sensor and per-unit drill-down
 - Trend visualization (are guests learning the system?)
 
+### Dashboard surfacing for health and sensor verification
+
+Both diagnostics exist as endpoints but have no UI, so using them means typing a
+URL. Put them on the SPA dashboard — with different exposure rules, because they
+are not the same kind of endpoint.
+
+**`/api/health`** stays unauthenticated. That is deliberate: it has to be
+pollable by an uptime monitor precisely when auth is broken, and it reports only
+`ok` / `fail` / `not_configured` per check, never config values or error
+details. So the endpoint itself is safe to leave open — the ask is not to
+_advertise_ it. Render the health widget only for signed-in users; no link, no
+status badge, nothing in the signed-out shell for a bot to follow. Keep it out
+of any sitemap, and `noindex` the route if one is added.
+
+**`/api/check-state?verify=yolink`** is the opposite: it is authenticated and
+must stay that way, because sensor states reveal the property's occupancy
+pattern. It also costs a YoLink round trip per sensor, so it must be a
+deliberate button press, never something that fires on page load or on a poll.
+Show `checked` / `agreed` / `drifted` with sensor names rather than raw device
+IDs, and treat `unavailable` and `deadlineExceeded` as distinct from drift —
+the first two mean we could not ask, not that anything disagrees.
+
+Worth showing alongside: circuit state per provider, which "Service outage
+auto-disable" below also wants.
+
 ### HVAC state tracking in Redis
 
 Persist HVAC on/off state from `hvac-event` handler to avoid scheduling redundant turn-off timers.
