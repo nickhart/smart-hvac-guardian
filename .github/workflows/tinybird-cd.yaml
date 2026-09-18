@@ -1,11 +1,18 @@
 name: Tinybird CD
 
 on:
+  # src/lib/tinybird.ts is what the CLI deploys — tinybird.config.json lists it
+  # under "include". Watching only tinybird/** meant the deploy never fired for
+  # a change to the definitions themselves, which is how provider_events_v2 and
+  # shutoff_enabled reached main without ever being deployed.
   push:
     branches:
       - main
     paths:
+      - "src/lib/tinybird.ts"
+      - "tinybird.config.json"
       - "tinybird/**"
+  workflow_dispatch:
 
 env:
   TINYBIRD_TOKEN: ${{ secrets.TINYBIRD_TOKEN }}
