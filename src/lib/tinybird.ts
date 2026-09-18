@@ -349,11 +349,61 @@ export const hvacRuntime = defineEndpoint("hvac_runtime", {
 export type HvacRuntimeParams = InferParams<typeof hvacRuntime>;
 export type HvacRuntimeOutput = InferOutputRow<typeof hvacRuntime>;
 
+export const providerHealth = defineEndpoint("provider_health", {
+  description:
+    "Provider call outcomes grouped by provider and outcome — the signal that distinguishes an upstream service being down from nothing happening",
+  params: {
+    start_date: p.string().optional("2024-01-01").describe("Start date (YYYY-MM-DD)"),
+    end_date: p.string().optional("2099-12-31").describe("End date (YYYY-MM-DD)"),
+    provider_filter: p.string().optional("").describe("Filter by provider (empty = all)"),
+    tenant_id: p.string().optional("").describe("Filter by tenant ID (empty = all)"),
+  },
+  nodes: [
+    node({
+      name: "by_outcome",
+      sql: `
+        SELECT
+          provider,
+          outcome,
+          count() AS calls,
+          max(timestamp) AS last_seen,
+          toInt32(round(avg(duration_ms))) AS avg_duration_ms,
+          anyLast(error_message) AS last_error
+        FROM provider_events_v2
+        WHERE timestamp >= parseDateTimeBestEffort({{String(start_date, '2024-01-01')}})
+          AND timestamp <= parseDateTimeBestEffort({{String(end_date, '2099-12-31')}})
+          AND ({{String(provider_filter, '')}} = '' OR provider = {{String(provider_filter, '')}})
+          AND ({{String(tenant_id, '')}} = '' OR tenant_id = {{String(tenant_id, '')}})
+        GROUP BY provider, outcome
+        ORDER BY last_seen DESC
+      `,
+    }),
+  ],
+  output: {
+    provider: t.string(),
+    outcome: t.string(),
+    calls: t.uint64(),
+    last_seen: t.dateTime(),
+    avg_duration_ms: t.int32().nullable(),
+    last_error: t.string().nullable(),
+  },
+});
+
+export type ProviderHealthParams = InferParams<typeof providerHealth>;
+export type ProviderHealthOutput = InferOutputRow<typeof providerHealth>;
+
 // ============================================================================
 // Client
 // ============================================================================
 
 export const tinybird = new Tinybird({
-  datasources: { sensorEvents, hvacCommands, hvacStateEvents },
-  pipes: { shutoffsPerDay, sensorTriggerFrequency, recentActivity, exposureDuration, hvacRuntime },
+  datasources: { sensorEvents, hvacCommands, hvacStateEvents, providerEvents },
+  pipes: {
+    shutoffsPerDay,
+    sensorTriggerFrequency,
+    recentActivity,
+    exposureDuration,
+    hvacRuntime,
+    providerHealth,
+  },
 });

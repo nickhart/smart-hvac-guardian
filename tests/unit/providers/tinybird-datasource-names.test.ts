@@ -32,6 +32,16 @@ const documentedNames = readdirSync(resolve(repoRoot, "tinybird/datasources"))
   .filter((f) => f.endsWith(".datasource"))
   .map((f) => f.replace(/\.datasource$/, ""));
 
+const deployedPipes = [...tsDefinitions.matchAll(/defineEndpoint\("([^"]+)"/g)].map((m) => m[1]);
+const documentedPipes = readdirSync(resolve(repoRoot, "tinybird/pipes"))
+  .filter((f) => f.endsWith(".pipe"))
+  .map((f) => f.replace(/\.pipe$/, ""));
+
+// Whatever the Tinybird client registers is what the app can query in a
+// type-safe way. providerEvents was defined but left unregistered, so it was
+// invisible to the SDK even once deployed.
+const registeredBlock = tsDefinitions.slice(tsDefinitions.indexOf("new Tinybird({"));
+
 describe("Tinybird datasource definitions", () => {
   it("finds the expected ingest call sites", () => {
     expect(ingestNames.length).toBeGreaterThanOrEqual(4);
@@ -53,6 +63,19 @@ describe("Tinybird datasource definitions", () => {
 
   it("the .datasource files describe exactly the deployed datasources", () => {
     expect([...documentedNames].sort()).toEqual([...deployedNames].sort());
+  });
+
+  it("every defined endpoint has a .pipe file, and vice versa", () => {
+    expect([...documentedPipes].sort()).toEqual([...deployedPipes].sort());
+  });
+
+  it("registers every datasource and endpoint on the Tinybird client", () => {
+    const unregistered = [...deployedNames, ...deployedPipes].filter((name) => {
+      // The client registers camelCase identifiers, not the wire names.
+      const ident = name.replace(/_v2$/, "").replace(/_(\w)/g, (_, c) => c.toUpperCase());
+      return !registeredBlock.includes(ident);
+    });
+    expect(unregistered).toEqual([]);
   });
 
   it("declares only _v2 datasources", () => {

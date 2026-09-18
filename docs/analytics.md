@@ -103,6 +103,26 @@ in the workspace with no TypeScript definition, so every deploy computed them as
 deletions and refused, failing for 30 consecutive runs until they were dropped
 with the manual destructive deploy.
 
+### `provider_health` endpoint
+
+Groups provider calls by provider and outcome over a date range — the query that
+answers "is an upstream service down?".
+
+| Parameter         | Default      | Description                      |
+| ----------------- | ------------ | -------------------------------- |
+| `start_date`      | `2024-01-01` | Start date (YYYY-MM-DD)          |
+| `end_date`        | `2099-12-31` | End date (YYYY-MM-DD)            |
+| `provider_filter` | `""`         | Filter by provider (empty = all) |
+| `tenant_id`       | `""`         | Filter by tenant (empty = all)   |
+
+Returns `provider`, `outcome`, `calls`, `last_seen`, `avg_duration_ms` and
+`last_error`. An `outcome` of `skipped_circuit_open` means the circuit breaker
+tripped and calls were deliberately withheld.
+
+```bash
+curl "https://api.us-east.aws.tinybird.co/v0/pipes/provider_health.json?token=$TINYBIRD_TOKEN"
+```
+
 ### `provider_events_v2`
 
 Health of calls to external providers: successes, failures, and calls skipped

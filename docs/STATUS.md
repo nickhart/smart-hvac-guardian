@@ -46,7 +46,9 @@ Event tracking via Tinybird (not Redis sorted sets as originally planned). Four 
 
 `src/lib/tinybird.ts` is the deploy source of truth — see [analytics.md](./analytics.md). The `.datasource` files are documentation.
 
-Gaps: **no analytics dashboard page**, and `provider_events_v2` has no endpoint, so provider health is only queryable from the Tinybird console.
+The `provider_health` endpoint groups provider calls by provider and outcome, so circuit-breaker state and upstream failures are queryable without opening the Tinybird console.
+
+Gap: **no analytics dashboard page** — the endpoints exist, nothing renders them.
 
 ### System shutoff integration (partial)
 
