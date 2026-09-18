@@ -8,6 +8,8 @@ import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
 import { evaluateZoneGraph } from "../src/zone-graph/index.js";
 import { getDelayForUnit } from "../src/utils/delay.js";
+import { verifySensorStates } from "../src/handlers/verify-sensors.js";
+import type { SensorVerification } from "../src/handlers/verify-sensors.js";
 
 export async function handleCheckState(request: Request, deps?: Dependencies): Promise<Response> {
   const logger = deps?.logger ?? createLogger();
@@ -83,6 +85,22 @@ export async function handleCheckState(request: Request, deps?: Dependencies): P
       unitDelays[unitId] = await getDelayForUnit(unitId, d.stateStore, d.config);
     }
 
+    // Opt-in: the states above are what our webhooks told us, which is only as
+    // good as the events that reached us. Asking the devices directly is the
+    // only way to see a dropped webhook, but it costs an external round trip
+    // per sensor, so it stays off the default path.
+    let verification: SensorVerification | undefined;
+    if (new URL(request.url).searchParams.get("verify") === "yolink") {
+      verification = await verifySensorStates({
+        sensorIds: allSensorIds,
+        believed: sensorStates,
+        sensor: d.sensor,
+        analytics: d.analytics,
+        logger,
+        requestId,
+      });
+    }
+
     return jsonResponse({
       status: "ok",
       siteName,
@@ -95,6 +113,7 @@ export async function handleCheckState(request: Request, deps?: Dependencies): P
       unexposedUnits: [...unexposedUnits],
       activeTimers: activeTimerUnitIds,
       offlineSensors: offlineSensorIds,
+      ...(verification ? { verification } : {}),
     });
   } catch (error) {
     logger.error("check-state handler error", {

@@ -65,6 +65,21 @@ export interface AnalyticsProvider {
     requestId?: string;
   }): Promise<void>;
 
+  /**
+   * Reconciliation of our webhook-derived belief about a sensor against the
+   * device's own reported state. Written for agreements too, so the drift rate
+   * has a denominator.
+   */
+  trackSensorStateDrift(data: {
+    requestId: string;
+    sensorId: string;
+    /** What our webhook-derived state says. */
+    believedState: string;
+    /** What the device itself reports. */
+    actualState: string;
+    agreed: boolean;
+  }): Promise<void>;
+
   trackHvacStateEvent(data: {
     requestId: string;
     hvacId: string;

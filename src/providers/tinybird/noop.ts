@@ -5,4 +5,5 @@ export class NoopAnalyticsProvider implements AnalyticsProvider {
   async trackHvacCommand(): Promise<void> {}
   async trackHvacStateEvent(): Promise<void> {}
   async trackProviderEvent(): Promise<void> {}
+  async trackSensorStateDrift(): Promise<void> {}
 }

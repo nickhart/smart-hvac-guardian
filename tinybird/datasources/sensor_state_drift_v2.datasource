@@ -1,0 +1,18 @@
+DESCRIPTION >
+    Webhook-derived sensor state reconciled against YoLink ground truth.
+    A row per sensor checked, agreeing or not, so the drift rate has a
+    denominator. Divergence means an open or close event never reached us.
+
+SCHEMA >
+    timestamp DateTime `json:$.timestamp`,
+    request_id String `json:$.request_id`,
+    tenant_id String `json:$.tenant_id`,
+    sensor_id String `json:$.sensor_id`,
+    believed_state String `json:$.believed_state`,
+    actual_state String `json:$.actual_state`,
+    agreed UInt8 `json:$.agreed`
+
+ENGINE "MergeTree"
+ENGINE_SORTING_KEY "tenant_id, timestamp, sensor_id"
+
+TOKEN claude_mcp_readonly READ

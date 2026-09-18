@@ -47,12 +47,15 @@ describe("Tinybird datasource definitions", () => {
     expect(ingestNames.length).toBeGreaterThanOrEqual(4);
   });
 
-  it.each(["sensor_events_v2", "hvac_commands_v2", "hvac_state_events_v2", "provider_events_v2"])(
-    "ingests to %s",
-    (name) => {
-      expect(ingestNames).toContain(name);
-    },
-  );
+  it.each([
+    "sensor_events_v2",
+    "hvac_commands_v2",
+    "hvac_state_events_v2",
+    "provider_events_v2",
+    "sensor_state_drift_v2",
+  ])("ingests to %s", (name) => {
+    expect(ingestNames).toContain(name);
+  });
 
   // The one that matters: a name the app ingests to but src/lib/tinybird.ts
   // does not define is never deployed, so every write to it 404s.
@@ -129,23 +132,23 @@ describe("the read-only MCP token can read everything that gets deployed", () =>
 });
 
 describe("Tinybird schemas agree between the deployed definition and its .datasource file", () => {
-  it.each(["sensor_events_v2", "hvac_commands_v2", "hvac_state_events_v2", "provider_events_v2"])(
-    "%s has the same columns in both",
-    (name) => {
-      const block = tsDefinitions.slice(
-        tsDefinitions.indexOf(`defineDatasource("${name}"`),
-        tsDefinitions.indexOf("engine:", tsDefinitions.indexOf(`defineDatasource("${name}"`)),
-      );
-      const tsColumns = [...block.matchAll(/^\s{4}(\w+):\s*t\./gm)].map((m) => m[1]).sort();
+  it.each([
+    "sensor_events_v2",
+    "hvac_commands_v2",
+    "hvac_state_events_v2",
+    "provider_events_v2",
+    "sensor_state_drift_v2",
+  ])("%s has the same columns in both", (name) => {
+    const block = tsDefinitions.slice(
+      tsDefinitions.indexOf(`defineDatasource("${name}"`),
+      tsDefinitions.indexOf("engine:", tsDefinitions.indexOf(`defineDatasource("${name}"`)),
+    );
+    const tsColumns = [...block.matchAll(/^\s{4}(\w+):\s*t\./gm)].map((m) => m[1]).sort();
 
-      const file = readFileSync(
-        resolve(repoRoot, `tinybird/datasources/${name}.datasource`),
-        "utf8",
-      );
-      const schema = file.slice(file.indexOf("SCHEMA >"), file.indexOf("ENGINE "));
-      const fileColumns = [...schema.matchAll(/^\s{4}(\w+)\s+\S/gm)].map((m) => m[1]).sort();
+    const file = readFileSync(resolve(repoRoot, `tinybird/datasources/${name}.datasource`), "utf8");
+    const schema = file.slice(file.indexOf("SCHEMA >"), file.indexOf("ENGINE "));
+    const fileColumns = [...schema.matchAll(/^\s{4}(\w+)\s+\S/gm)].map((m) => m[1]).sort();
 
-      expect(tsColumns).toEqual(fileColumns);
-    },
-  );
+    expect(tsColumns).toEqual(fileColumns);
+  });
 });
