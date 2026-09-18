@@ -80,6 +80,20 @@ export class TinybirdAnalyticsProvider implements AnalyticsProvider {
     });
   }
 
+  async trackSensorStateDrift(
+    data: Parameters<AnalyticsProvider["trackSensorStateDrift"]>[0],
+  ): Promise<void> {
+    await this.ingest("sensor_state_drift_v2", {
+      timestamp: new Date().toISOString(),
+      request_id: data.requestId,
+      sensor_id: data.sensorId,
+      believed_state: data.believedState,
+      actual_state: data.actualState,
+      agreed: data.agreed ? 1 : 0,
+      ...(this.tenantId ? { tenant_id: this.tenantId } : {}),
+    });
+  }
+
   private async ingest(datasource: string, payload: Record<string, unknown>): Promise<void> {
     // Analytics failures must never break the HVAC control path, so everything
     // here is swallowed — but the reason is logged. `fetch` does not reject on

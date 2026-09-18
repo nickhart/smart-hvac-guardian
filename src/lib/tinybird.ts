@@ -128,6 +128,36 @@ export const providerEvents = defineDatasource("provider_events_v2", {
 
 export type ProviderEventsRow = InferRow<typeof providerEvents>;
 
+/**
+ * Reconciliation between what our webhook-derived state says a sensor is doing
+ * and what YoLink reports when asked directly.
+ *
+ * A row is written for every sensor checked, agreeing or not, so the drift rate
+ * has a denominator. `believed_state` comes from Redis, which is only as good
+ * as the webhooks that reached us; `actual_state` is ground truth from the
+ * device. They diverge when an open or close event never arrived, which is
+ * otherwise invisible: the safe default reports an unknown sensor as closed,
+ * so a dropped open looks exactly like a quiet door.
+ */
+export const sensorStateDrift = defineDatasource("sensor_state_drift_v2", {
+  description: "Webhook-derived sensor state reconciled against YoLink ground truth",
+  schema: {
+    timestamp: t.dateTime(),
+    request_id: t.string(),
+    tenant_id: t.string(),
+    sensor_id: t.string(),
+    believed_state: t.string(),
+    actual_state: t.string(),
+    agreed: t.uint8(),
+  },
+  engine: engine.mergeTree({
+    sortingKey: ["tenant_id", "timestamp", "sensor_id"],
+  }),
+  tokens: [{ token: mcpReadonly, scope: "READ" }],
+});
+
+export type SensorStateDriftRow = InferRow<typeof sensorStateDrift>;
+
 // ============================================================================
 // Endpoints
 // ============================================================================
@@ -427,7 +457,7 @@ export type ProviderHealthOutput = InferOutputRow<typeof providerHealth>;
 // ============================================================================
 
 export const tinybird = new Tinybird({
-  datasources: { sensorEvents, hvacCommands, hvacStateEvents, providerEvents },
+  datasources: { sensorEvents, hvacCommands, hvacStateEvents, providerEvents, sensorStateDrift },
   pipes: {
     shutoffsPerDay,
     sensorTriggerFrequency,

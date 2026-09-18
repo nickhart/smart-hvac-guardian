@@ -96,6 +96,7 @@ describe("CieloIFTTTProvider circuit breaking", () => {
       trackHvacCommand: vi.fn().mockResolvedValue(undefined),
       trackHvacStateEvent: vi.fn().mockResolvedValue(undefined),
       trackProviderEvent: vi.fn().mockResolvedValue(undefined),
+      trackSensorStateDrift: vi.fn().mockResolvedValue(undefined),
     };
   }
 

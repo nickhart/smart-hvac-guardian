@@ -42,6 +42,7 @@ function createDeps(systemEnabled: boolean, overrides?: Partial<Dependencies>): 
       trackHvacCommand: vi.fn().mockResolvedValue(undefined),
       trackHvacStateEvent: vi.fn().mockResolvedValue(undefined),
       trackProviderEvent: vi.fn().mockResolvedValue(undefined),
+      trackSensorStateDrift: vi.fn().mockResolvedValue(undefined),
     },
     qstashReceiver: { verify: vi.fn().mockResolvedValue(true) } as never,
     config: {

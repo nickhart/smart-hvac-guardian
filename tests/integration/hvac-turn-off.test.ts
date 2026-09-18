@@ -41,6 +41,7 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
       trackHvacCommand: vi.fn().mockResolvedValue(undefined),
       trackHvacStateEvent: vi.fn().mockResolvedValue(undefined),
       trackProviderEvent: vi.fn().mockResolvedValue(undefined),
+      trackSensorStateDrift: vi.fn().mockResolvedValue(undefined),
     },
     qstashReceiver: { verify: vi.fn().mockResolvedValue(true) } as never,
     config: {
@@ -353,6 +354,7 @@ describe("hvac-turn-off retry suppression", () => {
         }),
         trackHvacStateEvent: vi.fn().mockResolvedValue(undefined),
         trackProviderEvent: vi.fn().mockResolvedValue(undefined),
+        trackSensorStateDrift: vi.fn().mockResolvedValue(undefined),
       },
     });
 

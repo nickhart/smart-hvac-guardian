@@ -148,6 +148,40 @@ tripped and calls were deliberately withheld.
 curl "https://api.us-east.aws.tinybird.co/v0/pipes/provider_health.json?token=$TINYBIRD_TOKEN"
 ```
 
+### `sensor_state_drift_v2`
+
+What we believe a sensor is doing, next to what the device says when asked
+directly. Written by `GET /api/check-state?verify=yolink`.
+
+| Column           | Meaning                            |
+| ---------------- | ---------------------------------- |
+| `believed_state` | Webhook-derived state, from Redis  |
+| `actual_state`   | What YoLink reports for the device |
+| `agreed`         | 1 when they match                  |
+
+A row is written for every sensor checked, agreeing or not, so a drift count
+has a denominator — without it, "no drift" and "nothing was checked" look the
+same.
+
+Divergence means an event never reached us, and it is silent in both
+directions. A dropped close leaves a door open in our state long after it shut.
+A dropped open is worse: an unknown sensor defaults to `closed` so the unit
+keeps running, which means the failure hides at exactly the moment the system
+should be acting.
+
+```sql
+SELECT sensor_id,
+       countIf(agreed = 0) AS drifts,
+       count() AS checks
+FROM sensor_state_drift_v2
+GROUP BY sensor_id
+```
+
+Verification is opt-in because it costs an external round trip per sensor, and
+it is bounded by a total deadline (`VERIFY_DEADLINE_MS`) — YoLink has no timeout
+of its own, and an unbounded call would hang the handler until the function
+times out.
+
 ### `provider_events_v2`
 
 Health of calls to external providers: successes, failures, and calls skipped
