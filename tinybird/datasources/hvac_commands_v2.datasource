@@ -15,3 +15,5 @@ SCHEMA >
 
 ENGINE "MergeTree"
 ENGINE_SORTING_KEY "tenant_id, timestamp, hvac_unit_id"
+
+TOKEN claude_mcp_readonly READ

@@ -19,3 +19,5 @@ SQL >
     LIMIT {{Int32(limit, 50)}}
 
 TYPE endpoint
+
+TOKEN claude_mcp_readonly READ

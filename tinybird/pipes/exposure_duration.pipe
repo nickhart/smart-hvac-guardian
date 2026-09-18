@@ -39,3 +39,5 @@ SQL >
         AND c.closed_at >= o.opened_at
     GROUP BY o.hvac_unit_id, o.opened_at
     ORDER BY o.opened_at DESC
+
+TOKEN claude_mcp_readonly READ

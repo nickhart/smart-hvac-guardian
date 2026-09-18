@@ -18,3 +18,5 @@ SQL >
     ORDER BY day DESC
 
 TYPE endpoint
+
+TOKEN claude_mcp_readonly READ
