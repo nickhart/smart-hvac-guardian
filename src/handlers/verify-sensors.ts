@@ -1,4 +1,5 @@
 import type { AnalyticsProvider, SensorProvider } from "../providers/types.js";
+import { UnknownDeviceError } from "../utils/errors.js";
 import type { Logger } from "../utils/logger.js";
 
 /**
@@ -24,6 +25,12 @@ export interface SensorVerification {
   drifted: SensorDrift[];
   /** Sensors the device did not answer for, in time or at all. */
   unavailable: string[];
+  /**
+   * Sensors the provider says it has never heard of. A configuration error, not
+   * an outage: structural validation cannot catch a well-formed config that
+   * names a device which no longer exists, so this is the only place it shows.
+   */
+  unknownDevices: string[];
   /** True when the budget ran out before every sensor was queried. */
   deadlineExceeded: boolean;
   durationMs: number;
@@ -102,6 +109,7 @@ export async function verifySensorStates(options: {
   const started = now();
   const drifted: SensorDrift[] = [];
   const unavailable: string[] = [];
+  const unknownDevices: string[] = [];
   let checked = 0;
   let agreed = 0;
   let deadlineExceeded = false;
@@ -150,11 +158,21 @@ export async function verifySensorStates(options: {
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       unavailable.push(sensorId);
-      if (message.startsWith("timed out")) {
-        deadlineExceeded = true;
-      }
 
-      logger.warn("Sensor verification failed", { requestId, sensorId, error: message });
+      if (error instanceof UnknownDeviceError) {
+        // Not an outage. The provider answered and does not have this device,
+        // so waiting or retrying will not help — someone has to fix the config.
+        unknownDevices.push(sensorId);
+        logger.error("Configured sensor does not exist at the provider", {
+          requestId,
+          sensorId,
+        });
+      } else {
+        if (message.startsWith("timed out")) {
+          deadlineExceeded = true;
+        }
+        logger.warn("Sensor verification failed", { requestId, sensorId, error: message });
+      }
 
       await record(() =>
         analytics.trackProviderEvent({
@@ -163,6 +181,7 @@ export async function verifySensorStates(options: {
           outcome: "failed",
           durationMs: now() - callStarted,
           errorMessage: message,
+          terminal: error instanceof UnknownDeviceError,
           requestId,
         }),
       );
@@ -174,6 +193,7 @@ export async function verifySensorStates(options: {
     agreed,
     drifted,
     unavailable,
+    unknownDevices,
     deadlineExceeded,
     durationMs: now() - started,
   };

@@ -14,7 +14,7 @@ const logger: Logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi
  */
 function createDeps(systemEnabled: boolean, overrides?: Partial<Dependencies>): Dependencies {
   return {
-    sensor: { getState: vi.fn() },
+    sensor: { getState: vi.fn().mockResolvedValue("open") },
     hvac: { turnOff: vi.fn().mockResolvedValue(undefined) },
     scheduler: {
       scheduleDelayedCheck: vi.fn(),
@@ -23,7 +23,7 @@ function createDeps(systemEnabled: boolean, overrides?: Partial<Dependencies>): 
     },
     stateStore: {
       setSensorState: vi.fn(),
-      getAllSensorStates: vi.fn().mockResolvedValue(new Map()),
+      getAllSensorStates: vi.fn().mockResolvedValue(new Map([["front_door", "open"]])),
       setTimerToken: vi.fn(),
       getTimerToken: vi.fn().mockResolvedValue("valid-token"),
       deleteTimerToken: vi.fn().mockResolvedValue(undefined),
@@ -46,8 +46,14 @@ function createDeps(systemEnabled: boolean, overrides?: Partial<Dependencies>): 
     },
     qstashReceiver: { verify: vi.fn().mockResolvedValue(true) } as never,
     config: {
-      zones: {},
-      sensorDelays: {},
+      zones: {
+        living_room: {
+          minisplits: ["ac_living"],
+          exteriorOpenings: ["front_door"],
+          interiorDoors: [],
+        },
+      },
+      sensorDelays: { front_door: 90 },
       sensorNames: {},
       sensorDefaults: {},
       hvacUnits: {

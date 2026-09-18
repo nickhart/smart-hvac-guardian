@@ -13,7 +13,7 @@ const mockLogger: Logger = {
 
 function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
   return {
-    sensor: { getState: vi.fn() },
+    sensor: { getState: vi.fn().mockResolvedValue("open") },
     hvac: { turnOff: vi.fn().mockResolvedValue(undefined) },
     scheduler: {
       scheduleDelayedCheck: vi.fn(),
@@ -21,8 +21,8 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
       scheduleUnitTurnOff: vi.fn(),
     },
     stateStore: {
-      setSensorState: vi.fn(),
-      getAllSensorStates: vi.fn(),
+      setSensorState: vi.fn().mockResolvedValue(undefined),
+      getAllSensorStates: vi.fn().mockResolvedValue(new Map([["front_door", "open"]])),
       setTimerToken: vi.fn(),
       getTimerToken: vi.fn().mockResolvedValue("valid-token"),
       deleteTimerToken: vi.fn().mockResolvedValue(undefined),
@@ -108,7 +108,7 @@ describe("hvac-turn-off handler", () => {
     const deps = createMockDeps({
       stateStore: {
         setSensorState: vi.fn(),
-        getAllSensorStates: vi.fn(),
+        getAllSensorStates: vi.fn().mockResolvedValue(new Map([["front_door", "open"]])),
         setTimerToken: vi.fn(),
         getTimerToken: vi.fn().mockResolvedValue("valid-token"),
         deleteTimerToken: vi.fn().mockResolvedValue(undefined),
@@ -141,7 +141,7 @@ describe("hvac-turn-off handler", () => {
     const deps = createMockDeps({
       stateStore: {
         setSensorState: vi.fn(),
-        getAllSensorStates: vi.fn(),
+        getAllSensorStates: vi.fn().mockResolvedValue(new Map([["front_door", "open"]])),
         setTimerToken: vi.fn(),
         getTimerToken: vi.fn().mockResolvedValue(null),
         deleteTimerToken: vi.fn(),
@@ -172,7 +172,7 @@ describe("hvac-turn-off handler", () => {
     const deps = createMockDeps({
       stateStore: {
         setSensorState: vi.fn(),
-        getAllSensorStates: vi.fn(),
+        getAllSensorStates: vi.fn().mockResolvedValue(new Map([["front_door", "open"]])),
         setTimerToken: vi.fn(),
         getTimerToken: vi.fn().mockResolvedValue("new-token"),
         deleteTimerToken: vi.fn(),
@@ -203,7 +203,7 @@ describe("hvac-turn-off handler", () => {
     const deps = createMockDeps({
       stateStore: {
         setSensorState: vi.fn(),
-        getAllSensorStates: vi.fn(),
+        getAllSensorStates: vi.fn().mockResolvedValue(new Map([["front_door", "open"]])),
         setTimerToken: vi.fn(),
         getTimerToken: vi.fn().mockResolvedValue("valid-token"),
         deleteTimerToken: vi.fn().mockResolvedValue(undefined),
@@ -246,7 +246,7 @@ describe("hvac-turn-off handler", () => {
     const deps = createMockDeps({
       stateStore: {
         setSensorState: vi.fn(),
-        getAllSensorStates: vi.fn(),
+        getAllSensorStates: vi.fn().mockResolvedValue(new Map([["front_door", "open"]])),
         setTimerToken: vi.fn(),
         getTimerToken: vi.fn().mockResolvedValue("token123"),
         deleteTimerToken: vi.fn(),
@@ -270,11 +270,105 @@ describe("hvac-turn-off handler", () => {
   });
 });
 
+/**
+ * The most expensive way this system can be wrong: shutting off a guest's AC
+ * because a close webhook never arrived, for a door that has been shut the
+ * whole time. From inside the system that decision looks perfectly correct —
+ * the timer fired, the token matched — so only the device can contradict it.
+ */
+describe("hvac-turn-off exposure verification", () => {
+  it("does not touch IFTTT when the door is really closed", async () => {
+    const deps = createMockDeps({
+      sensor: { getState: vi.fn().mockResolvedValue("closed") },
+    });
+
+    const res = await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "valid-token" }),
+      deps,
+    );
+    const body = (await res.json()) as { action: string };
+
+    expect(res.status).toBe(200);
+    expect(body.action).toBe("aborted_stale_state");
+    expect(deps.hvac.turnOff).not.toHaveBeenCalled();
+  });
+
+  it("records the abort as its own action, not as a cancellation", async () => {
+    const deps = createMockDeps({
+      sensor: { getState: vi.fn().mockResolvedValue("closed") },
+    });
+
+    await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "valid-token" }),
+      deps,
+    );
+
+    expect(deps.analytics.trackHvacCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "aborted_stale_state", hvacUnitId: "ac_living" }),
+    );
+  });
+
+  it("releases the timer token so the unit is not left blocked", async () => {
+    const deps = createMockDeps({
+      sensor: { getState: vi.fn().mockResolvedValue("closed") },
+    });
+
+    await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "valid-token" }),
+      deps,
+    );
+
+    expect(deps.stateStore.deleteTimerToken).toHaveBeenCalledWith("ac_living");
+  });
+
+  // Fails open: a YoLink outage must not silently disable every shutoff.
+  it("still turns off when the device cannot be reached", async () => {
+    const deps = createMockDeps({
+      sensor: { getState: vi.fn().mockRejectedValue(new Error("YoLink down")) },
+    });
+
+    const res = await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "valid-token" }),
+      deps,
+    );
+    const body = (await res.json()) as { action: string };
+
+    expect(body.action).toBe("turned_off");
+    expect(deps.hvac.turnOff).toHaveBeenCalledWith("turn_off_ac_living");
+  });
+
+  /**
+   * Runs before the shadow-mode gate, so a disabled system still records
+   * whether the shutoff it decided on would have been justified — which is the
+   * whole point of watching it before trusting it.
+   */
+  it("verifies even while the system is disabled", async () => {
+    const deps = createMockDeps({
+      sensor: { getState: vi.fn().mockResolvedValue("closed") },
+      stateStore: {
+        ...createMockDeps().stateStore,
+        getSystemEnabled: vi.fn().mockResolvedValue(false),
+      },
+    });
+
+    const res = await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "valid-token" }),
+      deps,
+    );
+    const body = (await res.json()) as { action: string };
+
+    expect(body.action).toBe("aborted_stale_state");
+    expect(deps.analytics.trackHvacCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "aborted_stale_state", shutoffEnabled: false }),
+    );
+  });
+});
+
 describe("hvac-turn-off retry suppression", () => {
   function validTokenStore() {
     return {
       setSensorState: vi.fn(),
-      getAllSensorStates: vi.fn(),
+      getAllSensorStates: vi.fn().mockResolvedValue(new Map([["front_door", "open"]])),
       setTimerToken: vi.fn(),
       getTimerToken: vi.fn().mockResolvedValue("valid-token"),
       deleteTimerToken: vi.fn().mockResolvedValue(undefined),

@@ -148,6 +148,59 @@ tripped and calls were deliberately withheld.
 curl "https://api.us-east.aws.tinybird.co/v0/pipes/provider_health.json?token=$TINYBIRD_TOKEN"
 ```
 
+### `aborted_stale_state` in `hvac_commands_v2`
+
+Before acting on a timer, the turn-off handler re-checks that the reason for
+acting still holds: it asks the devices about every sensor it believes is open.
+If they all report closed, the exposure is over — a close webhook was dropped —
+and the shutoff is abandoned rather than executed.
+
+```sql
+SELECT action, countIf(shutoff_enabled = 1) AS live, count() AS total
+FROM hvac_commands_v2
+GROUP BY action
+```
+
+`aborted_stale_state` is the count of guest-visible mistakes avoided. It is
+distinct from `cancelled`, which means the door closed normally and the webhook
+arrived — a timer doing its job, not a failure caught.
+
+Only sensors believed **open** are checked: they are the ones holding the
+justification up, and a door we think is closed but is really open would argue
+_for_ shutting off, which is what we were doing anyway. When a device cannot be
+reached the shutoff proceeds — refusing to act on an outage would silently
+disable every shutoff in the system.
+
+A correction is written back to Redis, so a dropped webhook heals instead of
+persisting until the next event.
+
+### Unknown devices vs. outages
+
+A verification failure is split two ways, because the remedies differ:
+
+| Field            | Meaning                               | Remedy         |
+| ---------------- | ------------------------------------- | -------------- |
+| `unavailable`    | Could not reach the device            | wait           |
+| `unknownDevices` | The provider answered: no such device | fix the config |
+
+`unknownDevices` is the only place a well-formed but wrong configuration shows
+up. `AppConfigSchema` enforces nine structural invariants on the zone graph, but
+a sensor ID that is correctly spelled and simply does not exist any more — a
+device removed or replaced — passes all of them. Only the provider knows.
+
+It is recorded with `terminal: 1` in `provider_events_v2`, so a config error is
+not read as a transient failure:
+
+```sql
+SELECT provider, operation, terminal, count()
+FROM provider_events_v2
+WHERE outcome = 'failed'
+GROUP BY provider, operation, terminal
+```
+
+Both still fail open — neither can confirm or deny an exposure, so the shutoff
+proceeds.
+
 ### `sensor_state_drift_v2`
 
 What we believe a sensor is doing, next to what the device says when asked

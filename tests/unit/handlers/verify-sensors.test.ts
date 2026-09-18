@@ -1,6 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { verifySensorStates } from "@/handlers/verify-sensors.js";
 import type { AnalyticsProvider, SensorProvider, SensorState } from "@/providers/types.js";
+import { UnknownDeviceError } from "@/utils/errors.js";
 
 function makeAnalytics() {
   return {
@@ -219,5 +220,61 @@ describe("verifySensorStates", () => {
     expect(result.unavailable).toEqual(["a"]);
     expect(result.deadlineExceeded).toBe(true);
     expect(result.checked).toBe(0);
+  });
+
+  /**
+   * A sensor the provider has never heard of is a configuration error, not an
+   * outage — a device removed, replaced, or a mistyped ID. The structural
+   * config validation cannot catch it, because the config is well-formed; only
+   * the provider knows the ID is wrong. Retrying and waiting both do nothing.
+   */
+  describe("a device the provider does not have", () => {
+    const unknown = new UnknownDeviceError("YoLink", "ghost_sensor");
+
+    it("is reported separately from an outage", async () => {
+      const result = await run({
+        sensorIds: ["ghost_sensor", "b"],
+        believed: { ghost_sensor: "open", b: "open" },
+        sensor: makeSensor({ ghost_sensor: unknown, b: new Error("YoLink down") }),
+      });
+
+      expect(result.unknownDevices).toEqual(["ghost_sensor"]);
+      expect(result.unavailable).toEqual(["ghost_sensor", "b"]);
+    });
+
+    it("is recorded as terminal, so it is not read as a transient failure", async () => {
+      const analytics = makeAnalytics();
+      await run({
+        sensorIds: ["ghost_sensor"],
+        believed: { ghost_sensor: "open" },
+        sensor: makeSensor({ ghost_sensor: unknown }),
+        analytics,
+      });
+
+      expect(analytics.trackProviderEvent).toHaveBeenCalledWith(
+        expect.objectContaining({ provider: "yolink", outcome: "failed", terminal: true }),
+      );
+    });
+
+    it("does not mark the run as deadline-exceeded", async () => {
+      const result = await run({
+        sensorIds: ["ghost_sensor"],
+        believed: { ghost_sensor: "open" },
+        sensor: makeSensor({ ghost_sensor: unknown }),
+      });
+
+      expect(result.deadlineExceeded).toBe(false);
+    });
+
+    it("leaves a reachable sensor unaffected", async () => {
+      const result = await run({
+        sensorIds: ["ghost_sensor", "b"],
+        believed: { ghost_sensor: "open", b: "open" },
+        sensor: makeSensor({ ghost_sensor: unknown, b: "closed" }),
+      });
+
+      expect(result.checked).toBe(1);
+      expect(result.drifted).toEqual([{ sensorId: "b", believed: "open", actual: "closed" }]);
+    });
   });
 });

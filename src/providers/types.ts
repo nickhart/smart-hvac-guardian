@@ -42,7 +42,8 @@ export interface AnalyticsProvider {
     requestId: string;
     hvacUnitId: string;
     unitName: string;
-    action: "turned_off" | "cancelled" | "scheduled";
+    /** `aborted_stale_state`: the devices said the exposure was already over. */
+    action: "turned_off" | "cancelled" | "scheduled" | "aborted_stale_state";
     triggerSource: "sensor_open" | "hvac_on";
     delaySeconds?: number;
     iftttEvent?: string;

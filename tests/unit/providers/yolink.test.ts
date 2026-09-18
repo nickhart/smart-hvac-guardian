@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { YoLinkClient } from "@/providers/yolink/client";
 import { YoLinkSensorProvider } from "@/providers/yolink/index";
 import type { Logger } from "@/utils/logger";
+import { TerminalProviderError, UnknownDeviceError } from "@/utils/errors";
 
 const mockLogger: Logger = {
   debug: vi.fn(),
@@ -229,5 +230,45 @@ describe("YoLinkSensorProvider", () => {
     const provider = new YoLinkSensorProvider(mockClient, mockLogger);
 
     expect(await provider.getState("s1")).toBe("unknown");
+  });
+
+  /**
+   * A configured sensor missing from the account is a config error — a device
+   * removed, replaced, or a mistyped ID — and it is terminal: no retry or wait
+   * fixes it. Structural config validation cannot catch this, because the
+   * config is perfectly well-formed; only YoLink knows the ID is wrong.
+   */
+  it("raises UnknownDeviceError for a device missing from the account", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+
+    fetchSpy.mockResolvedValueOnce(
+      new Response(JSON.stringify({ access_token: "tok", expires_in: 7200 })),
+    );
+    fetchSpy.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          code: "000000",
+          msg: "Success",
+          data: {
+            devices: [
+              {
+                deviceId: "device1",
+                deviceUDID: "u1",
+                name: "Sensor",
+                token: "dtok1",
+                type: "DoorSensor",
+              },
+            ],
+          },
+        }),
+      ),
+    );
+
+    const client = createClient();
+    const error = await client.getDeviceState("ghost_sensor").catch((e: unknown) => e);
+
+    expect(error).toBeInstanceOf(UnknownDeviceError);
+    expect(error).toBeInstanceOf(TerminalProviderError);
+    expect((error as UnknownDeviceError).deviceId).toBe("ghost_sensor");
   });
 });
