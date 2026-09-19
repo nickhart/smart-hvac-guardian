@@ -174,6 +174,28 @@ disable every shutoff in the system.
 A correction is written back to Redis, so a dropped webhook heals instead of
 persisting until the next event.
 
+### `shutoff_enabled` and the dry-run boundary
+
+`shutoff_enabled` is the one field separating a dry run — the system deciding
+but not actuating — from real operation. Split any comparison on it:
+
+```sql
+SELECT action, shutoff_enabled, count()
+FROM hvac_commands_v2
+GROUP BY action, shutoff_enabled
+```
+
+Rows written **before 2026-09-19** cannot be split this way. The cancellation
+branch in `api/hvac-turn-off.ts` returned before the system state was read and
+hardcoded `shutoff_enabled = 1`, so every `cancelled` row claims the system was
+live regardless. Cancellations are roughly a third of all commands.
+
+The contradiction is visible in the data: sensor events from 2026-09-18 23:59
+to 2026-09-19 00:05 record `shutoff_enabled = 0`, while the cancellations they
+directly caused, ten minutes later at 00:09, record `1`.
+
+`turned_off` rows were always correct, in both the executed and shadow paths.
+
 ### Unknown devices vs. outages
 
 A verification failure is split two ways, because the remedies differ:
