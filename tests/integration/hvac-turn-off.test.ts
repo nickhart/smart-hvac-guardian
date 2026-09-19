@@ -276,6 +276,54 @@ describe("hvac-turn-off handler", () => {
  * whole time. From inside the system that decision looks perfectly correct —
  * the timer fired, the token matched — so only the device can contradict it.
  */
+/**
+ * `shutoff_enabled` is the one field separating a dry run from real operation.
+ * The cancellation branch returns before the rest of the handler runs, and it
+ * used to hardcode `true` — so every cancelled row claimed the system was live,
+ * including ones recorded while it was disabled. A third of all commands are
+ * cancellations, so that quietly corrupted the comparison.
+ */
+describe("hvac-turn-off records the real system state on a cancellation", () => {
+  function depsWithSystem(enabled: boolean) {
+    return createMockDeps({
+      stateStore: {
+        ...createMockDeps().stateStore,
+        // Token gone: the door closed, so the timer is cancelled.
+        getTimerToken: vi.fn().mockResolvedValue(null),
+        getSystemEnabled: vi.fn().mockResolvedValue(enabled),
+      },
+    });
+  }
+
+  it("reports a disabled system as disabled", async () => {
+    const deps = depsWithSystem(false);
+
+    const res = await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "stale-token" }),
+      deps,
+    );
+    const body = (await res.json()) as { action: string };
+
+    expect(body.action).toBe("cancelled");
+    expect(deps.analytics.trackHvacCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "cancelled", shutoffEnabled: false }),
+    );
+  });
+
+  it("reports an enabled system as enabled", async () => {
+    const deps = depsWithSystem(true);
+
+    await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "stale-token" }),
+      deps,
+    );
+
+    expect(deps.analytics.trackHvacCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "cancelled", shutoffEnabled: true }),
+    );
+  });
+});
+
 describe("hvac-turn-off exposure verification", () => {
   it("does not touch IFTTT when the door is really closed", async () => {
     const deps = createMockDeps({

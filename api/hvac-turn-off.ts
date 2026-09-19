@@ -76,6 +76,12 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
     const signature = request.headers.get("upstash-signature") ?? "";
     await verifyQStashSignature(d.qstashReceiver, signature, rawBody);
 
+    // Read before the token check, not after: the cancellation branch below
+    // returns early, and hardcoding a value there mislabelled every cancelled
+    // row as live — including ones recorded while the system was disabled.
+    // That is the one flag separating a dry run from real operation.
+    const systemEnabled = await d.stateStore.getSystemEnabled();
+
     // Check cancellation token in Redis
     const storedToken = await d.stateStore.getTimerToken(hvacUnitId);
 
@@ -92,7 +98,7 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
         unitName: d.config.hvacUnits[hvacUnitId]?.name ?? hvacUnitId,
         action: "cancelled",
         triggerSource: "sensor_open",
-        shutoffEnabled: true,
+        shutoffEnabled: systemEnabled,
       });
 
       return jsonResponse({
@@ -111,8 +117,6 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
       logger.warn("Unknown HVAC unit in turn-off", { requestId, hvacUnitId });
       return errorResponse("Unknown HVAC unit", 404);
     }
-
-    const systemEnabled = await d.stateStore.getSystemEnabled();
 
     // The timer says this unit was exposed ten minutes ago. Before acting on
     // that, check the reason still holds — a close webhook that never arrived
