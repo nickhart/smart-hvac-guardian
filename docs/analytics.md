@@ -174,6 +174,29 @@ disable every shutoff in the system.
 A correction is written back to Redis, so a dropped webhook heals instead of
 persisting until the next event.
 
+### Scheduled timers should equal recorded commands
+
+Every scheduled timer ends in exactly one command — `turned_off`, `cancelled`,
+or `aborted_stale_state`. A cancellation still fires and still records, so the
+two counts should match:
+
+```sql
+SELECT
+    (SELECT sum(length(timers_scheduled)) FROM sensor_events_v2) AS scheduled,
+    (SELECT count() FROM hvac_commands_v2 WHERE trigger_source = 'sensor_open') AS recorded
+```
+
+Before 2026-09-19 they did not: 323 scheduled, 213 recorded, 110 lost. The
+deduplication id was built from a wall-clock ten-minute bucket, so a door that
+opened, closed and reopened inside one bucket produced a second QStash message
+with an identical id, which QStash dropped. The recorded count matched the
+number of distinct (unit, bucket) pairs exactly — 213 — which is what confirmed
+the cause.
+
+The symptom was an **absence**: a shutoff that silently never happened, leaving
+no row anywhere. This query is the only thing that shows it, which is why it is
+worth re-running whenever timer behaviour changes.
+
 ### `shutoff_enabled` and the dry-run boundary
 
 `shutoff_enabled` is the one field separating a dry run — the system deciding

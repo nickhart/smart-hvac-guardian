@@ -17,11 +17,16 @@ export interface SchedulerProvider {
     deduplicationId?: string,
   ): Promise<void>;
   scheduleTurnOff(deduplicationId: string): Promise<void>;
+  /**
+   * The deduplication id is derived from the cancellation token rather than
+   * passed in. Callers previously built it from a wall-clock bucket, which made
+   * every re-exposure of a unit within ten minutes collide with the previous
+   * one and be silently dropped.
+   */
   scheduleUnitTurnOff(
     hvacUnitId: string,
     cancellationToken: string,
     delaySeconds: number,
-    deduplicationId: string,
   ): Promise<void>;
 }
 

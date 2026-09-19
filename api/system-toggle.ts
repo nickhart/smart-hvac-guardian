@@ -94,15 +94,12 @@ export async function handleSystemToggle(request: Request, deps?: Dependencies):
         const ttl = delaySeconds + 60;
         await d.stateStore.setTimerToken(unitId, token, ttl);
 
-        const window = Math.floor(Date.now() / (10 * 60 * 1000));
-        const dedupId = `turnoff-${unitId}-${window}`;
-        await d.scheduler.scheduleUnitTurnOff(unitId, token, delaySeconds, dedupId);
+        await d.scheduler.scheduleUnitTurnOff(unitId, token, delaySeconds);
         logger.info("Timer scheduled on re-enable", {
           requestId,
           unitId,
           delaySeconds,
           token,
-          dedupId,
         });
       }
 

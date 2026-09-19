@@ -48,15 +48,76 @@ describe("QStashScheduler", () => {
       logger: mockLogger,
     });
 
-    await scheduler.scheduleUnitTurnOff("ac_living", "token-abc", 90, "turnoff-ac_living-123");
+    await scheduler.scheduleUnitTurnOff("ac_living", "token-abc", 90);
 
     expect(mockPublishJSON).toHaveBeenCalledWith({
       url: "https://example.com/api/hvac-turn-off",
       body: { hvacUnitId: "ac_living", cancellationToken: "token-abc" },
       delay: 90,
-      deduplicationId: "turnoff-ac_living-123",
+      deduplicationId: "turnoff-ac_living-token-abc",
       retries: 1,
     });
+  });
+
+  /**
+   * The bug this replaced cost 34% of all scheduled turn-offs in production.
+   *
+   * QStash suppresses a repeat of the same deduplication id for ten minutes.
+   * The id used to be built from a wall-clock ten-minute bucket, so a door that
+   * opened, closed and reopened inside one bucket produced a second message
+   * with an identical id, which QStash dropped. The surviving first message
+   * then arrived carrying the superseded token, was rejected as a mismatch, and
+   * the reopened door was left with no timer at all — a shutoff that silently
+   * never happened.
+   */
+  it("gives each exposure its own deduplication id, however close together", async () => {
+    const scheduler = new QStashScheduler({
+      token: "test-token",
+      checkStateUrl: "https://example.com/api/check-state",
+      turnOffUrl: "https://example.com/api/hvac-turn-off",
+      logger: mockLogger,
+    });
+
+    // Same unit, same wall-clock minute, two separate exposures.
+    await scheduler.scheduleUnitTurnOff("ac_living", "token-first", 600);
+    await scheduler.scheduleUnitTurnOff("ac_living", "token-second", 600);
+
+    const ids = mockPublishJSON.mock.calls.map((call) => call[0].deduplicationId);
+    expect(ids).toEqual(["turnoff-ac_living-token-first", "turnoff-ac_living-token-second"]);
+    expect(new Set(ids).size).toBe(2);
+  });
+
+  // Deduplication still does its real job: one exposure scheduled twice — a
+  // duplicate webhook, or two concurrent requests — is still suppressed.
+  it("still deduplicates a repeat of the same exposure", async () => {
+    const scheduler = new QStashScheduler({
+      token: "test-token",
+      checkStateUrl: "https://example.com/api/check-state",
+      turnOffUrl: "https://example.com/api/hvac-turn-off",
+      logger: mockLogger,
+    });
+
+    await scheduler.scheduleUnitTurnOff("ac_living", "same-token", 600);
+    await scheduler.scheduleUnitTurnOff("ac_living", "same-token", 600);
+
+    const ids = mockPublishJSON.mock.calls.map((call) => call[0].deduplicationId);
+    expect(new Set(ids).size).toBe(1);
+  });
+
+  it("scopes the deduplication id to the tenant", async () => {
+    const scheduler = new QStashScheduler({
+      token: "test-token",
+      checkStateUrl: "https://example.com/api/check-state",
+      turnOffUrl: "https://example.com/api/hvac-turn-off",
+      logger: mockLogger,
+      tenantId: "tenant1",
+    });
+
+    await scheduler.scheduleUnitTurnOff("ac_living", "token-abc", 600);
+
+    expect(mockPublishJSON.mock.calls[0][0].deduplicationId).toBe(
+      "tenant1-turnoff-ac_living-token-abc",
+    );
   });
 
   it("caps delivery retries so an outage is not amplified", async () => {
@@ -69,7 +130,7 @@ describe("QStashScheduler", () => {
       logger: mockLogger,
     });
 
-    await scheduler.scheduleUnitTurnOff("ac_living", "token-abc", 90, "dedup-1");
+    await scheduler.scheduleUnitTurnOff("ac_living", "token-abc", 90);
     await scheduler.scheduleTurnOff("dedup-2");
     await scheduler.scheduleDelayedCheck("front_door", 30);
 
@@ -88,9 +149,9 @@ describe("QStashScheduler", () => {
       logger: mockLogger,
     });
 
-    await expect(
-      scheduler.scheduleUnitTurnOff("ac_living", "token-abc", 90, "dedup-1"),
-    ).rejects.toThrow("Failed to schedule unit turn-off");
+    await expect(scheduler.scheduleUnitTurnOff("ac_living", "token-abc", 90)).rejects.toThrow(
+      "Failed to schedule unit turn-off",
+    );
   });
 });
 

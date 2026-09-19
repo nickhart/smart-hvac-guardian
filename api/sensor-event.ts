@@ -127,11 +127,9 @@ export async function handleSensorEvent(request: Request, deps?: Dependencies): 
 
       await d.stateStore.setTimerToken(unitId, token, ttl);
 
-      const window = Math.floor(Date.now() / (10 * 60 * 1000));
-      const dedupId = `turnoff-${unitId.trim()}-${window}`;
-      await d.scheduler.scheduleUnitTurnOff(unitId, token, delaySeconds, dedupId);
+      await d.scheduler.scheduleUnitTurnOff(unitId, token, delaySeconds);
 
-      logger.info("Timer scheduled for unit", { requestId, unitId, delaySeconds, token, dedupId });
+      logger.info("Timer scheduled for unit", { requestId, unitId, delaySeconds, token });
     }
 
     // 7. Cancel timers for units no longer exposed

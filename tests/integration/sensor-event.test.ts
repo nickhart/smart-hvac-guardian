@@ -153,11 +153,12 @@ describe("sensor-event handler", () => {
       expect.any(String),
       150, // 90 + 60 buffer
     );
+    // The scheduler derives its own deduplication id from this token, so the
+    // token is the only thing the caller has to get right.
     expect(deps.scheduler.scheduleUnitTurnOff).toHaveBeenCalledWith(
       "ac_living",
       expect.any(String),
       90,
-      expect.stringContaining("turnoff-ac_living-"),
     );
   });
 

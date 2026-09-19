@@ -220,11 +220,17 @@ export class LocalScheduler implements SchedulerProvider {
     hvacUnitId: string,
     cancellationToken: string,
     delaySeconds: number,
-    deduplicationId: string,
   ): Promise<void> {
-    // If same dedupId exists, cancel the old one and reschedule.
-    // (In production QStash would dedup, but in the dev simulator we
-    // replace so that the latest cancellation token is always honored.)
+    const deduplicationId = `turnoff-${hvacUnitId.trim()}-${cancellationToken}`;
+    // Keyed on the cancellation token, matching QStashScheduler, so each
+    // exposure gets its own timer here too.
+    //
+    // This simulator used to diverge from production on exactly this point: it
+    // REPLACED a colliding timer while QStash DROPS the newer message. With the
+    // old wall-clock-bucket ids that divergence hid a real bug — a reopened
+    // door rescheduled correctly in dev and silently lost its timer in
+    // production. A simulator that is kinder than the real thing cannot find
+    // the bugs the real thing has.
     const existing = this.pendingTimers.get(deduplicationId);
     if (existing) {
       clearTimeout(existing.timeout);
