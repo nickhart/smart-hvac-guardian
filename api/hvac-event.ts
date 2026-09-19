@@ -130,15 +130,13 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
 
     await d.stateStore.setTimerToken(hvacId, token, ttl);
 
-    const window = Math.floor(Date.now() / (10 * 60 * 1000));
-    const dedupId = `turnoff-${hvacId.trim()}-${window}`;
-    await d.scheduler.scheduleUnitTurnOff(hvacId, token, delaySeconds, dedupId);
+    await d.scheduler.scheduleUnitTurnOff(hvacId, token, delaySeconds);
 
     logger.info("Turn-off scheduled for HVAC unit on event", {
       requestId,
       hvacId,
       delaySeconds,
-      dedupId,
+      token,
     });
 
     const unitConfig = d.config.hvacUnits[hvacId];

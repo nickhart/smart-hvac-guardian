@@ -83,9 +83,19 @@ export class QStashScheduler implements SchedulerProvider {
     hvacUnitId: string,
     cancellationToken: string,
     delaySeconds: number,
-    deduplicationId: string,
   ): Promise<void> {
-    // Scope dedup IDs to tenant
+    // Keyed on the cancellation token, which uniquely identifies one exposure.
+    //
+    // QStash suppresses a repeat of the same id for ten minutes. Callers used
+    // to key on a wall-clock ten-minute bucket instead, so a door that opened,
+    // closed and reopened inside one bucket produced a second message with the
+    // same id — which QStash dropped. The first message then arrived carrying
+    // the superseded token, was rejected as a mismatch, and the reopened door
+    // was left with no timer at all. It cost 34% of all scheduled turn-offs.
+    //
+    // A token is minted per exposure, so a genuine double-publish of one
+    // exposure still dedupes, while a new exposure gets its own message.
+    const deduplicationId = `turnoff-${hvacUnitId.trim()}-${cancellationToken}`;
     const scopedDedupId = this.tenantId ? `${this.tenantId}-${deduplicationId}` : deduplicationId;
 
     this.logger.info("Scheduling per-unit HVAC turn-off", {

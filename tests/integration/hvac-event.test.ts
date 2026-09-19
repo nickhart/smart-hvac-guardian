@@ -153,11 +153,12 @@ describe("hvac-event handler", () => {
     expect(body.action).toBe("scheduled");
     expect(body.hvacUnitId).toBe("ac_living");
     expect(body.delaySeconds).toBe(90);
+    // The scheduler derives its own deduplication id from this token, so the
+    // token is the only thing the caller has to get right.
     expect(deps.scheduler.scheduleUnitTurnOff).toHaveBeenCalledWith(
       "ac_living",
       expect.any(String),
       90,
-      expect.stringContaining("turnoff-ac_living-"),
     );
     expect(deps.stateStore.setTimerToken).toHaveBeenCalledWith(
       "ac_living",
