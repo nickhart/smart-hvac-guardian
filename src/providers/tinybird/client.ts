@@ -43,6 +43,7 @@ export class TinybirdAnalyticsProvider implements AnalyticsProvider {
       action: data.action,
       trigger_source: data.triggerSource,
       delay_seconds: data.delaySeconds ?? null,
+      late_by_seconds: data.lateBySeconds ?? null,
       ifttt_event: data.iftttEvent ?? null,
       shutoff_enabled: data.shutoffEnabled ? 1 : 0,
       ...(this.tenantId ? { tenant_id: this.tenantId } : {}),

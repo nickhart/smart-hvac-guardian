@@ -8,7 +8,12 @@ import { resolveTenantFromWebhook } from "../src/middleware/tenant.js";
 import { verifyQStashSignature } from "../src/providers/qstash/verify.js";
 import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
-import { verifyExposureStillHolds } from "../src/handlers/verify-exposure.js";
+import {
+  verifyExposureStillHolds,
+  readEffectiveSensorStates,
+} from "../src/handlers/verify-exposure.js";
+import { evaluateZoneGraph } from "../src/zone-graph/index.js";
+import { getDelayForUnit, TIMER_TOKEN_BUFFER_SECONDS } from "../src/utils/delay.js";
 import {
   CircuitOpenError,
   TerminalProviderError,
@@ -18,6 +23,8 @@ import {
 const TurnOffPayload = z.object({
   hvacUnitId: z.string().min(1),
   cancellationToken: z.string().min(1),
+  /** Optional: messages scheduled before this field existed will not carry it. */
+  expectedAt: z.string().datetime().optional(),
   tenantId: z.string().optional(),
 });
 
@@ -46,7 +53,7 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
       return errorResponse("Invalid payload", 400);
     }
 
-    const { hvacUnitId, cancellationToken, tenantId } = parsed.data;
+    const { hvacUnitId, cancellationToken, expectedAt, tenantId } = parsed.data;
     logger.info("Received turn-off request", {
       requestId,
       hvacUnitId,
@@ -82,40 +89,97 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
     // That is the one flag separating a dry run from real operation.
     const systemEnabled = await d.stateStore.getSystemEnabled();
 
-    // Check cancellation token in Redis
+    // Validate the target before doing any work. An unknown unit is never in
+    // the zone graph, so the checks below would always find it unexposed and
+    // return a benign 200 — hiding a configuration error behind a result that
+    // looks like a correctly avoided shutoff.
+    const unitConfig = d.config.hvacUnits[hvacUnitId];
+    if (!unitConfig) {
+      logger.warn("Unknown HVAC unit in turn-off", { requestId, hvacUnitId });
+      return errorResponse("Unknown HVAC unit", 404);
+    }
+
+    // Three outcomes, not two. A token that is present but different means a
+    // newer exposure is already armed and this message is superseded. A token
+    // that is *absent* is ambiguous: either the door closed, or this unit's
+    // timer was lost — and those need opposite responses.
     const storedToken = await d.stateStore.getTimerToken(hvacUnitId);
 
-    if (!storedToken || storedToken !== cancellationToken) {
-      logger.info("Turn-off cancelled: token mismatch or missing", {
+    if (storedToken && storedToken !== cancellationToken) {
+      logger.info("Turn-off superseded: a newer timer is already armed", {
         requestId,
         hvacUnitId,
-        expected: storedToken,
-        received: cancellationToken,
       });
       await d.analytics.trackHvacCommand({
         requestId,
         hvacUnitId,
-        unitName: d.config.hvacUnits[hvacUnitId]?.name ?? hvacUnitId,
+        unitName: unitConfig.name,
         action: "cancelled",
         triggerSource: "sensor_open",
         shutoffEnabled: systemEnabled,
       });
 
-      return jsonResponse({
-        status: "ok",
-        action: "cancelled",
-        hvacUnitId,
-      });
+      return jsonResponse({ status: "ok", action: "cancelled", hvacUnitId });
     }
 
-    // Validate the target before doing any external work. An unknown unit is
-    // never in the zone graph, so the exposure check below would always find it
-    // unexposed and abort with a benign 200 — hiding a configuration error
-    // behind a result that looks like a correctly avoided shutoff.
-    const unitConfig = d.config.hvacUnits[hvacUnitId];
-    if (!unitConfig) {
-      logger.warn("Unknown HVAC unit in turn-off", { requestId, hvacUnitId });
-      return errorResponse("Unknown HVAC unit", 404);
+    if (!storedToken) {
+      // The token expired or was never stored. If the unit is still exposed,
+      // nothing is armed and the door is open — dropping this message would
+      // leave it unwatched until some later sensor event happened to arrive.
+      // Redis and the zone graph only; no device calls on this path.
+      const sensorStates = await readEffectiveSensorStates(d.config, d.stateStore);
+      const { exposedUnits } = evaluateZoneGraph(d.config.zones, sensorStates);
+
+      if (exposedUnits.has(hvacUnitId)) {
+        // How far past its intended fire time this message arrived. A few
+        // seconds means TIMER_TOKEN_BUFFER_SECONDS is slightly too tight;
+        // minutes means delivery is being delayed and the buffer is not the
+        // problem. Absent on messages scheduled before the field existed.
+        const lateBySeconds = expectedAt
+          ? Math.max(0, Math.round((Date.now() - new Date(expectedAt).getTime()) / 1000))
+          : undefined;
+
+        const delaySeconds = await getDelayForUnit(hvacUnitId, d.stateStore, d.config);
+        const token = crypto.randomUUID();
+
+        await d.stateStore.setTimerToken(
+          hvacUnitId,
+          token,
+          delaySeconds + TIMER_TOKEN_BUFFER_SECONDS,
+        );
+        await d.scheduler.scheduleUnitTurnOff(hvacUnitId, token, delaySeconds);
+
+        logger.warn("Timer was missing but the unit is still exposed — re-armed", {
+          requestId,
+          hvacUnitId,
+          delaySeconds,
+          lateBySeconds,
+        });
+        await d.analytics.trackHvacCommand({
+          requestId,
+          hvacUnitId,
+          unitName: unitConfig.name,
+          action: "rearmed",
+          triggerSource: "sensor_open",
+          delaySeconds,
+          lateBySeconds,
+          shutoffEnabled: systemEnabled,
+        });
+
+        return jsonResponse({ status: "ok", action: "rearmed", hvacUnitId, delaySeconds });
+      }
+
+      logger.info("Turn-off cancelled: the unit is no longer exposed", { requestId, hvacUnitId });
+      await d.analytics.trackHvacCommand({
+        requestId,
+        hvacUnitId,
+        unitName: unitConfig.name,
+        action: "cancelled",
+        triggerSource: "sensor_open",
+        shutoffEnabled: systemEnabled,
+      });
+
+      return jsonResponse({ status: "ok", action: "cancelled", hvacUnitId });
     }
 
     // The timer says this unit was exposed ten minutes ago. Before acting on

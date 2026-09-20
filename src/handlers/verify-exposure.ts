@@ -12,6 +12,34 @@ import { verifySensorStates, type SensorDrift } from "./verify-sensors.js";
  */
 export const SHUTOFF_VERIFY_DEADLINE_MS = 3000;
 
+/**
+ * What the system believes every sensor is doing, with the same defaults the
+ * control path applies: a configured default first, then "closed" for anything
+ * still unknown — the safe choice, because it leaves the AC running.
+ *
+ * Reads Redis only. No device calls, so it is cheap enough for a decision point.
+ */
+export async function readEffectiveSensorStates(
+  config: AppConfig,
+  stateStore: StateStore,
+): Promise<Map<string, SensorState>> {
+  const allSensorIds = Object.keys(config.sensorDelays);
+  const sensorStates = await stateStore.getAllSensorStates(allSensorIds);
+
+  for (const [id, defaultState] of Object.entries(config.sensorDefaults)) {
+    if (!sensorStates.has(id)) {
+      sensorStates.set(id, defaultState);
+    }
+  }
+  for (const id of allSensorIds) {
+    if (!sensorStates.has(id)) {
+      sensorStates.set(id, "closed");
+    }
+  }
+
+  return sensorStates;
+}
+
 export interface ExposureCheck {
   /** False only when the devices positively say the exposure is over. */
   stillExposed: boolean;
@@ -57,18 +85,7 @@ export async function verifyExposureStillHolds(options: {
 }): Promise<ExposureCheck> {
   const { hvacUnitId, config, stateStore, sensor, analytics, logger, requestId } = options;
 
-  const allSensorIds = Object.keys(config.sensorDelays);
-  const sensorStates = await stateStore.getAllSensorStates(allSensorIds);
-  for (const [id, defaultState] of Object.entries(config.sensorDefaults)) {
-    if (!sensorStates.has(id)) {
-      sensorStates.set(id, defaultState);
-    }
-  }
-  for (const id of allSensorIds) {
-    if (!sensorStates.has(id)) {
-      sensorStates.set(id, "closed");
-    }
-  }
+  const sensorStates = await readEffectiveSensorStates(config, stateStore);
 
   const believedOpen = [...sensorStates].filter(([, state]) => state === "open").map(([id]) => id);
 

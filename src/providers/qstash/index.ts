@@ -107,11 +107,18 @@ export class QStashScheduler implements SchedulerProvider {
     });
 
     try {
+      // When this message is meant to fire. Carried so the handler can tell a
+      // message that is two seconds past its token's TTL from one that is ten
+      // minutes late — the difference between "the buffer is slightly tight"
+      // and "something upstream is delaying delivery".
+      const expectedAt = new Date(Date.now() + delaySeconds * 1000).toISOString();
+
       await this.client.publishJSON({
         url: this.turnOffUrl,
         body: {
           hvacUnitId,
           cancellationToken,
+          expectedAt,
           ...(this.tenantId ? { tenantId: this.tenantId } : {}),
         },
         delay: delaySeconds,

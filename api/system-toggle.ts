@@ -8,7 +8,7 @@ import { resolveTenantFromSession } from "../src/middleware/tenant.js";
 import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
 import { evaluateZoneGraph, computeTimerActions } from "../src/zone-graph/index.js";
-import { getDelayForUnit } from "../src/utils/delay.js";
+import { getDelayForUnit, TIMER_TOKEN_BUFFER_SECONDS } from "../src/utils/delay.js";
 
 const TogglePayload = z.object({
   enabled: z.boolean(),
@@ -91,7 +91,7 @@ export async function handleSystemToggle(request: Request, deps?: Dependencies):
       for (const unitId of schedule) {
         const delaySeconds = await getDelayForUnit(unitId, d.stateStore, d.config);
         const token = crypto.randomUUID();
-        const ttl = delaySeconds + 60;
+        const ttl = delaySeconds + TIMER_TOKEN_BUFFER_SECONDS;
         await d.stateStore.setTimerToken(unitId, token, ttl);
 
         await d.scheduler.scheduleUnitTurnOff(unitId, token, delaySeconds);

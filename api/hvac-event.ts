@@ -9,7 +9,7 @@ import { resolveTenantFromWebhook } from "../src/middleware/tenant.js";
 import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
 import { evaluateZoneGraph } from "../src/zone-graph/index.js";
-import { getDelayForUnit } from "../src/utils/delay.js";
+import { getDelayForUnit, TIMER_TOKEN_BUFFER_SECONDS } from "../src/utils/delay.js";
 
 const HvacEventPayload = z.object({
   hvacId: z.string().min(1),
@@ -126,7 +126,7 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
     // Unit is exposed — schedule turn-off timer
     const delaySeconds = await getDelayForUnit(hvacId, d.stateStore, d.config);
     const token = crypto.randomUUID();
-    const ttl = delaySeconds + 60;
+    const ttl = delaySeconds + TIMER_TOKEN_BUFFER_SECONDS;
 
     await d.stateStore.setTimerToken(hvacId, token, ttl);
 

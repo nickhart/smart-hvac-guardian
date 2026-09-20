@@ -47,10 +47,20 @@ export interface AnalyticsProvider {
     requestId: string;
     hvacUnitId: string;
     unitName: string;
-    /** `aborted_stale_state`: the devices said the exposure was already over. */
-    action: "turned_off" | "cancelled" | "scheduled" | "aborted_stale_state";
+    /**
+     * `aborted_stale_state`: the devices said the exposure was already over.
+     * `rearmed`: the timer was gone but the unit was still exposed, so a fresh
+     * one was scheduled rather than letting the door go unwatched.
+     */
+    action: "turned_off" | "cancelled" | "scheduled" | "aborted_stale_state" | "rearmed";
     triggerSource: "sensor_open" | "hvac_on";
     delaySeconds?: number;
+    /**
+     * How far past its intended fire time a message arrived. Only meaningful on
+     * `rearmed`, where it says whether the token buffer is slightly too tight
+     * or delivery is badly delayed — two problems with different remedies.
+     */
+    lateBySeconds?: number;
     iftttEvent?: string;
     /** False when the decision was made in shadow mode and not executed. */
     shutoffEnabled: boolean;

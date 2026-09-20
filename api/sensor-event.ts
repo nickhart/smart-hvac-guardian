@@ -11,7 +11,7 @@ import { jsonResponse, errorResponse } from "../src/utils/response.js";
 import { evaluateZoneGraph } from "../src/zone-graph/index.js";
 import { computeTimerActions } from "../src/zone-graph/index.js";
 import type { SensorState } from "../src/zone-graph/index.js";
-import { getDelayForUnit } from "../src/utils/delay.js";
+import { getDelayForUnit, TIMER_TOKEN_BUFFER_SECONDS } from "../src/utils/delay.js";
 
 const SensorEventPayload = z.object({
   sensorId: z.string().min(1),
@@ -123,7 +123,7 @@ export async function handleSensorEvent(request: Request, deps?: Dependencies): 
     for (const unitId of schedule) {
       const delaySeconds = await getDelayForUnit(unitId, d.stateStore, d.config);
       const token = crypto.randomUUID();
-      const ttl = delaySeconds + 60; // buffer for QStash delivery
+      const ttl = delaySeconds + TIMER_TOKEN_BUFFER_SECONDS;
 
       await d.stateStore.setTimerToken(unitId, token, ttl);
 

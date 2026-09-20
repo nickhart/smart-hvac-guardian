@@ -52,11 +52,35 @@ describe("QStashScheduler", () => {
 
     expect(mockPublishJSON).toHaveBeenCalledWith({
       url: "https://example.com/api/hvac-turn-off",
-      body: { hvacUnitId: "ac_living", cancellationToken: "token-abc" },
+      body: {
+        hvacUnitId: "ac_living",
+        cancellationToken: "token-abc",
+        expectedAt: expect.any(String),
+      },
       delay: 90,
       deduplicationId: "turnoff-ac_living-token-abc",
       retries: 1,
     });
+  });
+
+  // The handler subtracts this from arrival time to measure delivery lateness,
+  // so it has to be the intended fire time, not the publish time.
+  it("stamps the message with when it is meant to fire", async () => {
+    const scheduler = new QStashScheduler({
+      token: "test-token",
+      checkStateUrl: "https://example.com/api/check-state",
+      turnOffUrl: "https://example.com/api/hvac-turn-off",
+      logger: mockLogger,
+    });
+
+    const before = Date.now();
+    await scheduler.scheduleUnitTurnOff("ac_living", "token-abc", 600);
+
+    const { expectedAt } = mockPublishJSON.mock.calls[0][0].body as { expectedAt: string };
+    const stamped = new Date(expectedAt).getTime();
+
+    expect(stamped).toBeGreaterThanOrEqual(before + 600_000);
+    expect(stamped).toBeLessThan(before + 600_000 + 5_000);
   });
 
   /**
