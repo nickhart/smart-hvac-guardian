@@ -19,6 +19,31 @@ Build a dashboard page showing shutoff history, frequency charts, and per-sensor
 - Per-sensor and per-unit drill-down
 - Trend visualization (are guests learning the system?)
 
+### Dashboard surfacing for health and sensor verification
+
+Both diagnostics exist as endpoints but have no UI, so using them means typing a
+URL. Put them on the SPA dashboard — with different exposure rules, because they
+are not the same kind of endpoint.
+
+**`/api/health`** stays unauthenticated. That is deliberate: it has to be
+pollable by an uptime monitor precisely when auth is broken, and it reports only
+`ok` / `fail` / `not_configured` per check, never config values or error
+details. So the endpoint itself is safe to leave open — the ask is not to
+_advertise_ it. Render the health widget only for signed-in users; no link, no
+status badge, nothing in the signed-out shell for a bot to follow. Keep it out
+of any sitemap, and `noindex` the route if one is added.
+
+**`/api/check-state?verify=yolink`** is the opposite: it is authenticated and
+must stay that way, because sensor states reveal the property's occupancy
+pattern. It also costs a YoLink round trip per sensor, so it must be a
+deliberate button press, never something that fires on page load or on a poll.
+Show `checked` / `agreed` / `drifted` with sensor names rather than raw device
+IDs, and treat `unavailable` and `deadlineExceeded` as distinct from drift —
+the first two mean we could not ask, not that anything disagrees.
+
+Worth showing alongside: circuit state per provider, which "Service outage
+auto-disable" below also wants.
+
 ### HVAC state tracking in Redis
 
 Persist HVAC on/off state from `hvac-event` handler to avoid scheduling redundant turn-off timers.
@@ -63,6 +88,93 @@ Then:
   sender in `src/utils/email.ts`.
 - With `shutoff_enabled` now recorded, the same query answers the question that
   justifies the project: wasted runtime with shutoff on versus off.
+
+### Measure the savings while the shutoff applets are still disabled
+
+The dry run is a natural experiment, and it expires. With the IFTTT shutoff
+applets disabled, units keep running past the point where they would have been
+shut off — so the wasted runtime the system exists to prevent is **directly
+observable** rather than inferred. Once the applets are enabled the waste stops
+happening, and with it the ability to measure what it was worth.
+
+The measurement is the intersection described under "Energy correlation
+dashboard": runtime that overlaps an exposure window, restricted to the portion
+**past the configured delay**, since everything before it is intended behaviour.
+`hvac_commands_v2` marks where each shutoff would have fired.
+
+Worth capturing enough of this window to compare against February onwards. It
+does not need the dashboard built first — a query and a note of the result is
+enough to preserve the observation.
+
+**Decide the question before picking a metric.** "How much does this save" is
+four questions whose confidence degrades sharply:
+
+1. How much wasted runtime occurs — measurable from data already collected.
+2. What that runtime would have cost — needs a power model per unit, so it is
+   only as good as the duty-cycle assumption.
+3. What the system nets — needs a counterfactual and an allowance for load
+   deferred to recovery rather than eliminated.
+4. Whether the utility bill shows it — needs weather and occupancy controls,
+   and the effect may be smaller than either confounder.
+
+They are not stages of one calculation; they are separate claims with separate
+evidence. Worth settling which one is being made, and stopping at the last one
+the data actually supports, rather than quoting a figure from (4) that only (1)
+underwrites.
+
+Three things that will make the number wrong if ignored:
+
+- **Nameplate wattage is a maximum, not an average.** Inverter minisplits
+  modulate, often running far below rated draw once a room is near setpoint.
+  Multiplying rated watts by wasted hours can overstate by a factor of two or
+  more. Either measure actual draw, or state the duty-cycle assumption next to
+  the number.
+- **Avoided runtime is not all avoided energy.** Shutting a unit off with a
+  door open defers cooling load; when the door closes, the unit works harder to
+  recover. Some of the "saving" is deferred rather than eliminated. The gross
+  figure is still worth having — it just is not the net.
+- **Exposure alone is not waste.** Only exposure while the unit is actually
+  running costs anything, which is why the intersection matters and why this
+  depends on `hvac_state_events_v2` continuing to arrive. Those events come
+  through IFTTT too, so confirm the state-reporting applets are enabled even
+  while the shutoff ones are not.
+
+### Verify the shutoff actually happened
+
+IFTTT's webhook endpoint returns 200 whether an applet is listening or not, so
+a successful trigger says nothing about whether the HVAC unit changed state. In
+September 2026, 72 turn-offs recorded `outcome: ok` against IFTTT while every
+applet was deliberately disabled and no unit moved. `provider_events_v2` looked
+perfectly healthy throughout.
+
+There is no way to ask IFTTT directly — no public API exposes applet status to
+an end user; the Platform API is for companies building IFTTT services, and
+applet management is UI-only. So the only honest signal is the effect:
+
+```
+hvac_commands_v2      action='turned_off'  @ T
+hvac_state_events_v2  event='off'          @ T + δ   ← did this follow?
+```
+
+A turn-off with no corresponding state change within a couple of minutes is a
+failed shutoff, whatever IFTTT reported. Run against the September data it would
+have been 0 for 72.
+
+One caveat to design around: HVAC state also arrives through IFTTT, so a silent
+result means the chain is broken but not which link. It cannot separate "the
+turn-off applet is disabled" from "the state-reporting applet is disabled".
+
+Two weaker signals worth considering alongside, neither sufficient alone:
+
+- **Silence detection.** A sensor that has not reported in N hours while others
+  have. Costs nothing — the data is already in `sensor_events_v2` — but a
+  uniformly dead IFTTT looks the same as a quiet house.
+- **A loopback applet.** A dedicated `hvac_guardian_ping` webhook whose action
+  posts back to us, proving the IFTTT path is alive. Tests the round trip
+  without touching HVAC, but proves only that _that_ applet is enabled.
+
+Belongs in the authenticated diagnostics, not `/api/health`: it needs real
+queries, and it is per-tenant.
 
 ### Service outage auto-disable
 
@@ -218,6 +330,30 @@ Upload historical energy data (CSV with `date` and `kwh` columns) to track consu
 - Period-over-period comparison (same month, different years)
 - Estimated savings: compare energy during HVAC-guardian-active periods vs baseline
 - Cooling degree days (CDD) normalization for fair year-over-year comparison
+
+**Why the naive comparison will not work:**
+
+Whole-condo kWh is dominated by outdoor temperature and by whether anyone is
+staying there. Both swamp the effect being measured, so a before/after average
+is close to meaningless on its own.
+
+- **Normalize by cooling degree days before comparing anything.** A warm week
+  with the system on will out-consume a mild week with it off, and say nothing.
+- **Occupancy is a second confounder.** An empty condo uses little regardless.
+  The sensor data already indicates occupancy — days with no sensor events at
+  all are almost certainly empty — so it can be used as a covariate rather than
+  guessed at.
+- **Prefer matched days over period averages.** Comparing days with similar CDD
+  and similar occupancy, across the dry-run and live periods, is more honest
+  than two monthly means.
+- **Expect the effect to be small relative to the noise.** The system saves
+  runtime on doors left open, which is a fraction of total HVAC load, which is
+  itself a fraction of the bill. A few weeks of live data may not be enough to
+  separate it from weather variation — which is a finding worth stating plainly
+  rather than reporting a number the data cannot support.
+
+Utility CSVs and the sensor data both reveal when the property is occupied, so
+neither belongs in this public repository.
 
 ### Web configuration UI
 
