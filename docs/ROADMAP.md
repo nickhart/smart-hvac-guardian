@@ -106,6 +106,22 @@ Worth capturing enough of this window to compare against February onwards. It
 does not need the dashboard built first — a query and a note of the result is
 enough to preserve the observation.
 
+**Decide the question before picking a metric.** "How much does this save" is
+four questions whose confidence degrades sharply:
+
+1. How much wasted runtime occurs — measurable from data already collected.
+2. What that runtime would have cost — needs a power model per unit, so it is
+   only as good as the duty-cycle assumption.
+3. What the system nets — needs a counterfactual and an allowance for load
+   deferred to recovery rather than eliminated.
+4. Whether the utility bill shows it — needs weather and occupancy controls,
+   and the effect may be smaller than either confounder.
+
+They are not stages of one calculation; they are separate claims with separate
+evidence. Worth settling which one is being made, and stopping at the last one
+the data actually supports, rather than quoting a figure from (4) that only (1)
+underwrites.
+
 Three things that will make the number wrong if ignored:
 
 - **Nameplate wattage is a maximum, not an average.** Inverter minisplits
