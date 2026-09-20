@@ -101,7 +101,7 @@ describe("shadow mode never actuates the HVAC", () => {
     const deps = createDeps(true);
     await handleHvacTurnOff(makeRequest(payload), deps);
 
-    expect(deps.hvac.turnOff).toHaveBeenCalledWith("turn_off_ac_living");
+    expect(deps.hvac.turnOff).toHaveBeenCalledWith("turn_off_ac_living", expect.any(String));
     expect(deps.analytics.trackHvacCommand).toHaveBeenCalledWith(
       expect.objectContaining({ action: "turned_off", shutoffEnabled: true }),
     );

@@ -26,7 +26,7 @@ export class CieloIFTTTProvider implements HVACProvider {
     this.logger = options?.logger;
   }
 
-  async turnOff(iftttEvent: string): Promise<void> {
+  async turnOff(iftttEvent: string, requestId: string): Promise<void> {
     const started = Date.now();
 
     const run = async () => {
@@ -41,13 +41,14 @@ export class CieloIFTTTProvider implements HVACProvider {
 
     try {
       await run();
-      await this.track("ok", iftttEvent, started);
+      await this.track("ok", iftttEvent, started, requestId);
     } catch (error) {
       const outcome = error instanceof CircuitOpenError ? "skipped_circuit_open" : "failed";
       await this.track(
         outcome,
         iftttEvent,
         started,
+        requestId,
         error instanceof Error ? error.message : String(error),
         error instanceof TerminalProviderError,
       );
@@ -59,6 +60,7 @@ export class CieloIFTTTProvider implements HVACProvider {
     outcome: "ok" | "failed" | "skipped_circuit_open",
     iftttEvent: string,
     started: number,
+    requestId: string,
     errorMessage?: string,
     terminal?: boolean,
   ): Promise<void> {
@@ -70,6 +72,7 @@ export class CieloIFTTTProvider implements HVACProvider {
       durationMs: Date.now() - started,
       errorMessage,
       terminal,
+      requestId,
     });
   }
 }

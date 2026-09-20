@@ -74,7 +74,7 @@ describe("CieloIFTTTProvider", () => {
     const mockClient = { trigger: vi.fn().mockResolvedValue(undefined) } as unknown as IFTTTClient;
     const provider = new CieloIFTTTProvider(mockClient);
 
-    await provider.turnOff("turn_off_ac");
+    await provider.turnOff("turn_off_ac", "req1");
     expect(mockClient.trigger).toHaveBeenCalledWith("turn_off_ac");
   });
 });
@@ -140,7 +140,7 @@ describe("CieloIFTTTProvider circuit breaking", () => {
       logger: mockLogger,
     });
 
-    await expect(provider.turnOff("turn_off_ac")).rejects.toBeInstanceOf(CircuitOpenError);
+    await expect(provider.turnOff("turn_off_ac", "req1")).rejects.toBeInstanceOf(CircuitOpenError);
     expect(mockClient.trigger).not.toHaveBeenCalled();
     expect(analytics.trackProviderEvent).toHaveBeenCalledWith(
       expect.objectContaining({ provider: "ifttt", outcome: "skipped_circuit_open" }),
@@ -156,7 +156,7 @@ describe("CieloIFTTTProvider circuit breaking", () => {
       logger: mockLogger,
     });
 
-    await provider.turnOff("turn_off_ac");
+    await provider.turnOff("turn_off_ac", "req1");
 
     expect(analytics.trackProviderEvent).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -164,6 +164,64 @@ describe("CieloIFTTTProvider circuit breaking", () => {
         operation: "trigger:turn_off_ac",
         outcome: "ok",
       }),
+    );
+  });
+
+  /**
+   * Every IFTTT provider event recorded before this carried an empty
+   * request_id — 72 of 72 — so provider health could not be joined to the
+   * command that caused it. "Which turn-off produced this failure?" had no
+   * answer in the data.
+   */
+  it("ties the provider event to the request that caused it", async () => {
+    const mockClient = { trigger: vi.fn().mockResolvedValue(undefined) } as unknown as IFTTTClient;
+    const analytics = createAnalytics();
+    const provider = new CieloIFTTTProvider(mockClient, {
+      circuitStore: createCircuitStore(false),
+      analytics,
+      logger: mockLogger,
+    });
+
+    await provider.turnOff("turn_off_ac", "req-abc");
+
+    expect(analytics.trackProviderEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ requestId: "req-abc", outcome: "ok" }),
+    );
+  });
+
+  it("ties a failure to its request too", async () => {
+    const mockClient = {
+      trigger: vi.fn().mockRejectedValue(new TerminalProviderError("IFTTT", "401")),
+    } as unknown as IFTTTClient;
+    const analytics = createAnalytics();
+    const provider = new CieloIFTTTProvider(mockClient, {
+      circuitStore: createCircuitStore(false),
+      analytics,
+      logger: mockLogger,
+    });
+
+    await expect(provider.turnOff("turn_off_ac", "req-xyz")).rejects.toBeInstanceOf(
+      TerminalProviderError,
+    );
+    expect(analytics.trackProviderEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ requestId: "req-xyz", outcome: "failed" }),
+    );
+  });
+
+  it("ties a skipped call to its request", async () => {
+    const mockClient = { trigger: vi.fn() } as unknown as IFTTTClient;
+    const analytics = createAnalytics();
+    const provider = new CieloIFTTTProvider(mockClient, {
+      circuitStore: createCircuitStore(true),
+      analytics,
+      logger: mockLogger,
+    });
+
+    await expect(provider.turnOff("turn_off_ac", "req-open")).rejects.toBeInstanceOf(
+      CircuitOpenError,
+    );
+    expect(analytics.trackProviderEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ requestId: "req-open", outcome: "skipped_circuit_open" }),
     );
   });
 
@@ -178,7 +236,9 @@ describe("CieloIFTTTProvider circuit breaking", () => {
       logger: mockLogger,
     });
 
-    await expect(provider.turnOff("turn_off_ac")).rejects.toBeInstanceOf(TerminalProviderError);
+    await expect(provider.turnOff("turn_off_ac", "req1")).rejects.toBeInstanceOf(
+      TerminalProviderError,
+    );
     expect(analytics.trackProviderEvent).toHaveBeenCalledWith(
       expect.objectContaining({ outcome: "failed", terminal: true }),
     );

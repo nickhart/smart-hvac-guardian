@@ -133,7 +133,7 @@ describe("hvac-turn-off handler", () => {
     expect(res.status).toBe(200);
     expect(body.action).toBe("turned_off");
     expect(body.hvacUnitId).toBe("ac_living");
-    expect(deps.hvac.turnOff).toHaveBeenCalledWith("turn_off_ac_living");
+    expect(deps.hvac.turnOff).toHaveBeenCalledWith("turn_off_ac_living", expect.any(String));
     expect(deps.stateStore.deleteTimerToken).toHaveBeenCalledWith("ac_living");
   });
 
@@ -559,7 +559,7 @@ describe("hvac-turn-off exposure verification", () => {
     const body = (await res.json()) as { action: string };
 
     expect(body.action).toBe("turned_off");
-    expect(deps.hvac.turnOff).toHaveBeenCalledWith("turn_off_ac_living");
+    expect(deps.hvac.turnOff).toHaveBeenCalledWith("turn_off_ac_living", expect.any(String));
   });
 
   /**
