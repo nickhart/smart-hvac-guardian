@@ -89,6 +89,40 @@ Then:
 - With `shutoff_enabled` now recorded, the same query answers the question that
   justifies the project: wasted runtime with shutoff on versus off.
 
+### Measure the savings while the shutoff applets are still disabled
+
+The dry run is a natural experiment, and it expires. With the IFTTT shutoff
+applets disabled, units keep running past the point where they would have been
+shut off — so the wasted runtime the system exists to prevent is **directly
+observable** rather than inferred. Once the applets are enabled the waste stops
+happening, and with it the ability to measure what it was worth.
+
+The measurement is the intersection described under "Energy correlation
+dashboard": runtime that overlaps an exposure window, restricted to the portion
+**past the configured delay**, since everything before it is intended behaviour.
+`hvac_commands_v2` marks where each shutoff would have fired.
+
+Worth capturing enough of this window to compare against February onwards. It
+does not need the dashboard built first — a query and a note of the result is
+enough to preserve the observation.
+
+Three things that will make the number wrong if ignored:
+
+- **Nameplate wattage is a maximum, not an average.** Inverter minisplits
+  modulate, often running far below rated draw once a room is near setpoint.
+  Multiplying rated watts by wasted hours can overstate by a factor of two or
+  more. Either measure actual draw, or state the duty-cycle assumption next to
+  the number.
+- **Avoided runtime is not all avoided energy.** Shutting a unit off with a
+  door open defers cooling load; when the door closes, the unit works harder to
+  recover. Some of the "saving" is deferred rather than eliminated. The gross
+  figure is still worth having — it just is not the net.
+- **Exposure alone is not waste.** Only exposure while the unit is actually
+  running costs anything, which is why the intersection matters and why this
+  depends on `hvac_state_events_v2` continuing to arrive. Those events come
+  through IFTTT too, so confirm the state-reporting applets are enabled even
+  while the shutoff ones are not.
+
 ### Verify the shutoff actually happened
 
 IFTTT's webhook endpoint returns 200 whether an applet is listening or not, so
@@ -280,6 +314,30 @@ Upload historical energy data (CSV with `date` and `kwh` columns) to track consu
 - Period-over-period comparison (same month, different years)
 - Estimated savings: compare energy during HVAC-guardian-active periods vs baseline
 - Cooling degree days (CDD) normalization for fair year-over-year comparison
+
+**Why the naive comparison will not work:**
+
+Whole-condo kWh is dominated by outdoor temperature and by whether anyone is
+staying there. Both swamp the effect being measured, so a before/after average
+is close to meaningless on its own.
+
+- **Normalize by cooling degree days before comparing anything.** A warm week
+  with the system on will out-consume a mild week with it off, and say nothing.
+- **Occupancy is a second confounder.** An empty condo uses little regardless.
+  The sensor data already indicates occupancy — days with no sensor events at
+  all are almost certainly empty — so it can be used as a covariate rather than
+  guessed at.
+- **Prefer matched days over period averages.** Comparing days with similar CDD
+  and similar occupancy, across the dry-run and live periods, is more honest
+  than two monthly means.
+- **Expect the effect to be small relative to the noise.** The system saves
+  runtime on doors left open, which is a fraction of total HVAC load, which is
+  itself a fraction of the bill. A few weeks of live data may not be enough to
+  separate it from weather variation — which is a finding worth stating plainly
+  rather than reporting a number the data cannot support.
+
+Utility CSVs and the sensor data both reveal when the property is occupied, so
+neither belongs in this public repository.
 
 ### Web configuration UI
 
