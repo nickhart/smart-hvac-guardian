@@ -91,22 +91,58 @@ describe("RedisStateStore", () => {
   });
 
   describe("getSystemEnabled", () => {
-    it("returns true when key is not set", async () => {
+    /**
+     * Nothing seeds `system:enabled` — only the toggle endpoint writes it — so
+     * an absent key used to mean enabled. A Redis instance replaced, flushed,
+     * migrated, or a changed tenant prefix would silently switch the system on
+     * and start shutting off guests' HVAC, logging nothing, because as far as
+     * the code was concerned nothing had happened.
+     *
+     * Unknown state must never mean "actuate". This matches the safe default
+     * used for sensors, where an unknown reading is treated as closed so the
+     * AC stays on.
+     */
+    it("defaults to disabled when the key is not set", async () => {
       mockGet.mockResolvedValueOnce(null);
-      const result = await store.getSystemEnabled();
-      expect(result).toBe(true);
+      expect(await store.getSystemEnabled()).toBe(false);
+    });
+
+    it("defaults to disabled on a value it does not recognise", async () => {
+      mockGet.mockResolvedValueOnce("yes");
+      expect(await store.getSystemEnabled()).toBe(false);
     });
 
     it("returns true when value is 'true'", async () => {
       mockGet.mockResolvedValueOnce("true");
-      const result = await store.getSystemEnabled();
-      expect(result).toBe(true);
+      expect(await store.getSystemEnabled()).toBe(true);
+    });
+
+    // Upstash deserialises stored values, so the booleans arrive unquoted.
+    it("handles a deserialised boolean either way", async () => {
+      mockGet.mockResolvedValueOnce(true);
+      expect(await store.getSystemEnabled()).toBe(true);
+      mockGet.mockResolvedValueOnce(false);
+      expect(await store.getSystemEnabled()).toBe(false);
     });
 
     it("returns false when value is 'false'", async () => {
       mockGet.mockResolvedValueOnce("false");
-      const result = await store.getSystemEnabled();
-      expect(result).toBe(false);
+      expect(await store.getSystemEnabled()).toBe(false);
+    });
+
+    // A system off because nobody turned it on looks identical to one off
+    // because someone turned it off. Only the log tells them apart.
+    it("logs when it falls back to the safe default", async () => {
+      const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
+      const logged = new RedisStateStore({ url: "https://x", token: "t", logger });
+      mockGet.mockResolvedValueOnce(null);
+
+      await logged.getSystemEnabled();
+
+      expect(logger.warn).toHaveBeenCalledWith(
+        expect.stringContaining("defaulting to disabled"),
+        expect.anything(),
+      );
     });
   });
 

@@ -1,20 +1,24 @@
 import { Redis } from "@upstash/redis";
 import type { StateStore } from "../types.js";
 import type { SensorState } from "../../zone-graph/evaluate.js";
+import type { Logger } from "../../utils/logger.js";
 
 interface RedisStateStoreOptions {
   url: string;
   token: string;
   tenantId?: string;
+  logger?: Logger;
 }
 
 export class RedisStateStore implements StateStore {
   private readonly redis: Redis;
   private readonly tenantPrefix: string;
+  private readonly logger?: Logger;
 
   constructor(options: RedisStateStoreOptions) {
     this.redis = new Redis({ url: options.url, token: options.token });
     this.tenantPrefix = options.tenantId ? `${options.tenantId}:` : "";
+    this.logger = options.logger;
   }
 
   /** Prefix a state key with tenantId. Auth keys (magic/session) stay global. */
@@ -55,10 +59,33 @@ export class RedisStateStore implements StateStore {
     await this.redis.del(this.key(`timer:${hvacUnitId}`));
   }
 
+  /**
+   * Defaults to **disabled** when the key is absent or unreadable.
+   *
+   * `system:enabled` is written only by the toggle endpoint — nothing seeds it
+   * — so an absent key used to mean enabled. A Redis instance replaced,
+   * flushed, migrated, or a changed tenant prefix would then silently switch
+   * the system on and start shutting off guests' HVAC, with nothing logged,
+   * because from the code's point of view nothing had happened.
+   *
+   * This matches the safe default the rest of the system already uses: an
+   * unknown sensor is treated as closed so the AC stays on. Unknown state must
+   * never mean "actuate".
+   */
   async getSystemEnabled(): Promise<boolean> {
     const val = await this.redis.get(this.key("system:enabled"));
+
+    if (val === true || val === "true") return true;
     if (val === false || val === "false") return false;
-    return true;
+
+    // Absent, or a value we do not recognise. Say so — a system that is off
+    // because nobody turned it on looks identical to one that is off because
+    // someone turned it off, and only the log distinguishes them.
+    this.logger?.warn("system:enabled is unset or unrecognised — defaulting to disabled", {
+      key: this.key("system:enabled"),
+      value: val === null || val === undefined ? "absent" : typeof val,
+    });
+    return false;
   }
 
   async setSystemEnabled(enabled: boolean): Promise<void> {

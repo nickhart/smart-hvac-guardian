@@ -70,6 +70,7 @@ export function createDependencies(
     url: secrets.upstashRedisUrl,
     token: secrets.upstashRedisToken,
     tenantId: options?.tenantId,
+    logger,
   });
 
   return {
