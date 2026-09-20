@@ -89,6 +89,43 @@ Then:
 - With `shutoff_enabled` now recorded, the same query answers the question that
   justifies the project: wasted runtime with shutoff on versus off.
 
+### Verify the shutoff actually happened
+
+IFTTT's webhook endpoint returns 200 whether an applet is listening or not, so
+a successful trigger says nothing about whether the HVAC unit changed state. In
+September 2026, 72 turn-offs recorded `outcome: ok` against IFTTT while every
+applet was deliberately disabled and no unit moved. `provider_events_v2` looked
+perfectly healthy throughout.
+
+There is no way to ask IFTTT directly — no public API exposes applet status to
+an end user; the Platform API is for companies building IFTTT services, and
+applet management is UI-only. So the only honest signal is the effect:
+
+```
+hvac_commands_v2      action='turned_off'  @ T
+hvac_state_events_v2  event='off'          @ T + δ   ← did this follow?
+```
+
+A turn-off with no corresponding state change within a couple of minutes is a
+failed shutoff, whatever IFTTT reported. Run against the September data it would
+have been 0 for 72.
+
+One caveat to design around: HVAC state also arrives through IFTTT, so a silent
+result means the chain is broken but not which link. It cannot separate "the
+turn-off applet is disabled" from "the state-reporting applet is disabled".
+
+Two weaker signals worth considering alongside, neither sufficient alone:
+
+- **Silence detection.** A sensor that has not reported in N hours while others
+  have. Costs nothing — the data is already in `sensor_events_v2` — but a
+  uniformly dead IFTTT looks the same as a quiet house.
+- **A loopback applet.** A dedicated `hvac_guardian_ping` webhook whose action
+  posts back to us, proving the IFTTT path is alive. Tests the round trip
+  without touching HVAC, but proves only that _that_ applet is enabled.
+
+Belongs in the authenticated diagnostics, not `/api/health`: it needs real
+queries, and it is per-tenant.
+
 ### Service outage auto-disable
 
 If IFTTT, Cielo, or YoLink is unreachable, temporarily disable AC shutoff to avoid locking guests out of AC. Re-enable automatically when services recover.
