@@ -10,6 +10,7 @@ SCHEMA >
     action String `json:$.action`,
     trigger_source String `json:$.trigger_source`,
     delay_seconds Nullable(Int32) `json:$.delay_seconds`,
+    late_by_seconds Nullable(Int32) `json:$.late_by_seconds`,
     ifttt_event Nullable(String) `json:$.ifttt_event`,
     shutoff_enabled UInt8 `json:$.shutoff_enabled`
 

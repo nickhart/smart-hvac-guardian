@@ -23,6 +23,8 @@ import {
 const TurnOffPayload = z.object({
   hvacUnitId: z.string().min(1),
   cancellationToken: z.string().min(1),
+  /** Optional: messages scheduled before this field existed will not carry it. */
+  expectedAt: z.string().datetime().optional(),
   tenantId: z.string().optional(),
 });
 
@@ -51,7 +53,7 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
       return errorResponse("Invalid payload", 400);
     }
 
-    const { hvacUnitId, cancellationToken, tenantId } = parsed.data;
+    const { hvacUnitId, cancellationToken, expectedAt, tenantId } = parsed.data;
     logger.info("Received turn-off request", {
       requestId,
       hvacUnitId,
@@ -129,6 +131,14 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
       const { exposedUnits } = evaluateZoneGraph(d.config.zones, sensorStates);
 
       if (exposedUnits.has(hvacUnitId)) {
+        // How far past its intended fire time this message arrived. A few
+        // seconds means TIMER_TOKEN_BUFFER_SECONDS is slightly too tight;
+        // minutes means delivery is being delayed and the buffer is not the
+        // problem. Absent on messages scheduled before the field existed.
+        const lateBySeconds = expectedAt
+          ? Math.max(0, Math.round((Date.now() - new Date(expectedAt).getTime()) / 1000))
+          : undefined;
+
         const delaySeconds = await getDelayForUnit(hvacUnitId, d.stateStore, d.config);
         const token = crypto.randomUUID();
 
@@ -143,6 +153,7 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
           requestId,
           hvacUnitId,
           delaySeconds,
+          lateBySeconds,
         });
         await d.analytics.trackHvacCommand({
           requestId,
@@ -151,6 +162,7 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
           action: "rearmed",
           triggerSource: "sensor_open",
           delaySeconds,
+          lateBySeconds,
           shutoffEnabled: systemEnabled,
         });
 

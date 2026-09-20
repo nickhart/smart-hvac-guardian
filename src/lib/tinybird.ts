@@ -74,6 +74,7 @@ export const hvacCommands = defineDatasource("hvac_commands_v2", {
     action: t.string(),
     trigger_source: t.string(),
     delay_seconds: t.int32().nullable(),
+    late_by_seconds: t.int32().nullable(),
     ifttt_event: t.string().nullable(),
     shutoff_enabled: t.uint8(),
   },

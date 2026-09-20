@@ -55,6 +55,12 @@ export interface AnalyticsProvider {
     action: "turned_off" | "cancelled" | "scheduled" | "aborted_stale_state" | "rearmed";
     triggerSource: "sensor_open" | "hvac_on";
     delaySeconds?: number;
+    /**
+     * How far past its intended fire time a message arrived. Only meaningful on
+     * `rearmed`, where it says whether the token buffer is slightly too tight
+     * or delivery is badly delayed — two problems with different remedies.
+     */
+    lateBySeconds?: number;
     iftttEvent?: string;
     /** False when the decision was made in shadow mode and not executed. */
     shutoffEnabled: boolean;

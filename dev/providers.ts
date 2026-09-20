@@ -250,7 +250,14 @@ export class LocalScheduler implements SchedulerProvider {
             "Content-Type": "application/json",
             "upstash-signature": "dev-mode-signature",
           },
-          body: JSON.stringify({ hvacUnitId, cancellationToken }),
+          // Carry the intended fire time like QStashScheduler does, so the
+          // handler's lateness maths works here too rather than only in
+          // production.
+          body: JSON.stringify({
+            hvacUnitId,
+            cancellationToken,
+            expectedAt: new Date(firesAt).toISOString(),
+          }),
         });
       } catch (err) {
         console.error(`[LocalScheduler] Failed to POST hvac-turn-off for ${hvacUnitId}:`, err);

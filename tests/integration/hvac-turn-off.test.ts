@@ -439,6 +439,56 @@ describe("hvac-turn-off re-arms a lost timer", () => {
     );
   });
 
+  /**
+   * Frequency alone does not say what to do about it. A message a few seconds
+   * past its token's TTL means the buffer is slightly too tight; one minutes
+   * late means delivery is being delayed and the buffer is not the problem.
+   * Without the intended fire time those look identical.
+   */
+  it("records how late the message was", async () => {
+    const deps = depsWithToken(null, "open");
+    const expectedAt = new Date(Date.now() - 45_000).toISOString();
+
+    await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "expired-token", expectedAt }),
+      deps,
+    );
+
+    const call = vi.mocked(deps.analytics.trackHvacCommand).mock.calls[0][0];
+    expect(call.action).toBe("rearmed");
+    expect(call.lateBySeconds).toBeGreaterThanOrEqual(44);
+    expect(call.lateBySeconds).toBeLessThanOrEqual(47);
+  });
+
+  // Messages scheduled before the field existed are still in flight, and a
+  // missing value must not be reported as "zero seconds late".
+  it("leaves lateness unset when the message predates the field", async () => {
+    const deps = depsWithToken(null, "open");
+
+    await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "expired-token" }),
+      deps,
+    );
+
+    const call = vi.mocked(deps.analytics.trackHvacCommand).mock.calls[0][0];
+    expect(call.lateBySeconds).toBeUndefined();
+  });
+
+  // Clock skew between the scheduler and the handler could otherwise produce a
+  // negative "lateness", which is not a thing.
+  it("never reports negative lateness", async () => {
+    const deps = depsWithToken(null, "open");
+    const expectedAt = new Date(Date.now() + 30_000).toISOString();
+
+    await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "expired-token", expectedAt }),
+      deps,
+    );
+
+    const call = vi.mocked(deps.analytics.trackHvacCommand).mock.calls[0][0];
+    expect(call.lateBySeconds).toBe(0);
+  });
+
   it("re-arms without calling the devices", async () => {
     const deps = depsWithToken(null, "open");
 

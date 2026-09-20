@@ -192,9 +192,26 @@ The three no-shutoff outcomes mean different things:
 | `aborted_stale_state` | the devices said the exposure was already over     |
 | `rearmed`             | the timer was lost; the door is still open         |
 
-A steady trickle of `rearmed` is the system healing itself. A lot of it means
-messages are arriving late, and the timer token TTL
-(`TIMER_TOKEN_BUFFER_SECONDS`) is worth revisiting.
+A steady trickle of `rearmed` is the system healing itself. How to act on more
+than a trickle depends on `late_by_seconds`, the gap between when a message was
+meant to fire and when it arrived:
+
+```sql
+SELECT
+    quantile(0.5)(late_by_seconds) AS p50,
+    quantile(0.9)(late_by_seconds) AS p90,
+    max(late_by_seconds) AS worst
+FROM hvac_commands_v2
+WHERE action = 'rearmed' AND late_by_seconds IS NOT NULL
+```
+
+Single-digit seconds means `TIMER_TOKEN_BUFFER_SECONDS` is slightly too tight
+and nudging it removes the churn. Minutes means delivery is being delayed and
+the buffer is not the problem. Without this the two are indistinguishable, and
+only the second one warrants an investigation.
+
+`late_by_seconds` is null on messages scheduled before the field existed, and on
+any action other than `rearmed`.
 
 Re-arming never actuates — it restarts the delay, so the guest gets a full
 fresh window rather than an immediate cut-off.
