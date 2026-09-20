@@ -242,7 +242,7 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
         action: "turned_off",
         triggerSource: "sensor_open",
         iftttEvent: unitConfig.iftttEvent,
-        shutoffEnabled: false,
+        shutoffEnabled: systemEnabled,
       });
       return jsonResponse({
         status: "ok",
@@ -258,7 +258,7 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
       iftttEvent: unitConfig.iftttEvent,
     });
 
-    await d.hvac.turnOff(unitConfig.iftttEvent);
+    await d.hvac.turnOff(unitConfig.iftttEvent, requestId);
     await d.stateStore.deleteTimerToken(hvacUnitId);
 
     logger.info("HVAC unit turned off successfully", { requestId, hvacUnitId });
@@ -270,7 +270,7 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
       action: "turned_off",
       triggerSource: "sensor_open",
       iftttEvent: unitConfig.iftttEvent,
-      shutoffEnabled: true,
+      shutoffEnabled: systemEnabled,
     });
 
     return jsonResponse({

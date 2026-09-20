@@ -7,7 +7,13 @@ export interface SensorProvider {
 }
 
 export interface HVACProvider {
-  turnOff(iftttEvent: string): Promise<void>;
+  /**
+   * `requestId` ties the provider event this records back to the command that
+   * caused it. Required rather than optional: every caller has one, and without
+   * it provider_events_v2 cannot be joined to hvac_commands_v2 at all — which
+   * was the case for every IFTTT event recorded before this was added.
+   */
+  turnOff(iftttEvent: string, requestId: string): Promise<void>;
 }
 
 export interface SchedulerProvider {

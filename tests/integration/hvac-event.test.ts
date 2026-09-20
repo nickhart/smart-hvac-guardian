@@ -110,6 +110,54 @@ describe("hvac-event handler", () => {
     expect(body.action).toBe("none");
   });
 
+  /**
+   * The `off` branch used to return before the zone graph was evaluated and
+   * report wasExposed: false without ever checking. A unit switching off while
+   * a door stood open — which is exactly what a successful shutoff looks like
+   * — was recorded as unexposed, corrupting the one field you would use to ask
+   * whether the shutoff took effect.
+   */
+  it("records the real exposure on an off event, not a hardcoded false", async () => {
+    const deps = createMockDeps({
+      stateStore: {
+        ...createMockDeps().stateStore,
+        getAllSensorStates: vi.fn().mockResolvedValue(new Map([["front_door", "open"]])),
+      },
+    });
+
+    await handleHvacEvent(makeRequest({ hvacId: "ac_living", event: "off" }), deps);
+
+    expect(deps.analytics.trackHvacStateEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ event: "off", wasExposed: true }),
+    );
+  });
+
+  it("records an off event as unexposed when the doors really are shut", async () => {
+    const deps = createMockDeps({
+      stateStore: {
+        ...createMockDeps().stateStore,
+        getAllSensorStates: vi.fn().mockResolvedValue(new Map([["front_door", "closed"]])),
+      },
+    });
+
+    await handleHvacEvent(makeRequest({ hvacId: "ac_living", event: "off" }), deps);
+
+    expect(deps.analytics.trackHvacStateEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ event: "off", wasExposed: false }),
+    );
+  });
+
+  // An unknown unit should not leave state-event rows behind for something
+  // that does not exist.
+  it("rejects an unknown unit before recording anything", async () => {
+    const deps = createMockDeps();
+
+    const res = await handleHvacEvent(makeRequest({ hvacId: "ac_ghost", event: "off" }), deps);
+
+    expect(res.status).toBe(404);
+    expect(deps.analytics.trackHvacStateEvent).not.toHaveBeenCalled();
+  });
+
   it("returns no action when HVAC unit is not in exposed zone", async () => {
     const deps = createMockDeps(); // all sensors closed → no exposure
     const res = await handleHvacEvent(makeRequest({ hvacId: "ac_living", event: "on" }), deps);

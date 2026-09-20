@@ -2,6 +2,26 @@
 
 Current state of implemented features and known gaps.
 
+## Operating mode
+
+**Dry run since 2026-09-20.** The app is enabled and makes real decisions, but
+the IFTTT shutoff applets are disabled, so no HVAC unit actually changes state.
+
+This matters when reading the data, because nothing in it distinguishes a dry
+run from real operation — `shutoff_enabled = 1` in both. Split on time:
+
+| period               | `shutoff_enabled` | meaning                                                        |
+| -------------------- | ----------------- | -------------------------------------------------------------- |
+| through 2026-09-18   | mixed             | discard; `cancelled` rows also mislabelled before 2026-09-19   |
+| 2026-09-19           | `0`               | shadow mode — decided, no IFTTT call                           |
+| 2026-09-20 onwards   | `1`               | **dry run** — IFTTT called, applets disabled, nothing actuates |
+| when applets enabled | `1`               | real operation — record the date here                          |
+
+An IFTTT trigger returns 200 whether an applet is listening or not, so
+`provider_events_v2` reads healthy throughout the dry run. That is expected, not
+evidence the shutoffs work — see "Verify the shutoff actually happened" in the
+roadmap.
+
 ## Completed
 
 ### Zone-aware AC control

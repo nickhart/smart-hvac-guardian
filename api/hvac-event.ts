@@ -9,6 +9,7 @@ import { resolveTenantFromWebhook } from "../src/middleware/tenant.js";
 import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
 import { evaluateZoneGraph } from "../src/zone-graph/index.js";
+import { readEffectiveSensorStates } from "../src/handlers/verify-exposure.js";
 import { getDelayForUnit, TIMER_TOKEN_BUFFER_SECONDS } from "../src/utils/delay.js";
 
 const HvacEventPayload = z.object({
@@ -57,57 +58,42 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
       }
     }
 
-    if (event === "off") {
-      await d.analytics.trackHvacStateEvent({
-        requestId,
-        hvacId,
-        event: "off",
-        wasExposed: false,
-        turnoffScheduled: false,
-        shutoffEnabled: await d.stateStore.getSystemEnabled(),
-      });
-      return jsonResponse({ status: "ok", action: "none" });
-    }
-
-    // Check if system is enabled. When disabled the evaluation still runs and
-    // timers are still scheduled — "shadow mode". Only the turn-off handler
-    // refuses to call IFTTT, so nothing reaches the HVAC while every decision
-    // is still recorded.
-    const systemEnabled = await d.stateStore.getSystemEnabled();
-    if (!systemEnabled) {
-      logger.info("System disabled — evaluating in shadow mode", { requestId });
-    }
-
+    // Validate the unit before recording anything about it, so an unknown id
+    // cannot leave state-event rows behind for a unit that does not exist.
     if (!(hvacId in d.config.hvacUnits)) {
       logger.warn("Unknown HVAC unit ID", { requestId, hvacId });
       return errorResponse("Unknown HVAC unit", 404);
     }
 
-    // Read all sensor states from Redis, applying defaults for sensors without state
-    const allSensorIds = Object.keys(d.config.sensorDelays);
-    const sensorStates = await d.stateStore.getAllSensorStates(allSensorIds);
-    for (const [id, defaultState] of Object.entries(d.config.sensorDefaults)) {
-      if (!sensorStates.has(id)) {
-        sensorStates.set(id, defaultState);
-      }
+    // When disabled the evaluation still runs and timers are still scheduled —
+    // "shadow mode". Only the turn-off handler refuses to call IFTTT, so
+    // nothing reaches the HVAC while every decision is still recorded.
+    const systemEnabled = await d.stateStore.getSystemEnabled();
+    if (!systemEnabled) {
+      logger.info("System disabled — evaluating in shadow mode", { requestId });
     }
 
-    // Treat offline/unknown sensors as "closed" (safe default: AC stays on)
-    const offlineSensorIds: string[] = [];
-    for (const id of allSensorIds) {
-      if (!sensorStates.has(id)) {
-        sensorStates.set(id, "closed");
-        offlineSensorIds.push(id);
-      }
-    }
-    if (offlineSensorIds.length > 0) {
-      logger.warn("Sensors offline, defaulting to closed", { requestId, offlineSensorIds });
-    }
-
-    // Evaluate zone graph
+    // Evaluated before the `off` branch, not after. That branch used to report
+    // wasExposed: false without ever checking — so a unit that switched off
+    // while a door stood open was recorded as unexposed. That is precisely the
+    // field you would use to ask whether a shutoff took effect.
+    const sensorStates = await readEffectiveSensorStates(d.config, d.stateStore);
     const { exposedUnits } = evaluateZoneGraph(d.config.zones, sensorStates);
+    const wasExposed = exposedUnits.has(hvacId);
 
-    if (!exposedUnits.has(hvacId)) {
+    if (event === "off") {
+      await d.analytics.trackHvacStateEvent({
+        requestId,
+        hvacId,
+        event: "off",
+        wasExposed,
+        turnoffScheduled: false,
+        shutoffEnabled: systemEnabled,
+      });
+      return jsonResponse({ status: "ok", action: "none" });
+    }
+
+    if (!wasExposed) {
       logger.info("HVAC unit is not in an exposed zone, no action needed", {
         requestId,
         hvacId,
