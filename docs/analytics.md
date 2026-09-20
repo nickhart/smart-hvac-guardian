@@ -174,6 +174,31 @@ disable every shutoff in the system.
 A correction is written back to Redis, so a dropped webhook heals instead of
 persisting until the next event.
 
+### `rearmed`
+
+A turn-off whose token had expired, for a unit still exposed. Instead of
+dropping the message — which left the door unwatched until some later sensor
+event happened to arrive — a fresh timer is scheduled and the delay restarts.
+
+```sql
+SELECT action, count() FROM hvac_commands_v2 GROUP BY action
+```
+
+The three no-shutoff outcomes mean different things:
+
+| action                | meaning                                            |
+| --------------------- | -------------------------------------------------- |
+| `cancelled`           | the door closed, or a newer timer is already armed |
+| `aborted_stale_state` | the devices said the exposure was already over     |
+| `rearmed`             | the timer was lost; the door is still open         |
+
+A steady trickle of `rearmed` is the system healing itself. A lot of it means
+messages are arriving late, and the timer token TTL
+(`TIMER_TOKEN_BUFFER_SECONDS`) is worth revisiting.
+
+Re-arming never actuates — it restarts the delay, so the guest gets a full
+fresh window rather than an immediate cut-off.
+
 ### Scheduled timers should equal recorded commands
 
 Every scheduled timer ends in exactly one command — `turned_off`, `cancelled`,

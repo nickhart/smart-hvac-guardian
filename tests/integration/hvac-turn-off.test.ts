@@ -137,11 +137,13 @@ describe("hvac-turn-off handler", () => {
     expect(deps.stateStore.deleteTimerToken).toHaveBeenCalledWith("ac_living");
   });
 
+  // Door shut: with no token and no exposure there is nothing to re-arm, so
+  // this is a genuine cancellation.
   it("skips turn-off when token is missing (cancelled)", async () => {
     const deps = createMockDeps({
       stateStore: {
         setSensorState: vi.fn(),
-        getAllSensorStates: vi.fn().mockResolvedValue(new Map([["front_door", "open"]])),
+        getAllSensorStates: vi.fn().mockResolvedValue(new Map([["front_door", "closed"]])),
         setTimerToken: vi.fn(),
         getTimerToken: vi.fn().mockResolvedValue(null),
         deleteTimerToken: vi.fn(),
@@ -288,8 +290,10 @@ describe("hvac-turn-off records the real system state on a cancellation", () => 
     return createMockDeps({
       stateStore: {
         ...createMockDeps().stateStore,
-        // Token gone: the door closed, so the timer is cancelled.
+        // Token gone AND the door shut: nothing to re-arm, so this is a
+        // cancellation rather than a lost timer.
         getTimerToken: vi.fn().mockResolvedValue(null),
+        getAllSensorStates: vi.fn().mockResolvedValue(new Map([["front_door", "closed"]])),
         getSystemEnabled: vi.fn().mockResolvedValue(enabled),
       },
     });
@@ -321,6 +325,129 @@ describe("hvac-turn-off records the real system state on a cancellation", () => 
     expect(deps.analytics.trackHvacCommand).toHaveBeenCalledWith(
       expect.objectContaining({ action: "cancelled", shutoffEnabled: true }),
     );
+  });
+});
+
+/**
+ * A turn-off message can arrive after its token has expired — delivery lag, or
+ * a retry that outlived the TTL. Both branches used to collapse into
+ * "cancelled", so a door that was still open lost its timer entirely and stayed
+ * unwatched until some later sensor event happened to arrive. The failure left
+ * no trace, because a shutoff that never happens records nothing.
+ */
+describe("hvac-turn-off re-arms a lost timer", () => {
+  function depsWithToken(storedToken: string | null, sensorState: string) {
+    return createMockDeps({
+      sensor: { getState: vi.fn().mockResolvedValue("open") },
+      stateStore: {
+        ...createMockDeps().stateStore,
+        getTimerToken: vi.fn().mockResolvedValue(storedToken),
+        getAllSensorStates: vi.fn().mockResolvedValue(new Map([["front_door", sensorState]])),
+      },
+    });
+  }
+
+  it("schedules a fresh timer when the token is gone but the door is open", async () => {
+    const deps = depsWithToken(null, "open");
+
+    const res = await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "expired-token" }),
+      deps,
+    );
+    const body = (await res.json()) as { action: string };
+
+    expect(body.action).toBe("rearmed");
+    expect(deps.scheduler.scheduleUnitTurnOff).toHaveBeenCalledWith(
+      "ac_living",
+      expect.any(String),
+      90,
+    );
+    expect(deps.stateStore.setTimerToken).toHaveBeenCalledWith(
+      "ac_living",
+      expect.any(String),
+      150,
+    );
+  });
+
+  // Re-arming restarts the delay. It must never stand in for the shutoff it
+  // replaces — the guest gets a full fresh window, not an immediate cut-off.
+  it("does not actuate when it re-arms", async () => {
+    const deps = depsWithToken(null, "open");
+
+    await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "expired-token" }),
+      deps,
+    );
+
+    expect(deps.hvac.turnOff).not.toHaveBeenCalled();
+  });
+
+  it("issues a token different from the one that arrived", async () => {
+    const deps = depsWithToken(null, "open");
+
+    await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "expired-token" }),
+      deps,
+    );
+
+    const issued = vi.mocked(deps.stateStore.setTimerToken).mock.calls[0][1];
+    expect(issued).not.toBe("expired-token");
+  });
+
+  // The ordinary cancellation: the door closed, so there is nothing to re-arm.
+  it("cancels when the token is gone and the door is closed", async () => {
+    const deps = depsWithToken(null, "closed");
+
+    const res = await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "expired-token" }),
+      deps,
+    );
+    const body = (await res.json()) as { action: string };
+
+    expect(body.action).toBe("cancelled");
+    expect(deps.scheduler.scheduleUnitTurnOff).not.toHaveBeenCalled();
+    expect(deps.hvac.turnOff).not.toHaveBeenCalled();
+  });
+
+  /**
+   * A token that is present but different means a newer exposure is already
+   * armed. Re-arming there would stack a second timer on the same unit.
+   */
+  it("does not re-arm when a newer timer is already armed", async () => {
+    const deps = depsWithToken("newer-token", "open");
+
+    const res = await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "older-token" }),
+      deps,
+    );
+    const body = (await res.json()) as { action: string };
+
+    expect(body.action).toBe("cancelled");
+    expect(deps.scheduler.scheduleUnitTurnOff).not.toHaveBeenCalled();
+  });
+
+  it("records the re-arm so a lost timer is visible rather than silent", async () => {
+    const deps = depsWithToken(null, "open");
+
+    await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "expired-token" }),
+      deps,
+    );
+
+    expect(deps.analytics.trackHvacCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "rearmed", hvacUnitId: "ac_living", delaySeconds: 90 }),
+    );
+  });
+
+  it("re-arms without calling the devices", async () => {
+    const deps = depsWithToken(null, "open");
+
+    await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "expired-token" }),
+      deps,
+    );
+
+    expect(deps.sensor.getState).not.toHaveBeenCalled();
   });
 });
 
