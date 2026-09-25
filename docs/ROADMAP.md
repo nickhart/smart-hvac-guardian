@@ -147,6 +147,13 @@ September 2026, 72 turn-offs recorded `outcome: ok` against IFTTT while every
 applet was deliberately disabled and no unit moved. `provider_events_v2` looked
 perfectly healthy throughout.
 
+**Prerequisite, not code:** the "powered off" reporting applets do not exist and
+never have — only "powered on" was ever created. Until all four exist, this item
+cannot produce a result at all, because the signal it correlates against is
+absent. See `docs/ifttt-applets.md`. Four applets, browser job, and each needs
+verifying individually: a typo in one of four is a per-unit failure nothing else
+reports.
+
 There is no way to ask IFTTT directly — no public API exposes applet status to
 an end user; the Platform API is for companies building IFTTT services, and
 applet management is UI-only. So the only honest signal is the effect:
