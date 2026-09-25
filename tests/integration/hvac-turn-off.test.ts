@@ -170,7 +170,7 @@ describe("hvac-turn-off handler", () => {
     expect(deps.hvac.turnOff).not.toHaveBeenCalled();
   });
 
-  it("skips turn-off when token mismatches", async () => {
+  it("reports a token mismatch as superseded, not cancelled", async () => {
     const deps = createMockDeps({
       stateStore: {
         setSensorState: vi.fn(),
@@ -197,7 +197,7 @@ describe("hvac-turn-off handler", () => {
     const body = (await res.json()) as Record<string, unknown>;
 
     expect(res.status).toBe(200);
-    expect(body.action).toBe("cancelled");
+    expect(body.action).toBe("superseded");
     expect(deps.hvac.turnOff).not.toHaveBeenCalled();
   });
 
@@ -335,6 +335,77 @@ describe("hvac-turn-off records the real system state on a cancellation", () => 
  * unwatched until some later sensor event happened to arrive. The failure left
  * no trace, because a shutoff that never happens records nothing.
  */
+/**
+ * Two outcomes that both mean "no shutoff" but answer different questions.
+ *
+ * A door closing inside the delay is the timer working, and the rate of it is a
+ * guest-behaviour signal. A door reopening while a timer is in flight replaces
+ * that timer, which is churn and says nothing about guests. They shared the
+ * `cancelled` label for the first week of the dry run, where churn was 39% of
+ * schedules and made the cancellation rate unreadable.
+ */
+describe("hvac-turn-off separates a replaced timer from a closed door", () => {
+  it("records a door that closed as cancelled", async () => {
+    const deps = createMockDeps({
+      stateStore: {
+        ...createMockDeps().stateStore,
+        getTimerToken: vi.fn().mockResolvedValue(null),
+        getAllSensorStates: vi.fn().mockResolvedValue(new Map([["front_door", "closed"]])),
+      },
+    });
+
+    await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "gone" }),
+      deps,
+    );
+
+    expect(deps.analytics.trackHvacCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "cancelled" }),
+    );
+  });
+
+  it("records a replaced timer as superseded", async () => {
+    const deps = createMockDeps({
+      stateStore: {
+        ...createMockDeps().stateStore,
+        getTimerToken: vi.fn().mockResolvedValue("newer"),
+      },
+    });
+
+    await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "older" }),
+      deps,
+    );
+
+    expect(deps.analytics.trackHvacCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "superseded" }),
+    );
+    expect(deps.analytics.trackHvacCommand).not.toHaveBeenCalledWith(
+      expect.objectContaining({ action: "cancelled" }),
+    );
+  });
+
+  // Neither actuates — that part was always right and must stay so.
+  it("actuates on neither", async () => {
+    for (const storedToken of [null, "newer"]) {
+      const deps = createMockDeps({
+        stateStore: {
+          ...createMockDeps().stateStore,
+          getTimerToken: vi.fn().mockResolvedValue(storedToken),
+          getAllSensorStates: vi.fn().mockResolvedValue(new Map([["front_door", "closed"]])),
+        },
+      });
+
+      await handleHvacTurnOff(
+        makeRequest({ hvacUnitId: "ac_living", cancellationToken: "older" }),
+        deps,
+      );
+
+      expect(deps.hvac.turnOff).not.toHaveBeenCalled();
+    }
+  });
+});
+
 describe("hvac-turn-off re-arms a lost timer", () => {
   function depsWithToken(storedToken: string | null, sensorState: string) {
     return createMockDeps({
@@ -422,7 +493,7 @@ describe("hvac-turn-off re-arms a lost timer", () => {
     );
     const body = (await res.json()) as { action: string };
 
-    expect(body.action).toBe("cancelled");
+    expect(body.action).toBe("superseded");
     expect(deps.scheduler.scheduleUnitTurnOff).not.toHaveBeenCalled();
   });
 
