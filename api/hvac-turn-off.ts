@@ -105,6 +105,10 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
     // timer was lost — and those need opposite responses.
     const storedToken = await d.stateStore.getTimerToken(hvacUnitId);
 
+    // Recorded as its own action, not as a cancellation. The door reopening
+    // while this timer was in flight is timer churn; a door closing inside the
+    // delay is the timer working. Sharing one label made the cancellation rate
+    // read as guest behaviour when 39% of it was churn.
     if (storedToken && storedToken !== cancellationToken) {
       logger.info("Turn-off superseded: a newer timer is already armed", {
         requestId,
@@ -114,12 +118,12 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
         requestId,
         hvacUnitId,
         unitName: unitConfig.name,
-        action: "cancelled",
+        action: "superseded",
         triggerSource: "sensor_open",
         shutoffEnabled: systemEnabled,
       });
 
-      return jsonResponse({ status: "ok", action: "cancelled", hvacUnitId });
+      return jsonResponse({ status: "ok", action: "superseded", hvacUnitId });
     }
 
     if (!storedToken) {

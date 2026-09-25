@@ -175,8 +175,14 @@ describe("E2E scenarios", () => {
     expect(activeTimers).toContain("ac_living");
   });
 
-  // Scenario 7: Token mismatch (stale timer)
-  it("rejects turn-off with stale cancellation token", async () => {
+  // Scenario 7: a door reopening replaces the timer, and the stale message is
+  // rejected as superseded rather than as a cancellation.
+  //
+  // This scenario passed even while production was silently losing the
+  // reopened door's timer, because the simulator replaced a colliding QStash
+  // message where QStash drops it. Both key on the cancellation token now, so
+  // the final assertion — that timer B actually fires — is a real test.
+  it("reports a stale cancellation token as superseded and still fires the new timer", async () => {
     // Open sensor -> timer scheduled with token A
     await post(base, "/api/sensor-event", {
       sensorId: "front_door",
@@ -206,7 +212,7 @@ describe("E2E scenarios", () => {
       hvacUnitId: "ac_living",
       cancellationToken: tokenA,
     });
-    expect((res.json as Record<string, unknown>).action).toBe("cancelled");
+    expect((res.json as Record<string, unknown>).action).toBe("superseded");
 
     // HVAC should still be on (old token rejected)
     expect(server.hvacProvider.getUnitStates().get("ac_living")).toBe("on");

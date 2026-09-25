@@ -184,13 +184,29 @@ event happened to arrive — a fresh timer is scheduled and the delay restarts.
 SELECT action, count() FROM hvac_commands_v2 GROUP BY action
 ```
 
-The three no-shutoff outcomes mean different things:
+The no-shutoff outcomes mean different things:
 
-| action                | meaning                                            |
-| --------------------- | -------------------------------------------------- |
-| `cancelled`           | the door closed, or a newer timer is already armed |
-| `aborted_stale_state` | the devices said the exposure was already over     |
-| `rearmed`             | the timer was lost; the door is still open         |
+| action                | meaning                                               |
+| --------------------- | ----------------------------------------------------- |
+| `cancelled`           | the door closed inside the delay — the timer working  |
+| `superseded`          | the door reopened, so a newer timer replaced this one |
+| `aborted_stale_state` | the devices said the exposure was already over        |
+| `rearmed`             | the timer was lost; the door is still open            |
+
+`cancelled` and `superseded` both mean no shutoff happened, but they answer
+different questions. A door closing inside the delay is a **guest-behaviour**
+signal — how often people shut the door in time. A door reopening while a timer
+is in flight is **timer churn**, and says nothing about guests.
+
+They shared the `cancelled` label until 2026-09-25, which made the cancellation
+rate unreadable: in the first week of the dry run 39% of schedules superseded a
+live timer, so 102 `cancelled` against 14 `turned_off` looked like guests closing
+doors 88% of the time when roughly 45 of those were churn. Rows before that date
+cannot be split.
+
+The churn is itself a consequence of fixing the deduplication bug, not a
+regression — a reopen used to produce no second message at all, so `superseded`
+was impossible.
 
 A steady trickle of `rearmed` is the system healing itself. How to act on more
 than a trickle depends on `late_by_seconds`, the gap between when a message was

@@ -54,11 +54,23 @@ export interface AnalyticsProvider {
     hvacUnitId: string;
     unitName: string;
     /**
+     * `cancelled`: the door closed inside the delay, which is the timer doing
+     * its job — a guest-behaviour signal.
+     * `superseded`: the door reopened while this timer was still in flight, so a
+     * newer one replaced it. Timer churn, unrelated to guest behaviour, and
+     * worth separating because it accounted for 39% of schedules in the first
+     * week and was inflating the cancellation rate.
      * `aborted_stale_state`: the devices said the exposure was already over.
      * `rearmed`: the timer was gone but the unit was still exposed, so a fresh
      * one was scheduled rather than letting the door go unwatched.
      */
-    action: "turned_off" | "cancelled" | "scheduled" | "aborted_stale_state" | "rearmed";
+    action:
+      | "turned_off"
+      | "cancelled"
+      | "superseded"
+      | "scheduled"
+      | "aborted_stale_state"
+      | "rearmed";
     triggerSource: "sensor_open" | "hvac_on";
     delaySeconds?: number;
     /**
