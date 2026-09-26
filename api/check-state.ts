@@ -80,10 +80,13 @@ export async function handleCheckState(request: Request, deps?: Dependencies): P
     // Build unit names and resolved delays
     const unitNames: Record<string, string> = {};
     const unitDelays: Record<string, number> = {};
-    for (const unitId of Object.keys(d.config.hvacUnits)) {
-      unitNames[unitId] = d.config.hvacUnits[unitId].name;
-      unitDelays[unitId] = await getDelayForUnit(unitId, d.stateStore, d.config);
-    }
+    // One Redis read per unit, in parallel rather than in series.
+    await Promise.all(
+      Object.keys(d.config.hvacUnits).map(async (unitId) => {
+        unitNames[unitId] = d.config.hvacUnits[unitId].name;
+        unitDelays[unitId] = await getDelayForUnit(unitId, d.stateStore, d.config);
+      }),
+    );
 
     // Opt-in: the states above are what our webhooks told us, which is only as
     // good as the events that reached us. Asking the devices directly is the

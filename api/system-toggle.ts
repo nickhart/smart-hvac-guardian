@@ -88,25 +88,32 @@ export async function handleSystemToggle(request: Request, deps?: Dependencies):
       const previouslyExposed = new Set(activeTimerUnitIds);
       const { schedule, cancel } = computeTimerActions(previouslyExposed, exposedUnits);
 
-      for (const unitId of schedule) {
-        const delaySeconds = await getDelayForUnit(unitId, d.stateStore, d.config);
-        const token = crypto.randomUUID();
-        const ttl = delaySeconds + TIMER_TOKEN_BUFFER_SECONDS;
-        await d.stateStore.setTimerToken(unitId, token, ttl);
+      // Parallel across units, same as sensor-event: re-enabling can schedule
+      // every unit at once, which serially is a round trip each.
+      await Promise.all(
+        schedule.map(async (unitId) => {
+          const delaySeconds = await getDelayForUnit(unitId, d.stateStore, d.config);
+          const token = crypto.randomUUID();
+          const ttl = delaySeconds + TIMER_TOKEN_BUFFER_SECONDS;
 
-        await d.scheduler.scheduleUnitTurnOff(unitId, token, delaySeconds);
-        logger.info("Timer scheduled on re-enable", {
-          requestId,
-          unitId,
-          delaySeconds,
-          token,
-        });
-      }
+          await d.stateStore.setTimerToken(unitId, token, ttl);
+          await d.scheduler.scheduleUnitTurnOff(unitId, token, delaySeconds);
 
-      for (const unitId of cancel) {
-        await d.stateStore.deleteTimerToken(unitId);
-        logger.info("Timer cancelled on re-enable", { requestId, unitId });
-      }
+          logger.info("Timer scheduled on re-enable", {
+            requestId,
+            unitId,
+            delaySeconds,
+            token,
+          });
+        }),
+      );
+
+      await Promise.all(
+        cancel.map(async (unitId) => {
+          await d.stateStore.deleteTimerToken(unitId);
+          logger.info("Timer cancelled on re-enable", { requestId, unitId });
+        }),
+      );
 
       return jsonResponse({ status: "ok", enabled, scheduled: schedule, cancelled: cancel });
     }
