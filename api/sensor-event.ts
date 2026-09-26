@@ -119,24 +119,36 @@ export async function handleSensorEvent(request: Request, deps?: Dependencies): 
     const { schedule, cancel } = computeTimerActions(previouslyExposed, exposedUnits);
     logger.info("Timer actions computed", { requestId, schedule, cancel });
 
-    // 6. Schedule new timers for newly exposed units
-    for (const unitId of schedule) {
-      const delaySeconds = await getDelayForUnit(unitId, d.stateStore, d.config);
-      const token = crypto.randomUUID();
-      const ttl = delaySeconds + TIMER_TOKEN_BUFFER_SECONDS;
+    // 6. Schedule new timers for newly exposed units.
+    //
+    // Across units in parallel; ordered within one. A door exposing four units
+    // used to cost twelve serial round trips — a Redis read, a Redis write and
+    // a QStash publish each — before the awaited analytics write. IFTTT gives
+    // up on a slow webhook and retries, which is where the duplicate events
+    // 5-6 seconds apart came from, and a retry it abandons is an event lost.
+    //
+    // It also means one unit failing no longer leaves the rest unscheduled:
+    // every unit is attempted, and the first rejection still surfaces.
+    await Promise.all(
+      schedule.map(async (unitId) => {
+        const delaySeconds = await getDelayForUnit(unitId, d.stateStore, d.config);
+        const token = crypto.randomUUID();
+        const ttl = delaySeconds + TIMER_TOKEN_BUFFER_SECONDS;
 
-      await d.stateStore.setTimerToken(unitId, token, ttl);
+        await d.stateStore.setTimerToken(unitId, token, ttl);
+        await d.scheduler.scheduleUnitTurnOff(unitId, token, delaySeconds);
 
-      await d.scheduler.scheduleUnitTurnOff(unitId, token, delaySeconds);
-
-      logger.info("Timer scheduled for unit", { requestId, unitId, delaySeconds, token });
-    }
+        logger.info("Timer scheduled for unit", { requestId, unitId, delaySeconds, token });
+      }),
+    );
 
     // 7. Cancel timers for units no longer exposed
-    for (const unitId of cancel) {
-      await d.stateStore.deleteTimerToken(unitId);
-      logger.info("Timer cancelled for unit", { requestId, unitId });
-    }
+    await Promise.all(
+      cancel.map(async (unitId) => {
+        await d.stateStore.deleteTimerToken(unitId);
+        logger.info("Timer cancelled for unit", { requestId, unitId });
+      }),
+    );
 
     // 8. Track analytics
     await d.analytics.trackSensorEvent({

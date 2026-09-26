@@ -432,3 +432,76 @@ describe("sensor-event handler", () => {
     expect((body.scheduled as string[]).sort()).toEqual(["ac_bedroom", "ac_living"]);
   });
 });
+
+/**
+ * A door exposing several units used to cost three serial round trips each — a
+ * Redis read, a Redis write and a QStash publish. IFTTT abandons a slow webhook
+ * and retries it, which is where duplicate events 5-6 seconds apart came from,
+ * and a retry it gives up on is an event lost outright.
+ *
+ * The calls stay ordered within a unit: the delay is needed before the TTL, and
+ * the token before scheduling.
+ */
+describe("sensor-event schedules units in parallel", () => {
+  function depsTrackingConcurrency() {
+    let inFlight = 0;
+    const peak = { value: 0 };
+
+    const deps = createMockDeps({
+      stateStore: {
+        ...createMockDeps().stateStore,
+        // Interior door open, so one exterior door exposes both zones.
+        getAllSensorStates: vi.fn().mockResolvedValue(
+          new Map([
+            ["front_door", "open"],
+            ["door_bedroom", "open"],
+            ["bedroom_window", "closed"],
+          ]),
+        ),
+      },
+      scheduler: {
+        scheduleDelayedCheck: vi.fn().mockResolvedValue(undefined),
+        scheduleTurnOff: vi.fn().mockResolvedValue(undefined),
+        scheduleUnitTurnOff: vi.fn(async () => {
+          inFlight += 1;
+          peak.value = Math.max(peak.value, inFlight);
+          await new Promise((resolve) => setTimeout(resolve, 5));
+          inFlight -= 1;
+        }),
+      },
+    });
+
+    return { deps, peak };
+  }
+
+  it("has both units in flight at once rather than one after the other", async () => {
+    const { deps, peak } = depsTrackingConcurrency();
+
+    const res = await handleSensorEvent(
+      makeRequest({ sensorId: "front_door", event: "open" }),
+      deps,
+    );
+    const body = (await res.json()) as { scheduled: string[] };
+
+    expect(body.scheduled).toHaveLength(2);
+    expect(deps.scheduler.scheduleUnitTurnOff).toHaveBeenCalledTimes(2);
+    expect(peak.value).toBe(2);
+  });
+
+  // Ordering within a unit still holds: the token written to Redis has to be
+  // the one handed to the scheduler, or the turn-off is rejected on arrival.
+  it("still pairs each unit's stored token with the one it schedules", async () => {
+    const { deps } = depsTrackingConcurrency();
+
+    await handleSensorEvent(makeRequest({ sensorId: "front_door", event: "open" }), deps);
+
+    const stored = vi.mocked(deps.stateStore.setTimerToken).mock.calls;
+    const scheduled = vi.mocked(deps.scheduler.scheduleUnitTurnOff).mock.calls;
+
+    expect(stored).toHaveLength(2);
+    for (const [unitId, token] of stored) {
+      const match = scheduled.find((call) => call[0] === unitId);
+      expect(match?.[1]).toBe(token);
+    }
+  });
+});
