@@ -1,11 +1,27 @@
 {
   "buildCommand": "pnpm --filter smart-hvac-guardian-web build",
   "outputDirectory": "web/dist",
+  "ignoreCommand": "bash -c 'set +e; [ -z \"$VERCEL_GIT_PREVIOUS_SHA\" ] && exit 1; git diff --quiet \"$VERCEL_GIT_PREVIOUS_SHA\" HEAD -- . \":(exclude)docs\" \":(exclude)*.md\"; [ $? -eq 0 ] && exit 0; exit 1'",
   "rewrites": [
-    { "source": "/api/t/:tenantId/sensor-event", "destination": "/api/sensor-event" },
-    { "source": "/api/t/:tenantId/hvac-event", "destination": "/api/hvac-event" },
-    { "source": "/api/t/:tenantId/:path*", "destination": "/api/:path*" },
-    { "source": "/api/:path*", "destination": "/api/:path*" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/api/t/:tenantId/sensor-event",
+      "destination": "/api/sensor-event"
+    },
+    {
+      "source": "/api/t/:tenantId/hvac-event",
+      "destination": "/api/hvac-event"
+    },
+    {
+      "source": "/api/t/:tenantId/:path*",
+      "destination": "/api/:path*"
+    },
+    {
+      "source": "/api/:path*",
+      "destination": "/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }
