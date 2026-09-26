@@ -160,6 +160,13 @@ A turn-off with no corresponding state change within a couple of minutes is a
 failed shutoff, whatever IFTTT reported. Run against the September data it would
 have been 0 for 72.
 
+**Prerequisite, now mostly met.** The "Device is powered off" applets did not
+exist until 2026-09-25 — only "powered on" had ever been created — so this item
+could not have produced a result at all, the signal it correlates against being
+absent. All four now exist. `loft_bedroom` is verified in both directions; the
+other three are created but untested, and a typo in one of four is a per-unit
+failure nothing else reports.
+
 One caveat to design around: HVAC state also arrives through IFTTT, so a silent
 result means the chain is broken but not which link. It cannot separate "the
 turn-off applet is disabled" from "the state-reporting applet is disabled".
