@@ -7,27 +7,16 @@ Current state of implemented features and known gaps.
 **Dry run since 2026-09-20.** The app is enabled and makes real decisions, but
 the IFTTT shutoff applets are disabled, so no HVAC unit actually changes state.
 
-This matters when reading the data, because nothing in it distinguishes a dry
-run from real operation — `shutoff_enabled = 1` in both. Split on time:
-
-| period               | `shutoff_enabled` | meaning                                                        |
-| -------------------- | ----------------- | -------------------------------------------------------------- |
-| through 2026-09-18   | mixed             | discard; `cancelled` rows also mislabelled before 2026-09-19   |
-| 2026-09-19           | `0`               | shadow mode — decided, no IFTTT call                           |
-| 2026-09-20 onwards   | `1`               | **dry run** — IFTTT called, applets disabled, nothing actuates |
-| when applets enabled | `1`               | real operation — record the date here                          |
-
 An IFTTT trigger returns 200 whether an applet is listening or not, so
-`provider_events_v2` reads healthy throughout the dry run. That is expected, not
-evidence the shutoffs work — see "Verify the shutoff actually happened" in the
-roadmap.
+`provider_events_v2` reads healthy throughout. That is expected, not evidence
+the shutoffs work — see "Verify the shutoff actually happened" in the roadmap.
 
-**HVAC state reporting has a second boundary.** "Device is powered off" applets
-were never created until 2026-09-25 — only "powered on" existed — so every
-`hvac_state_events_v2` row before that date is an `on` with no matching `off`.
-Runtime pairing over that period produces intervals that never close, which
-fails quietly rather than loudly. One unit (`loft_bedroom`) is verified in both
+One unit (`loft_bedroom`) has its state-reporting applets verified in both
 directions; the other three are created but untested.
+
+Nothing in the data distinguishes a dry run from real operation, and several
+other dates change what a query means. They are listed together in
+[analytics.md](./analytics.md) — check there before comparing across a date.
 
 ## Completed
 
@@ -87,6 +76,16 @@ The token check distinguishes three cases rather than two. A token that is prese
 
 Deduplication ids are keyed on the cancellation token, not a wall-clock bucket. The bucket scheme silently dropped 34% of scheduled turn-offs when a door reopened inside the same ten minutes.
 
+### Provider resilience
+
+A Redis-backed circuit breaker (`src/utils/circuit-breaker.ts`) opens after repeated IFTTT failures and skips calls for a cooldown, tripping immediately on a terminal failure such as a bad webhook key. Outcomes are recorded to `provider_events_v2` with the request id that caused them.
+
+QStash retries are capped at 1, so one turn-off cannot become four failure notifications, and terminal or circuit-open failures return 200 so QStash stops retrying.
+
+Every outbound call is bounded by a deadline. Before that, a hang could not trip the breaker at all — failures are recorded in a `catch`, and a hang never throws — so a slow provider was invisible to the thing meant to protect against it.
+
+Still open: extending the breaker to YoLink, and surfacing circuit state in the dashboard.
+
 ### Health endpoint
 
 `GET /api/health` — unauthenticated probe for an external uptime monitor, reporting per-dependency status without exposing config or credentials. Returns 503 when Redis or config fails; unconfigured optional services report `not_configured`. See the README.
@@ -101,36 +100,9 @@ Deduplication ids are keyed on the cancellation token, not a wall-clock bucket. 
 - Tinybird definitions, the `.datasource` files and the ingest call sites are checked against each other, including that every deployed resource grants the read-only token. Each of those has drifted in production at least once.
 - 391 unit and integration tests, 7 end-to-end scenarios.
 
-## Not Started
+## Not started
 
-### Analytics dashboard
-
-Charts and visualizations for shutoff history, frequency trends, per-sensor breakdown. Time-range picker for viewing specific periods.
-
-### Web configuration UI
-
-Browser-based management of sensors, HVAC units, zones, IFTTT event names. Currently all config lives in the `APP_CONFIG` environment variable.
-
-### Email notifications
-
-- Sensor open alerts (e.g. "Kitchen window open for 10 minutes")
-- HVAC turn-off confirmations
-- System error alerts (provider failures, QStash issues)
-
-### HVAC state tracking in Redis
-
-Persist HVAC on/off state from `hvac-event` to avoid redundant turn-off commands. Open questions: extra beep from redundant off command, race condition with manual on.
-
-### Service outage auto-disable (partial)
-
-A Redis-backed circuit breaker (`src/utils/circuit-breaker.ts`) opens after repeated IFTTT failures and skips calls for a cooldown, tripping immediately on a terminal failure such as a bad webhook key. QStash retries are capped at 1 so one turn-off cannot become four failure notifications, and terminal or circuit-open failures return 200 so QStash stops retrying. Outcomes are recorded to `provider_events_v2`.
-
-Still open: extending the breaker to YoLink, and surfacing circuit state in the dashboard.
-
-### Onboarding experience
-
-Stepper wizard to walk new users through: adding service keys/tokens, configuring zones, setting default delays, setting up IFTTT applets.
-
-### Multi-tenant hosted service
-
-See [ROADMAP.md](./ROADMAP.md) for the full exploration of what it would take to support multiple clients.
+Everything not built is in [ROADMAP.md](./ROADMAP.md), which is the only place
+it should be described. This section used to restate six of those entries in a
+sentence each, which drifted from the fuller versions and gave two answers to
+the same question.
