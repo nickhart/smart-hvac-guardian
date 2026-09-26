@@ -10,6 +10,26 @@ Smart HVAC Guardian uses [Tinybird](https://www.tinybird.co/) as its analytics b
 
 Analytics are fire-and-forget: ingestion errors are silently swallowed so they never break the HVAC control path.
 
+## Dates the data changes meaning
+
+Six times this dataset started meaning something different, and none of them
+announce themselves in a query. Check this before comparing anything across a
+date.
+
+| From                 | What changed                                         | Consequence                                                              |
+| -------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------ |
+| through 2026-09-18   | instrumentation still settling                       | treat as unreliable                                                      |
+| before 2026-09-19    | `cancelled` rows hardcoded `shutoff_enabled = 1`     | cancellations cannot be split into live versus shadow                    |
+| before 2026-09-19    | deduplication keyed on a wall-clock bucket           | 34% of scheduled turn-offs never produced a command at all               |
+| 2026-09-19           | shadow mode — decided, no IFTTT call                 | `shutoff_enabled = 0`                                                    |
+| 2026-09-20 onwards   | **dry run** — IFTTT called, shutoff applets disabled | `shutoff_enabled = 1`, identical to real operation; split on date        |
+| before 2026-09-25    | `cancelled` also covered a replaced timer            | the cancellation rate reads as guest behaviour when much of it was churn |
+| before 2026-09-25    | no "powered off" applets existed                     | `on` events with no matching `off`; runtime intervals never close        |
+| when applets enabled | real operation — **record the date here**            | still `shutoff_enabled = 1`                                              |
+
+Each has its own section below: the dry-run boundary, `cancelled` versus
+`superseded` under `rearmed`, and scheduled-versus-recorded counts.
+
 ## Architecture
 
 ```

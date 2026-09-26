@@ -7,20 +7,16 @@ Current state of implemented features and known gaps.
 **Dry run since 2026-09-20.** The app is enabled and makes real decisions, but
 the IFTTT shutoff applets are disabled, so no HVAC unit actually changes state.
 
-This matters when reading the data, because nothing in it distinguishes a dry
-run from real operation — `shutoff_enabled = 1` in both. Split on time:
-
-| period               | `shutoff_enabled` | meaning                                                        |
-| -------------------- | ----------------- | -------------------------------------------------------------- |
-| through 2026-09-18   | mixed             | discard; `cancelled` rows also mislabelled before 2026-09-19   |
-| 2026-09-19           | `0`               | shadow mode — decided, no IFTTT call                           |
-| 2026-09-20 onwards   | `1`               | **dry run** — IFTTT called, applets disabled, nothing actuates |
-| when applets enabled | `1`               | real operation — record the date here                          |
-
 An IFTTT trigger returns 200 whether an applet is listening or not, so
-`provider_events_v2` reads healthy throughout the dry run. That is expected, not
-evidence the shutoffs work — see "Verify the shutoff actually happened" in the
-roadmap.
+`provider_events_v2` reads healthy throughout. That is expected, not evidence
+the shutoffs work — see "Verify the shutoff actually happened" in the roadmap.
+
+One unit (`loft_bedroom`) has its state-reporting applets verified in both
+directions; the other three are created but untested.
+
+Nothing in the data distinguishes a dry run from real operation, and several
+other dates change what a query means. They are listed together in
+[analytics.md](./analytics.md) — check there before comparing across a date.
 
 ## Completed
 
@@ -62,7 +58,7 @@ Offline or unknown sensors are treated as closed (safe default — AC stays on).
 
 ### Shutoff analytics (partial)
 
-Event tracking via Tinybird (not Redis sorted sets as originally planned). Four datasources: `sensor_events_v2`, `hvac_commands_v2`, `hvac_state_events_v2` and `provider_events_v2`, all carrying `tenant_id` and `shutoff_enabled`. Endpoints exist for `shutoffs_per_day`, `sensor_trigger_frequency`, `recent_activity`, `exposure_duration` and `hvac_runtime`.
+Event tracking via Tinybird (not Redis sorted sets as originally planned). Five datasources: `sensor_events_v2`, `hvac_commands_v2`, `hvac_state_events_v2`, `provider_events_v2` and `sensor_state_drift_v2`, all carrying `tenant_id`. `hvac_commands_v2` also carries `late_by_seconds`, the gap between when a turn-off was meant to fire and when it arrived. Endpoints exist for `shutoffs_per_day`, `sensor_trigger_frequency`, `recent_activity`, `exposure_duration` and `hvac_runtime`.
 
 `src/lib/tinybird.ts` is the deploy source of truth — see [analytics.md](./analytics.md). The `.datasource` files are documentation.
 
@@ -72,7 +68,23 @@ Gap: **no analytics dashboard page** — the endpoints exist, nothing renders th
 
 ### System shutoff integration (partial)
 
-Race condition fix: `hvac-turn-off.ts` checks `system:enabled` before executing, even if the timer fired. Active timers are deliberately **not** cancelled on disable — they fire and are recorded as shadow decisions, which is the point of shadow mode.
+`hvac-turn-off.ts` checks `system:enabled` before executing, even if the timer fired. Active timers are deliberately **not** cancelled on disable — they fire and are recorded as shadow decisions, which is the point of shadow mode.
+
+Before acting, it re-reads every sensor it believes is open and re-evaluates the zone graph. If the devices say the exposure is over — a close webhook that never arrived — the shutoff is abandoned and recorded as `aborted_stale_state` rather than cutting a guest's AC for a door that shut ten minutes ago. Fails open: an unreachable device proceeds, because refusing to act on an outage would disable every shutoff.
+
+The token check distinguishes three cases rather than two. A token that is present but different means a newer exposure is already armed (`superseded`); a token that is absent means either the door closed (`cancelled`) or the timer was lost, in which case a still-exposed unit is re-armed (`rearmed`) rather than left unwatched.
+
+Deduplication ids are keyed on the cancellation token, not a wall-clock bucket. The bucket scheme silently dropped 34% of scheduled turn-offs when a door reopened inside the same ten minutes.
+
+### Provider resilience
+
+A Redis-backed circuit breaker (`src/utils/circuit-breaker.ts`) opens after repeated IFTTT failures and skips calls for a cooldown, tripping immediately on a terminal failure such as a bad webhook key. Outcomes are recorded to `provider_events_v2` with the request id that caused them.
+
+QStash retries are capped at 1, so one turn-off cannot become four failure notifications, and terminal or circuit-open failures return 200 so QStash stops retrying.
+
+Every outbound call is bounded by a deadline. Before that, a hang could not trip the breaker at all — failures are recorded in a `catch`, and a hang never throws — so a slow provider was invisible to the thing meant to protect against it.
+
+Still open: extending the breaker to YoLink, and surfacing circuit state in the dashboard.
 
 ### Health endpoint
 
@@ -83,37 +95,14 @@ Race condition fix: `hvac-turn-off.ts` checks `system:enabled` before executing,
 - `no-floating-promises` and `no-misused-promises` are enabled (type-aware, scoped to files `tsconfig.json` covers). A dropped analytics promise on Edge runtime is now a lint error rather than a silent data loss.
 - `pnpm test:e2e` runs in CI — 7 full sensor-to-turn-off scenarios that previously only ran locally.
 - Node 24 across CI, the devcontainer and `engines`, with actions on their Node 24-native majors.
+- CI is path-aware: documentation-only pull requests run formatting and a Markdown link check, code runs the full suite. **`gate` is the job to mark required in branch protection** — a job skipped by a path filter reports as skipped rather than successful, so requiring `code` directly would block every documentation-only pull request.
+- `src/utils/http.ts` is the only place allowed to call `fetch`, enforced by a test over every file in `src/` and `api/`. A call with no timeout looks exactly like one with a timeout, only shorter.
+- Tinybird definitions, the `.datasource` files and the ingest call sites are checked against each other, including that every deployed resource grants the read-only token. Each of those has drifted in production at least once.
+- 391 unit and integration tests, 7 end-to-end scenarios.
 
-## Not Started
+## Not started
 
-### Analytics dashboard
-
-Charts and visualizations for shutoff history, frequency trends, per-sensor breakdown. Time-range picker for viewing specific periods.
-
-### Web configuration UI
-
-Browser-based management of sensors, HVAC units, zones, IFTTT event names. Currently all config lives in the `APP_CONFIG` environment variable.
-
-### Email notifications
-
-- Sensor open alerts (e.g. "Kitchen window open for 10 minutes")
-- HVAC turn-off confirmations
-- System error alerts (provider failures, QStash issues)
-
-### HVAC state tracking in Redis
-
-Persist HVAC on/off state from `hvac-event` to avoid redundant turn-off commands. Open questions: extra beep from redundant off command, race condition with manual on.
-
-### Service outage auto-disable (partial)
-
-A Redis-backed circuit breaker (`src/utils/circuit-breaker.ts`) opens after repeated IFTTT failures and skips calls for a cooldown, tripping immediately on a terminal failure such as a bad webhook key. QStash retries are capped at 1 so one turn-off cannot become four failure notifications, and terminal or circuit-open failures return 200 so QStash stops retrying. Outcomes are recorded to `provider_events_v2`.
-
-Still open: extending the breaker to YoLink, and surfacing circuit state in the dashboard.
-
-### Onboarding experience
-
-Stepper wizard to walk new users through: adding service keys/tokens, configuring zones, setting default delays, setting up IFTTT applets.
-
-### Multi-tenant hosted service
-
-See [ROADMAP.md](./ROADMAP.md) for the full exploration of what it would take to support multiple clients.
+Everything not built is in [ROADMAP.md](./ROADMAP.md), which is the only place
+it should be described. This section used to restate six of those entries in a
+sentence each, which drifted from the fuller versions and gave two answers to
+the same question.
