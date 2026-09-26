@@ -176,6 +176,52 @@ Two weaker signals worth considering alongside, neither sufficient alone:
 Belongs in the authenticated diagnostics, not `/api/health`: it needs real
 queries, and it is per-tenant.
 
+### Mark a completed shutoff so its retry cannot re-arm
+
+**Low priority — do not build until the trigger condition below is met.**
+
+A turn-off that succeeds but responds slowly is retried by QStash. The retry
+finds no timer token (the successful run deleted it), sees the door still open,
+and re-arms — leaving a timer nobody asked for:
+
+```
+t=0      Door opens. Token A, message queued for t=600.
+t=600    Message arrives, token matches, IFTTT turn-off, AC off.
+         Token deleted. Response is slow; QStash never sees the 200.
+t=630    QStash retries with token A. No token stored, door still open
+         → RE-ARM → token B, message queued for t=1230.
+t=1200   Guest turns the AC on. Their hvac-event webhook is lost.
+t=1230   The re-armed timer fires → AC off.
+```
+
+The guest gets 30 seconds instead of ten minutes, cut off by a timer they never
+triggered. It needs two failures at once — a slow turn-off response and a lost
+`on` event — but both have the same root cause, so they are correlated rather
+than independent.
+
+**The fix:** after a successful turn-off, write `shutoff-done:{unitId}:{token}`
+with a short TTL. In the absent-token branch, check it before re-arming; if this
+exact token already actuated, return 200 and do nothing.
+
+**Key by token, never by unit.** A per-unit marker would suppress a _legitimate_
+re-arm for a different, genuinely lost timer on the same unit inside the TTL —
+trading one silent failure for another. Tokens are minted per exposure, so a
+token-keyed marker suppresses only the message that already ran.
+
+**Rejected alternative:** overwriting the timer token with a `"completed"`
+sentinel, so the retry falls into the existing `superseded` branch. Elegant, but
+`getActiveTimerUnitIds` scans `timer:*`, so the sentinel would make the unit look
+armed and sensor events would decline to reschedule it for the whole TTL. A
+separate key namespace avoids that.
+
+If the marker write fails, behaviour degrades to today's. A try/catch is enough.
+
+**Trigger condition:** `rearmed` rows with a small `late_by_seconds`, meaning
+retries are landing on turn-offs that already completed. Parallelising the
+scheduling loop may have removed the timeouts that make this reachable at all —
+if that count stays at zero, this is machinery guarding an empty room. Build it
+when the count is non-zero, and use the observed lateness to size the TTL.
+
 ### Service outage auto-disable
 
 If IFTTT, Cielo, or YoLink is unreachable, temporarily disable AC shutoff to avoid locking guests out of AC. Re-enable automatically when services recover.
