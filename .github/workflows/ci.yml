@@ -7,19 +7,100 @@ on:
     branches: [main]
 
 jobs:
-  ci:
+  # Which kind of change is this? Only pull requests are filtered — a push to
+  # main always runs everything, because that is the branch being protected and
+  # the cost of being wrong there is higher than a few minutes of CI.
+  changes:
     runs-on: ubuntu-latest
-
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
+      docs: ${{ steps.classify.outputs.docs }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
+      - id: classify
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT" != "pull_request" ]; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+            echo "docs=true" >> "$GITHUB_OUTPUT"
+            echo "Push to main — running everything."
+            exit 0
+          fi
+
+          changed=$(git diff --name-only "$BASE_SHA...HEAD")
+          echo "Changed files:"
+          echo "$changed" | sed 's/^/  /'
+
+          # Anything outside docs/ and *.md is code. Workflow files count as
+          # code deliberately: a change to CI has to be exercised by CI.
+          if echo "$changed" | grep -qvE '(^docs/|\.md$)'; then
+            echo "code=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "code=false" >> "$GITHUB_OUTPUT"
+          fi
+
+          if echo "$changed" | grep -qE '(^docs/|\.md$)'; then
+            echo "docs=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "docs=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  docs:
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
       - uses: pnpm/action-setup@v6
-
       - uses: actions/setup-node@v7
         with:
           node-version: "24"
           cache: pnpm
+      - run: pnpm install --frozen-lockfile
 
+      # Prettier parses Markdown, so malformed documents fail here too.
+      - name: Format check
+        run: pnpm format:check
+
+      # Catches the failure this repository actually has: a document renamed or
+      # removed while something still points at it. No dependency, no config.
+      - name: Internal links resolve
+        run: |
+          set -euo pipefail
+          broken=0
+          while IFS= read -r line; do
+            src="${line%%:*}"
+            target="${line#*:}"
+            resolved="$(dirname "$src")/$target"
+            if [ ! -e "$resolved" ]; then
+              echo "::error file=$src::links to missing $target"
+              broken=1
+            fi
+          done < <(
+            grep -rnoE '\]\([^)#:]+\.md\)' --include='*.md' . \
+              | grep -v node_modules \
+              | sed -E 's/^([^:]+):[0-9]+:\]\((.+)\)$/\1:\2/' || true
+          )
+          exit "$broken"
+
+  code:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: pnpm
       - run: pnpm install --frozen-lockfile
 
       - name: Type check
@@ -34,5 +115,38 @@ jobs:
       - name: Test with coverage
         run: pnpm test:coverage
 
+  e2e:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
       - name: E2E scenarios
         run: pnpm test:e2e
+
+  # The single check to mark required in branch protection.
+  #
+  # A job skipped by a path filter reports as "skipped", not "success", so
+  # requiring `code` directly would block every documentation-only pull request
+  # forever. This one always runs and fails only if something that did run
+  # failed.
+  gate:
+    needs: [changes, docs, code, e2e]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check results
+        run: |
+          echo "changes: ${{ needs.changes.result }}"
+          echo "docs:    ${{ needs.docs.result }}"
+          echo "code:    ${{ needs.code.result }}"
+          echo "e2e:     ${{ needs.e2e.result }}"
+      - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
