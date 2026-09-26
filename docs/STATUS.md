@@ -99,6 +99,7 @@ Still open: extending the breaker to YoLink, and surfacing circuit state in the 
 - `src/utils/http.ts` is the only place allowed to call `fetch`, enforced by a test over every file in `src/` and `api/`. A call with no timeout looks exactly like one with a timeout, only shorter.
 - Tinybird definitions, the `.datasource` files and the ingest call sites are checked against each other, including that every deployed resource grants the read-only token. Each of those has drifted in production at least once.
 - 391 unit and integration tests, 7 end-to-end scenarios.
+- Vercel skips the build when a push changes only `docs/` and Markdown, via `ignoreCommand` in `vercel.json`. So a documentation-only pull request gets no preview URL, by design. The command normalises every failure — missing `VERCEL_GIT_PREVIOUS_SHA`, a shallow clone, an unknown SHA — to "build anyway", because a redundant build costs seconds and a wrongly skipped one leaves the webhook endpoints on old code.
 
 ## Not started
 
