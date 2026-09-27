@@ -110,6 +110,21 @@ tenant-less URLs (`/api/sensor-event`) on a deployment that still had
 
 `APP_CONFIG` survives only as the local dev server's config format.
 
+### Tenant credential hardening
+
+Follow-up to the single-tenant removal, closing the gaps it left:
+
+- **The webhook secret is required.** A tenant without one used to accept
+  unauthenticated webhooks; every activated tenant has one, so it is now
+  rejected instead. The secret is accepted only as `Authorization: Bearer`,
+  not as `?secret=` in the URL, where request logs would keep it.
+- **No fallback to the operator's YoLink/IFTTT keys.** `createDependencies`
+  takes the tenant's own keys and nothing else; `YOLINK_*` and
+  `IFTTT_WEBHOOK_KEY` are no longer read.
+- **Wizard drafts are deleted on activation.** They held the YoLink and IFTTT
+  keys in plaintext, beside the encrypted copy, indefinitely. For tenants
+  activated earlier: `pnpm cli tenant:clear-drafts <tenantId>`.
+
 ### CI safety nets
 
 - `no-floating-promises` and `no-misused-promises` are enabled (type-aware, scoped to files `tsconfig.json` covers). A dropped analytics promise on Edge runtime is now a lint error rather than a silent data loss.
