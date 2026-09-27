@@ -93,17 +93,6 @@ export async function setSystemToggle(enabled: boolean): Promise<{ enabled: bool
 
 // --- Onboarding API ---
 
-export async function startOnboarding(
-  email: string,
-  propertyName: string,
-): Promise<{ status: string; tenantId?: string; slug?: string; message: string }> {
-  return fetchJson("/api/onboarding/start", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, propertyName }),
-  });
-}
-
 export async function getOnboardingSteps(): Promise<{
   status: string;
   stepData: Record<string, Record<string, unknown>>;
@@ -177,10 +166,6 @@ export async function activateOnboarding(): Promise<{
   webhookSecret?: string;
 }> {
   return fetchJson("/api/onboarding/activate", { method: "POST" });
-}
-
-export async function importEnvConfig(): Promise<{ status: string; message: string }> {
-  return fetchJson("/api/onboarding/import-env", { method: "POST" });
 }
 
 // --- Settings API ---
