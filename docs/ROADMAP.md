@@ -431,6 +431,41 @@ is close to meaningless on its own.
 Utility CSVs and the sensor data both reveal when the property is occupied, so
 neither belongs in this public repository.
 
+### More sign-in options
+
+Magic links are the only way in today. Add OAuth sign-in (Google first, then
+others such as GitHub or Apple) and possibly passkeys.
+
+- Keep sign-in invite-only: an OAuth identity maps to an existing `users` row
+  by verified email; it never creates a user or a tenant on its own.
+- Must run on the Edge runtime (Web Crypto, PKCE), like the rest of auth.
+- Makes Resend optional for deployments that don't want email at all.
+
+### Swappable service providers
+
+A contributor who prefers other services should only have to write a small
+shim, not edit handlers. Part of this exists: `src/providers/types.ts` already
+defines interfaces for sensors, HVAC control, scheduling, analytics and state.
+What's missing:
+
+- **Selection.** `createDependencies` constructs YoLink, Cielo-via-IFTTT,
+  QStash, Upstash Redis and Tinybird directly. Choose implementations from
+  config instead, with a registry a shim can add itself to.
+- **Leaks through the interfaces.** QStash's signature check sits in the
+  turn-off handler (`qstashReceiver` in `Dependencies`); callback
+  authentication belongs to the scheduler. The database is hardwired to Neon's
+  HTTP driver (`src/db/client.ts`), though Drizzle supports other Postgres
+  drivers. Email is Resend-only.
+- **Config.** The env schema requires QStash and Upstash variables
+  unconditionally; each provider should declare and validate its own.
+- **Analytics is more than a writer.** The Tinybird datasources, pipes and CD
+  deploy are Tinybird-specific, so another backend needs its own schema, not
+  just a new `AnalyticsProvider`.
+
+**Make the wizards provider-aware.** The setup wizard, first-run bootstrap and
+IFTTT applet wizard should ask for — and test — only what the chosen providers
+need, rather than assuming YoLink, IFTTT and Cielo.
+
 ### Web configuration UI
 
 Browser-based management of the tenant's configuration.
