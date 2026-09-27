@@ -43,7 +43,12 @@ export async function resolveTenantFromSession(
 
 /**
  * Resolve tenant from a tenantId (e.g. from URL path or QStash payload).
- * Used for webhook endpoints. Validates Bearer token or ?secret= query param.
+ *
+ * With a request — an IFTTT webhook — the tenant's webhook secret must arrive
+ * as `Authorization: Bearer <secret>`. It is required: activation always
+ * creates one, so a tenant without it is broken rather than old, and letting it
+ * through would make the tenant ID alone enough to post events. Without a
+ * request — a QStash callback — the caller checks the QStash signature instead.
  */
 export async function resolveTenantFromWebhook(
   tenantId: string,
@@ -55,10 +60,10 @@ export async function resolveTenantFromWebhook(
   const ctx = await resolveTenantById(tenantId, envSecrets, database);
   if (!ctx) return null;
 
-  // Validate webhook secret if one is configured
-  if (ctx.tenantSecrets.webhookSecret && request) {
+  if (request) {
+    const expected = ctx.tenantSecrets.webhookSecret;
     const token = extractBearerToken(request);
-    if (!token || !timingSafeEqual(token, ctx.tenantSecrets.webhookSecret)) {
+    if (!expected || !token || !timingSafeEqual(token, expected)) {
       return null;
     }
   }
@@ -67,26 +72,13 @@ export async function resolveTenantFromWebhook(
 }
 
 /**
- * Extract bearer token from Authorization header or ?secret= query param.
+ * The secret from `Authorization: Bearer <secret>`. Only the header: a secret
+ * in the URL (`?secret=` used to be accepted) ends up in request logs.
  */
 function extractBearerToken(request: Request): string | null {
-  // Check Authorization header first
   const authHeader = request.headers.get("authorization");
-  if (authHeader) {
-    const match = authHeader.match(/^Bearer\s+(.+)$/i);
-    if (match) return match[1];
-  }
-
-  // Fallback to ?secret= query param
-  try {
-    const url = new URL(request.url);
-    const secret = url.searchParams.get("secret");
-    if (secret) return secret;
-  } catch {
-    // Invalid URL, ignore
-  }
-
-  return null;
+  const match = authHeader?.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1] : null;
 }
 
 async function resolveTenantById(

@@ -59,13 +59,14 @@ describe("resolveTenantFromWebhook auth", () => {
     expect(ctx!.tenantId).toBe(TENANT_ID);
   });
 
-  it("allows request with valid ?secret= query param", async () => {
+  // A secret in the URL ends up in request logs — Vercel's, IFTTT's, any
+  // proxy's. The header is the only place it is accepted.
+  it("rejects the secret passed as a ?secret= query param", async () => {
     const req = makeRequest(
       `https://test.example.com/api/t/${TENANT_ID}/sensor-event?secret=${WEBHOOK_SECRET}`,
     );
     const ctx = await resolveTenantFromWebhook(TENANT_ID, req, {} as never);
-    expect(ctx).not.toBeNull();
-    expect(ctx!.tenantId).toBe(TENANT_ID);
+    expect(ctx).toBeNull();
   });
 
   it("rejects request with wrong Bearer token", async () => {
@@ -82,7 +83,10 @@ describe("resolveTenantFromWebhook auth", () => {
     expect(ctx).toBeNull();
   });
 
-  it("allows request without auth when no webhook secret is configured (backward compat)", async () => {
+  // Activation always creates a secret, so a tenant without one is broken, not
+  // legacy — and letting it through meant a tenant ID alone was enough to post
+  // events for it.
+  it("rejects every webhook for a tenant with no webhook secret", async () => {
     vi.mocked(getTenantSecrets).mockResolvedValue({
       yolinkUaCid: "cid",
       yolinkSecretKey: "sk",
@@ -90,9 +94,11 @@ describe("resolveTenantFromWebhook auth", () => {
       // no webhookSecret
     } as never);
 
-    const req = makeRequest(`https://test.example.com/api/t/${TENANT_ID}/sensor-event`);
+    const req = makeRequest(`https://test.example.com/api/t/${TENANT_ID}/sensor-event`, {
+      Authorization: "Bearer anything",
+    });
     const ctx = await resolveTenantFromWebhook(TENANT_ID, req, {} as never);
-    expect(ctx).not.toBeNull();
+    expect(ctx).toBeNull();
   });
 
   it("allows request without request object (QStash-signed path)", async () => {
@@ -100,7 +106,7 @@ describe("resolveTenantFromWebhook auth", () => {
     expect(ctx).not.toBeNull();
   });
 
-  it("prefers Authorization header over query param", async () => {
+  it("accepts the header even with an unrelated query string", async () => {
     const req = makeRequest(
       `https://test.example.com/api/t/${TENANT_ID}/sensor-event?secret=wrong-in-query`,
       { Authorization: `Bearer ${WEBHOOK_SECRET}` },
