@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import * as api from "../../lib/api";
+import { parseDelay } from "../../lib/delay";
 
 interface StepProps {
   data: Record<string, unknown>;
@@ -124,7 +125,7 @@ export function Step3Sensors({ data, onSave }: StepProps) {
                 <input
                   type="number"
                   value={sensor.delay}
-                  onChange={(e) => updateSensor(i, "delay", parseInt(e.target.value) || 300)}
+                  onChange={(e) => updateSensor(i, "delay", parseDelay(e.target.value))}
                   className="w-20 border rounded px-2 py-1 text-sm"
                   min={0}
                 />

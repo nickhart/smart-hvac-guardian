@@ -37,9 +37,13 @@ export function Step8Review({ allStepData, onSave }: StepProps) {
         webhookUrls: res.webhookUrls,
       });
     } catch (err) {
+      // An invalid config comes back as a 400 whose body lists what's wrong.
+      const errors =
+        err instanceof api.ApiError ? (err.body as { errors?: unknown } | null)?.errors : undefined;
       setVerifyResult({
         ok: false,
         message: err instanceof Error ? err.message : "Verification failed",
+        errors,
       });
     } finally {
       setVerifying(false);

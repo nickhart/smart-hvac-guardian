@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import * as api from "../lib/api";
+import { parseDelay } from "../lib/delay";
 
 interface HvacUnit {
   name: string;
@@ -377,7 +378,7 @@ export function Settings({ onBack }: SettingsProps) {
                   type="number"
                   value={unit.delaySeconds}
                   onChange={(e) =>
-                    updateHvacUnit(unitId, "delaySeconds", parseInt(e.target.value) || 300)
+                    updateHvacUnit(unitId, "delaySeconds", parseDelay(e.target.value))
                   }
                   className="w-20 border rounded px-2 py-1 text-sm"
                   min={0}
@@ -431,7 +432,7 @@ export function Settings({ onBack }: SettingsProps) {
                 <input
                   type="number"
                   value={config.sensorDelays[sensorId]}
-                  onChange={(e) => updateSensorDelay(sensorId, parseInt(e.target.value) || 300)}
+                  onChange={(e) => updateSensorDelay(sensorId, parseDelay(e.target.value))}
                   className="w-20 border rounded px-2 py-1 text-sm"
                   min={0}
                 />
