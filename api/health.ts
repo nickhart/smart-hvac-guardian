@@ -12,6 +12,7 @@ export interface HealthDeps {
   logger?: Logger;
   checkRedis?: () => Promise<void>;
   loadSecrets?: () => { tinybirdToken?: string; resendApiKey?: string };
+  databaseConfigured?: boolean;
 }
 
 export interface HealthReport {
@@ -26,8 +27,11 @@ export interface HealthReport {
  * when it matters — so it reports only per-check status, never config values,
  * credentials, or error details that would be useful to an attacker.
  *
- * Redis is the only hard dependency: without it no timer state can be read or
- * written. Analytics being unconfigured is reported but is not a failure.
+ * Redis and the database are the hard dependencies: without Redis no timer
+ * state can be read or written, and without the database there are no tenants,
+ * so every route refuses. The database is checked for being configured, not
+ * queried — a query on every poll would keep a serverless Postgres from ever
+ * suspending. Analytics being unconfigured is reported but is not a failure.
  */
 export async function handleHealth(_request: Request, deps?: HealthDeps): Promise<Response> {
   const logger = deps?.logger ?? createLogger();
@@ -69,6 +73,10 @@ export async function handleHealth(_request: Request, deps?: HealthDeps): Promis
     checks.analytics = secrets.tinybirdToken ? "ok" : "not_configured";
     checks.email = secrets.resendApiKey ? "ok" : "not_configured";
   }
+
+  const databaseConfigured = deps?.databaseConfigured ?? Boolean(process.env.DATABASE_URL);
+  checks.database = databaseConfigured ? "ok" : "fail";
+  if (!databaseConfigured) logger.error("Health: DATABASE_URL is not set");
 
   const healthy = !Object.values(checks).includes("fail");
   const report: HealthReport = {
