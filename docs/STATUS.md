@@ -94,7 +94,7 @@ Still open: extending the breaker to YoLink, and surfacing circuit state in the 
 
 - `no-floating-promises` and `no-misused-promises` are enabled (type-aware, scoped to files `tsconfig.json` covers). A dropped analytics promise on Edge runtime is now a lint error rather than a silent data loss.
 - `pnpm test:e2e` runs in CI — 7 full sensor-to-turn-off scenarios that previously only ran locally.
-- Node 24 across CI, the devcontainer and `engines`, with actions on their Node 24-native majors.
+- Node 24 across CI and `engines`, with actions on their Node 24-native majors.
 - CI is path-aware: documentation-only pull requests run formatting and a Markdown link check, code runs the full suite. **`gate` is the job to mark required in branch protection** — a job skipped by a path filter reports as skipped rather than successful, so requiring `code` directly would block every documentation-only pull request.
 - `src/utils/http.ts` is the only place allowed to call `fetch`, enforced by a test over every file in `src/` and `api/`. A call with no timeout looks exactly like one with a timeout, only shorter.
 - Tinybird definitions, the `.datasource` files and the ingest call sites are checked against each other, including that every deployed resource grants the read-only token. Each of those has drifted in production at least once.
