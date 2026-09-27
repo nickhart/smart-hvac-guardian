@@ -8,7 +8,10 @@ import { upsertTenantConfig } from "../../src/db/queries/config.js";
 import { setTenantSecrets } from "../../src/db/queries/secrets.js";
 import { RedisStateStore } from "../../src/providers/redis/index.js";
 import { loadEnvSecrets } from "../../src/config/index.js";
-import { AppConfigSchema } from "../../src/config/schema.js";
+import {
+  tenantWebhookUrls,
+  validateOnboardingConfig,
+} from "../../src/onboarding/assemble-config.js";
 import { createSession } from "../../src/auth/session.js";
 import { createLogger } from "../../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../../src/utils/response.js";
@@ -49,28 +52,11 @@ export default async function handler(request: Request): Promise<Response> {
       return errorResponse("Missing required credentials. Complete all steps first.", 400);
     }
 
-    // Assemble config
-    const step3 = (progress["3"] ?? {}) as Record<string, unknown>;
-    const step4 = (progress["4"] ?? {}) as Record<string, unknown>;
-    const step5 = (progress["5"] ?? {}) as Record<string, unknown>;
-
     const appUrl =
       secrets.appUrl ||
       (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+    const result = validateOnboardingConfig(progress, session.tenantId, appUrl);
 
-    const rawConfig = {
-      zones: step5["zones"] ?? {},
-      sensorDelays: step3["sensorDelays"] ?? {},
-      hvacUnits: step4["hvacUnits"] ?? {},
-      sensorNames: step3["sensorNames"] ?? {},
-      sensorDefaults: step3["sensorDefaults"] ?? {},
-      yolink: {
-        baseUrl: (step3["yolinkBaseUrl"] as string) ?? "https://api.yosmart.com/open/yolink/v2/api",
-      },
-      turnOffUrl: `${appUrl}/api/t/${session.tenantId}/hvac-turn-off`,
-    };
-
-    const result = AppConfigSchema.safeParse(rawConfig);
     if (!result.success) {
       return jsonResponse(
         {
@@ -109,10 +95,7 @@ export default async function handler(request: Request): Promise<Response> {
     const response = jsonResponse({
       status: "ok",
       message: "Your system is now active!",
-      webhookUrls: {
-        sensorEvent: `${appUrl}/api/t/${session.tenantId}/sensor-event`,
-        hvacEvent: `${appUrl}/api/t/${session.tenantId}/hvac-event`,
-      },
+      webhookUrls: tenantWebhookUrls(appUrl, session.tenantId),
       webhookSecret,
     });
 

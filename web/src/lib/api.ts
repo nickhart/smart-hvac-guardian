@@ -22,11 +22,32 @@ export interface SessionResponse {
   tenantStatus?: "onboarding" | "active" | "suspended";
 }
 
+/**
+ * A non-2xx response. Carries the parsed body, because some endpoints put more
+ * than a message in it — verify returns the validation errors.
+ */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+    readonly body: unknown,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, init);
   if (!res.ok) {
-    const body = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error((body as { error?: string }).error ?? res.statusText);
+    const body = (await res.json().catch(() => null)) as {
+      error?: string;
+      message?: string;
+    } | null;
+    // Handlers report failures two ways: `{ error }` from errorResponse, and
+    // `{ status: "error", message }` from the onboarding checks. Reading only
+    // `error` turned "Invalid YoLink credentials" into "Bad Request".
+    throw new ApiError(body?.error ?? body?.message ?? res.statusText, res.status, body);
   }
   return res.json() as Promise<T>;
 }

@@ -11,6 +11,35 @@ Forward-looking features and explorations. See [STATUS.md](./STATUS.md) for what
 - **Interior door assignment rework**: Dedicated step or section where the user picks a sensor marked as interior, then selects which two zones it connects — instead of configuring interior doors within each zone's card. This makes the mental model clearer and avoids duplicate/conflicting entries.
 - **Zone-centric HVAC/sensor assignment**: Rather than toggling items per-zone, define which zone each HVAC unit and exterior sensor belongs to (single-owner), with validation that every item is assigned exactly once.
 
+### IFTTT applet setup wizard
+
+Creating the IFTTT applets is the longest and most error-prone part of setup, and nothing in the app helps with it. Activation shows the two webhook URLs and the secret once; the README explains the rest. A property with S sensors and U units needs `2S + 3U` applets — 22 for five sensors and four units — each typed by hand into IFTTT's editor. A mistake is silent, because IFTTT returns 200 whether or not an applet is listening.
+
+A second wizard, reachable from Settings after activation, that turns the tenant's config into a checklist of every applet and everything to paste into it:
+
+| Applets         | IFTTT trigger                                              | IFTTT action                                         | Body                                             |
+| --------------- | ---------------------------------------------------------- | ---------------------------------------------------- | ------------------------------------------------ |
+| 2 per sensor    | YoLink: _sensor_ opens / closes                            | Webhooks: make a web request to the sensor-event URL | `{"sensorId":"<id>","event":"open"}` / `"close"` |
+| 2 per HVAC unit | Cielo: _unit_ powered on / off                             | Webhooks: make a web request to the hvac-event URL   | `{"hvacId":"<id>","event":"on"}` / `"off"`       |
+| 1 per HVAC unit | Webhooks: receive a web request, event `turn_off_<unitId>` | Cielo: turn _unit_ off                               | —                                                |
+
+- **A copy button on every field**: URL, method, content type, `Authorization` header, body, event name. Device names are shown as YoLink and Cielo show them, so the right trigger is easy to find.
+- **Check each applet as it's created.** The app already receives the events these applets send, so the wizard can wait for one: "open the Front Door now", then ✓ when a `sensor-event` for that sensor arrives. Powered on/off works the same way. Turn-off applets can only be checked by firing the event, as the onboarding Test step does, and asking the user to confirm the unit responded (see [Verify the shutoff actually happened](#verify-the-shutoff-actually-happened)).
+- **Progress is saved**, so the applets can be done over several sittings. The checklist can be reopened when a sensor or unit is added, showing only what's new.
+
+**Design question: the webhook secret.** Every sensor and HVAC-state applet needs the `Authorization` header, but the secret is shown once at activation and stored encrypted. Options:
+
+1. Show the header with a placeholder and have the user paste in the secret they saved. The minimum.
+2. Let the owner reveal the secret again after re-authenticating.
+3. A "rotate secret" action: a new secret, shown once, used in every applet from then on. It suits a full re-setup and breaks existing applets otherwise. It's also the missing answer to a leaked secret, for which there's no path today.
+
+**Bonus: automate applet creation with Playwright.** IFTTT has no API for managing applets (the Platform API is for companies building IFTTT services), so the only automation is driving ifttt.com in a browser. That's plausible as a script the owner runs on their own machine, headed. They sign in themselves (Playwright can reuse the session), and the script fills in each applet from the same list the wizard generates. Before building it:
+
+- Check IFTTT's terms of service on automated use of the website.
+- Expect it to break: IFTTT's editor changes without notice, and one selector change breaks the script. Worth it only if the manual wizard still proves painful at 20+ applets.
+- Never store IFTTT credentials, and never run it server-side.
+- Keep it a helper outside the product. The wizard's checklist and per-applet checks stay the source of truth for whether an applet works.
+
 ### Analytics dashboard
 
 Build a dashboard page showing shutoff history, frequency charts, and per-sensor breakdown using the existing Tinybird endpoints (`shutoffs_per_day`, `sensor_trigger_frequency`, `recent_activity`, `exposure_duration`).
@@ -459,6 +488,8 @@ Web-based stepper wizard that walks a new client through the entire setup proces
 - Test connection — fire a test webhook event
 
 **Step 7 — Create IFTTT applets**
+
+_Superseded by [IFTTT applet setup wizard](#ifttt-applet-setup-wizard), which covers all three applet kinds, not only turn-off._
 
 - For each HVAC unit, show exact step-by-step instructions to create the "turn off" applet
   - Which IFTTT trigger (webhook event name) to use

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { parseDelay } from "../../lib/delay";
 
 interface StepProps {
   data: Record<string, unknown>;
@@ -121,7 +122,7 @@ export function Step5HvacUnits({ data, onSave }: StepProps) {
                 <input
                   type="number"
                   value={unit.delaySeconds}
-                  onChange={(e) => updateDelay(i, parseInt(e.target.value) || 300)}
+                  onChange={(e) => updateDelay(i, parseDelay(e.target.value))}
                   className="w-20 border rounded px-2 py-1 text-sm"
                   min={0}
                 />
