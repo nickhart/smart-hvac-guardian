@@ -12,7 +12,10 @@ An IFTTT trigger returns 200 whether an applet is listening or not, so
 the shutoffs work — see "Verify the shutoff actually happened" in the roadmap.
 
 One unit (`loft_bedroom`) has its state-reporting applets verified in both
-directions; the other three are created but untested.
+directions; the other three are created but untested. HVAC state events are
+sparse: as of 2026-09-27 no "powered off" applet has run outside a test, and
+one "powered on" trigger failed on Cielo's side and never posted — see "HVAC
+state tracking" in the roadmap.
 
 Nothing in the data distinguishes a dry run from real operation, and several
 other dates change what a query means. They are listed together in
