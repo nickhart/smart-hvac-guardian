@@ -134,8 +134,8 @@ Open your `APP_URL`, enter your email and click the link Resend delivers. A new 
 1. **Welcome**
 2. **YoLink credentials**: your UA-CID and Secret Key, from the YoLink app under Account → Advanced Settings → User Access Credentials. The wizard tests them.
 3. **Sensors**: imported from your YoLink account. Set a display name and delay for each.
-4. **Zones**: which sensors are exterior openings, which are interior doors, and which zones they connect.
-5. **HVAC units**: one per unit, each with its own turn-off delay. Each unit gets an IFTTT event name, `turn_off_<unitId>`.
+4. **HVAC units**: one per unit, each with its own turn-off delay. Each unit gets an IFTTT event name, `turn_off_<unitId>`.
+5. **Zones**: which units each zone contains, which sensors are exterior openings, which are interior doors, and which zones they connect.
 6. **IFTTT webhook key**: from [ifttt.com/maker_webhooks](https://ifttt.com/maker_webhooks) → Documentation.
 7. **Test applets**: fires each unit's turn-off event so you can confirm the shutoff applets from step 8 work. **This really turns the unit off.**
 8. **Review**
