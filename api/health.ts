@@ -5,13 +5,14 @@ import { RedisStateStore } from "../src/providers/redis/index.js";
 import { createLogger } from "../src/utils/logger.js";
 import type { Logger } from "../src/utils/logger.js";
 import { jsonResponse } from "../src/utils/response.js";
+import { emailStatus } from "../src/utils/email.js";
 
 export type CheckStatus = "ok" | "fail" | "not_configured";
 
 export interface HealthDeps {
   logger?: Logger;
   checkRedis?: () => Promise<void>;
-  loadSecrets?: () => { tinybirdToken?: string; resendApiKey?: string };
+  loadSecrets?: () => { tinybirdToken?: string; resendApiKey?: string; emailFrom?: string };
   databaseConfigured?: boolean;
 }
 
@@ -39,7 +40,7 @@ export async function handleHealth(_request: Request, deps?: HealthDeps): Promis
   const checks: Record<string, CheckStatus> = {};
 
   // Config must parse before anything else can be checked.
-  let secrets: { tinybirdToken?: string; resendApiKey?: string } | null = null;
+  let secrets: { tinybirdToken?: string; resendApiKey?: string; emailFrom?: string } | null = null;
   try {
     secrets = deps?.loadSecrets ? deps.loadSecrets() : loadEnvSecrets();
     checks.config = "ok";
@@ -71,7 +72,8 @@ export async function handleHealth(_request: Request, deps?: HealthDeps): Promis
     }
 
     checks.analytics = secrets.tinybirdToken ? "ok" : "not_configured";
-    checks.email = secrets.resendApiKey ? "ok" : "not_configured";
+    // A Resend key without EMAIL_FROM fails: sign-in email cannot be sent.
+    checks.email = emailStatus(secrets);
   }
 
   const databaseConfigured = deps?.databaseConfigured ?? Boolean(process.env.DATABASE_URL);

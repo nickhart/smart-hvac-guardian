@@ -22,7 +22,11 @@ describe("health handler", () => {
     const res = await handleHealth(makeRequest(), {
       logger,
       checkRedis: vi.fn().mockResolvedValue(undefined),
-      loadSecrets: () => ({ tinybirdToken: "tb", resendApiKey: "re" }),
+      loadSecrets: () => ({
+        tinybirdToken: "tb",
+        resendApiKey: "re",
+        emailFrom: "noreply@example.com",
+      }),
     });
 
     expect(res.status).toBe(200);
@@ -44,7 +48,11 @@ describe("health handler", () => {
     const res = await handleHealth(makeRequest(), {
       logger,
       checkRedis: vi.fn().mockResolvedValue(undefined),
-      loadSecrets: () => ({ tinybirdToken: "tb", resendApiKey: "re" }),
+      loadSecrets: () => ({
+        tinybirdToken: "tb",
+        resendApiKey: "re",
+        emailFrom: "noreply@example.com",
+      }),
     });
 
     expect(res.status).toBe(503);
@@ -56,13 +64,29 @@ describe("health handler", () => {
     const res = await handleHealth(makeRequest(), {
       logger,
       checkRedis: vi.fn().mockRejectedValue(new Error("connect ECONNREFUSED")),
-      loadSecrets: () => ({ tinybirdToken: "tb", resendApiKey: "re" }),
+      loadSecrets: () => ({
+        tinybirdToken: "tb",
+        resendApiKey: "re",
+        emailFrom: "noreply@example.com",
+      }),
     });
 
     expect(res.status).toBe(503);
     const body = (await res.json()) as HealthReport;
     expect(body.status).toBe("degraded");
     expect(body.checks.redis).toBe("fail");
+  });
+
+  it("returns 503 when email has a Resend key but no EMAIL_FROM", async () => {
+    const res = await handleHealth(makeRequest(), {
+      logger,
+      checkRedis: vi.fn().mockResolvedValue(undefined),
+      loadSecrets: () => ({ tinybirdToken: "tb", resendApiKey: "re" }),
+    });
+
+    expect(res.status).toBe(503);
+    const body = (await res.json()) as HealthReport;
+    expect(body.checks.email).toBe("fail");
   });
 
   it("reports unconfigured optional services without failing", async () => {
