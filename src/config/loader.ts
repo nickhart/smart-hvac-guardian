@@ -40,9 +40,6 @@ export function loadEnvSecrets(env?: Record<string, string | undefined>): EnvSec
   const source = env ?? process.env;
 
   const raw = {
-    yolinkUaCid: source.YOLINK_UA_CID,
-    yolinkSecretKey: source.YOLINK_SECRET_KEY,
-    iftttWebhookKey: source.IFTTT_WEBHOOK_KEY,
     qstashToken: source.QSTASH_TOKEN,
     qstashCurrentSigningKey: source.QSTASH_CURRENT_SIGNING_KEY,
     qstashNextSigningKey: source.QSTASH_NEXT_SIGNING_KEY,

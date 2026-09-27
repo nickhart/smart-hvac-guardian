@@ -275,10 +275,16 @@ describe("loadEnvSecrets", () => {
 
   it("parses valid env secrets", () => {
     const secrets = loadEnvSecrets(validSecrets);
-    expect(secrets.yolinkUaCid).toBe("ua-cid");
-    expect(secrets.iftttWebhookKey).toBe("ifttt-key");
     expect(secrets.upstashRedisUrl).toBe("https://redis.upstash.io");
     expect(secrets.upstashRedisToken).toBe("redis-token");
+  });
+
+  // YoLink and IFTTT keys belong to each tenant, in the database. Env vars
+  // with those names are ignored rather than used as anyone's credentials.
+  it("does not read YoLink or IFTTT keys from the environment", () => {
+    const secrets = loadEnvSecrets(validSecrets) as Record<string, unknown>;
+    expect(secrets).not.toHaveProperty("yolinkUaCid");
+    expect(secrets).not.toHaveProperty("iftttWebhookKey");
   });
 
   it("throws on missing secrets", () => {
