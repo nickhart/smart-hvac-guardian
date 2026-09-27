@@ -11,7 +11,7 @@ import type { Database } from "../../src/db/client.js";
 import { createLogger } from "../../src/utils/logger.js";
 import type { Logger } from "../../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../../src/utils/response.js";
-import { createResendSender } from "../../src/utils/email.js";
+import { createResendSender, emailStatus } from "../../src/utils/email.js";
 
 const SendMagicPayload = z.object({
   email: z.string().email(),
@@ -43,8 +43,13 @@ export async function handleSendMagic(request: Request, deps?: SendMagicDeps): P
 
     const secrets = deps?.secrets ?? loadEnvSecrets();
 
-    if (!secrets.resendApiKey) {
-      logger.error("Auth not configured", { requestId });
+    // Sign-in is email-only, so without a way to send there is no sign-in.
+    // Refusing here names the problem; sending anyway would surface as a
+    // Resend rejection on a link the user never receives.
+    if (emailStatus(secrets) !== "ok") {
+      logger.error("Auth not configured: RESEND_API_KEY and EMAIL_FROM are both required", {
+        requestId,
+      });
       return errorResponse("Auth not configured", 503);
     }
 

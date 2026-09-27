@@ -57,18 +57,18 @@ Set these in your Vercel project (Settings → Environment Variables). Also put 
 
 #### Required
 
-| Variable                     | Where to get it                                                                                          |
-| ---------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `DATABASE_URL`               | Neon connection string                                                                                   |
-| `MASTER_ENCRYPTION_KEY`      | Generate with `openssl rand -hex 32` (64 hex chars). Encrypts tenant secrets at rest — **back it up**    |
-| `UPSTASH_REDIS_REST_URL`     | Upstash console → Redis → REST API                                                                       |
-| `UPSTASH_REDIS_REST_TOKEN`   | Upstash console → Redis → REST API                                                                       |
-| `QSTASH_TOKEN`               | Upstash console → QStash                                                                                 |
-| `QSTASH_CURRENT_SIGNING_KEY` | Upstash console → QStash → Signing keys                                                                  |
-| `QSTASH_NEXT_SIGNING_KEY`    | Upstash console → QStash → Signing keys                                                                  |
-| `RESEND_API_KEY`             | Resend dashboard → API Keys                                                                              |
-| `EMAIL_FROM`                 | A sender address on your Resend-verified domain, e.g. `noreply@example.com`                              |
-| `APP_URL`                    | Your deployment's public URL, e.g. `https://your-app.vercel.app`. Used in sign-in links and webhook URLs |
+| Variable                     | Where to get it                                                                                                                  |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL`               | Neon connection string                                                                                                           |
+| `MASTER_ENCRYPTION_KEY`      | Generate with `openssl rand -hex 32` (64 hex chars). Encrypts tenant secrets at rest — **back it up**                            |
+| `UPSTASH_REDIS_REST_URL`     | Upstash console → Redis → REST API                                                                                               |
+| `UPSTASH_REDIS_REST_TOKEN`   | Upstash console → Redis → REST API                                                                                               |
+| `QSTASH_TOKEN`               | Upstash console → QStash                                                                                                         |
+| `QSTASH_CURRENT_SIGNING_KEY` | Upstash console → QStash → Signing keys                                                                                          |
+| `QSTASH_NEXT_SIGNING_KEY`    | Upstash console → QStash → Signing keys                                                                                          |
+| `RESEND_API_KEY`             | Resend dashboard → API Keys                                                                                                      |
+| `EMAIL_FROM`                 | A sender address on your Resend-verified domain, e.g. `noreply@example.com`. There is no default: without it, sign-in is refused |
+| `APP_URL`                    | Your deployment's public URL, e.g. `https://your-app.vercel.app`. Used in sign-in links and webhook URLs                         |
 
 `MASTER_ENCRYPTION_KEY` cannot be rotated in place. If you lose or change it, every tenant's stored YoLink and IFTTT credentials become unreadable and have to be re-entered.
 
@@ -290,7 +290,7 @@ Redis and the database are the hard dependencies — it returns **503** when Red
 is unreachable, `DATABASE_URL` is not set, or config fails to validate, so a
 monitor can alert on status code alone. The database is checked for being
 configured, not queried, so polling doesn't keep a serverless Postgres awake.
-Unconfigured optional services report `not_configured` rather than failing.
+Unconfigured optional services report `not_configured` rather than failing. Email is the exception to watch: a Resend key without `EMAIL_FROM` reports `fail`, because sign-in can't work.
 
 Provider health is also recorded to the Tinybird `provider_events_v2` datasource
 (success, failure, or `skipped_circuit_open`), which is what shows an upstream

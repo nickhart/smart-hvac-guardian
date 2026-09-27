@@ -18,6 +18,7 @@ const mockSecrets: EnvSecrets = {
   upstashRedisUrl: "https://redis.upstash.io",
   upstashRedisToken: "redis-token",
   resendApiKey: "re_test_123",
+  emailFrom: "noreply@example.com",
   appUrl: "https://myapp.example.com",
 };
 
@@ -64,6 +65,15 @@ describe("send-magic handler", () => {
     });
     const res = await handleSendMagic(makeRequest({ email: "test@example.com" }), deps);
     expect(res.status).toBe(503);
+  });
+
+  // No default sender any more: a Resend key alone would only send from a
+  // domain nobody verified, so it counts as unconfigured.
+  it("returns 503 with a Resend key but no EMAIL_FROM", async () => {
+    const deps = createDeps({ secrets: { ...mockSecrets, emailFrom: undefined } });
+    const res = await handleSendMagic(makeRequest({ email: "owner@example.com" }), deps);
+    expect(res.status).toBe(503);
+    expect(deps.sendEmail).not.toHaveBeenCalled();
   });
 
   it("returns 400 for invalid payload", async () => {

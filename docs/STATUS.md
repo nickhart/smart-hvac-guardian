@@ -36,7 +36,7 @@ Redis flag (`system:enabled`) checked in `sensor-event`, `hvac-event`, and `hvac
 
 ### Resend.dev integration
 
-Resend is used as the transactional email provider for magic-link login emails, sending from a verified `acsavr.com` address (override with `EMAIL_FROM`).
+Resend is used as the transactional email provider for magic-link login emails, sending from `EMAIL_FROM`, which must be on a domain verified in the same Resend account. There is no default sender: a Resend key without `EMAIL_FROM` counts as misconfigured, and `/api/health` reports `email: fail`.
 
 All sending goes through `createResendSender()` in `src/utils/email.ts`, which **throws when Resend returns an error**. `resend.emails.send()` resolves with `{ data, error }` rather than rejecting, so an unchecked call reports success on a rejected send — that silently broke login for months.
 
