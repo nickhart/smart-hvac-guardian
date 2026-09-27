@@ -131,6 +131,38 @@ jobs:
       - name: E2E scenarios
         run: pnpm test:e2e
 
+  # The web app in a real browser, against a fake backend (web/e2e). Covers the
+  # setup wizard end to end without a database, YoLink or IFTTT.
+  web:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "24"
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        run: pnpm --filter smart-hvac-guardian-web exec playwright install --with-deps chromium
+
+      - name: Type check browser tests
+        run: pnpm --filter smart-hvac-guardian-web test:e2e:types
+
+      - name: Browser tests
+        run: pnpm web:test
+
+      - name: Upload report
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: web/playwright-report/
+          retention-days: 7
+
   # The single check to mark required in branch protection.
   #
   # A job skipped by a path filter reports as "skipped", not "success", so
@@ -138,7 +170,7 @@ jobs:
   # forever. This one always runs and fails only if something that did run
   # failed.
   gate:
-    needs: [changes, docs, code, e2e]
+    needs: [changes, docs, code, e2e, web]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -148,5 +180,6 @@ jobs:
           echo "docs:    ${{ needs.docs.result }}"
           echo "code:    ${{ needs.code.result }}"
           echo "e2e:     ${{ needs.e2e.result }}"
+          echo "web:     ${{ needs.web.result }}"
       - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
         run: exit 1

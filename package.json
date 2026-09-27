@@ -20,6 +20,7 @@
     "tinybird:preview": "tinybird preview",
     "web:dev": "pnpm --filter smart-hvac-guardian-web dev",
     "web:build": "pnpm --filter smart-hvac-guardian-web build",
+    "web:test": "pnpm --filter smart-hvac-guardian-web test:e2e",
     "cli": "tsx scripts/cli.ts",
     "db:push": "drizzle-kit push",
     "gh:runs": "gh run list --limit 5",
