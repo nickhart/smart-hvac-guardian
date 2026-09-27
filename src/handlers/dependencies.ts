@@ -38,22 +38,22 @@ export function createDependencies(
   config: AppConfig,
   secrets: EnvSecrets,
   logger: Logger,
-  options?: { tenantId?: string; tenantSecrets?: TenantSecrets },
+  tenant: { tenantId: string; tenantSecrets: TenantSecrets },
 ): Dependencies {
-  // Per-tenant credentials override env secrets for YoLink/IFTTT
-  const yolinkUaCid = options?.tenantSecrets?.yolinkUaCid || secrets.yolinkUaCid;
-  const yolinkSecretKey = options?.tenantSecrets?.yolinkSecretKey || secrets.yolinkSecretKey;
-  const iftttWebhookKey = options?.tenantSecrets?.iftttWebhookKey || secrets.iftttWebhookKey;
+  // YoLink and IFTTT keys are the tenant's own, never the operator's. There
+  // used to be a fallback to YOLINK_*/IFTTT_WEBHOOK_KEY env vars, which would
+  // have quietly run one tenant's house on another's accounts.
+  const { tenantId, tenantSecrets } = tenant;
 
   const yolinkClient = new YoLinkClient({
     baseUrl: config.yolink.baseUrl,
-    uaCid: yolinkUaCid,
-    secretKey: yolinkSecretKey,
+    uaCid: tenantSecrets.yolinkUaCid,
+    secretKey: tenantSecrets.yolinkSecretKey,
     logger,
   });
 
   const iftttClient = new IFTTTClient({
-    webhookKey: iftttWebhookKey,
+    webhookKey: tenantSecrets.iftttWebhookKey,
     logger,
   });
 
@@ -62,14 +62,14 @@ export function createDependencies(
       ? new TinybirdAnalyticsProvider({
           baseUrl: secrets.tinybirdUrl,
           token: secrets.tinybirdToken,
-          tenantId: options?.tenantId,
+          tenantId,
         })
       : new NoopAnalyticsProvider();
 
   const stateStore = new RedisStateStore({
     url: secrets.upstashRedisUrl,
     token: secrets.upstashRedisToken,
-    tenantId: options?.tenantId,
+    tenantId,
     logger,
   });
 
@@ -85,7 +85,7 @@ export function createDependencies(
       checkStateUrl: "unused",
       turnOffUrl: config.turnOffUrl,
       logger,
-      tenantId: options?.tenantId,
+      tenantId,
     }),
     stateStore,
     analytics,
@@ -95,6 +95,6 @@ export function createDependencies(
     }),
     config,
     logger,
-    tenantId: options?.tenantId,
+    tenantId,
   };
 }

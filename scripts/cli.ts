@@ -9,6 +9,7 @@
  *   tenant:suspend <tenantId>            Suspend a tenant
  *   tenant:activate <tenantId>           Activate a tenant
  *   tenant:delete <tenantId>             Delete a tenant and all related records
+ *   tenant:clear-drafts <tenantId>       Delete an active tenant's setup-wizard drafts
  *
  *   user:add <email> <tenantId> [role]   Add a user (role: owner|admin|viewer, default: viewer)
  *   user:list <tenantId>                 List users for a tenant
@@ -21,6 +22,7 @@
 import * as fs from "node:fs";
 import { Redis } from "@upstash/redis";
 import { getDb } from "../src/db/client.js";
+import { deleteOnboardingProgress, getOnboardingProgress } from "../src/db/queries/onboarding.js";
 import {
   createTenant,
   getAllTenants,
@@ -48,6 +50,8 @@ Tenant commands:
   tenant:suspend <tenantId>            Suspend a tenant
   tenant:activate <tenantId>           Activate a tenant
   tenant:delete <tenantId>             Delete tenant + all related records
+  tenant:clear-drafts <tenantId>       Delete an active tenant's setup-wizard drafts (they hold
+                                       plaintext YoLink/IFTTT keys)
 
 User commands:
   user:add <email> <tenantId> [role]   Add a user (role: owner|admin|viewer, default: viewer)
@@ -201,6 +205,35 @@ async function main(): Promise<void> {
       }
       await deleteTenant(db, tenantId);
       console.log(`Tenant ${tenantId} (${tenant.name}) deleted.`);
+      break;
+    }
+
+    // Activation deletes the drafts itself; this is for tenants activated
+    // before it did, whose drafts still hold the YoLink and IFTTT keys as typed.
+    case "tenant:clear-drafts": {
+      const tenantId = args[0];
+      if (!tenantId) {
+        console.error("Error: tenantId is required");
+        usage();
+      }
+      const tenant = await getTenantById(db, tenantId);
+      if (!tenant) {
+        console.error(`Error: tenant ${tenantId} not found`);
+        process.exit(1);
+      }
+      if (tenant.status === "onboarding") {
+        console.error(
+          `Error: tenant ${tenantId} is still in setup — clearing its drafts would lose its progress.`,
+        );
+        process.exit(1);
+      }
+      const drafts = await getOnboardingProgress(db, tenantId);
+      if (!drafts) {
+        console.log(`Tenant ${tenantId} has no drafts. Nothing to do.`);
+        break;
+      }
+      await deleteOnboardingProgress(db, tenantId);
+      console.log(`Deleted setup-wizard drafts for ${tenantId} (${tenant.name}).`);
       break;
     }
 

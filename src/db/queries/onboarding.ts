@@ -32,3 +32,12 @@ export async function saveOnboardingStep(
       set: { stepData, updatedAt: new Date() },
     });
 }
+
+/**
+ * Drop a tenant's wizard drafts. They hold the YoLink and IFTTT keys as typed,
+ * in plaintext, so they must not outlive onboarding: once activation has
+ * stored those keys encrypted, the drafts are only a second, unencrypted copy.
+ */
+export async function deleteOnboardingProgress(db: Database, tenantId: string): Promise<void> {
+  await db.delete(onboardingProgress).where(eq(onboardingProgress.tenantId, tenantId));
+}

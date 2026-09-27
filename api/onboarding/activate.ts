@@ -2,7 +2,10 @@ export const config = { runtime: "edge" };
 
 import { getSessionPayload, getSessionToken } from "../../src/auth/session.js";
 import { getDb } from "../../src/db/client.js";
-import { getOnboardingProgress } from "../../src/db/queries/onboarding.js";
+import {
+  deleteOnboardingProgress,
+  getOnboardingProgress,
+} from "../../src/db/queries/onboarding.js";
 import { getTenantById, updateTenantStatus } from "../../src/db/queries/tenants.js";
 import { upsertTenantConfig } from "../../src/db/queries/config.js";
 import { setTenantSecrets } from "../../src/db/queries/secrets.js";
@@ -86,6 +89,19 @@ export default async function handler(request: Request): Promise<Response> {
 
     // Activate tenant
     await updateTenantStatus(db, session.tenantId, "active");
+
+    // The drafts hold the YoLink and IFTTT keys in plaintext; they're stored
+    // encrypted now, so drop the copy. A failure here must not fail the
+    // activation — this response is the only time the webhook secret is shown.
+    try {
+      await deleteOnboardingProgress(db, session.tenantId);
+    } catch (error) {
+      logger.error("Could not delete onboarding drafts", {
+        requestId,
+        tenantId: session.tenantId,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
 
     // Refresh session to reflect new status
     const newSession = await createSession(authStore, session.email, db);

@@ -12,9 +12,6 @@ const mockLogger: Logger = {
 };
 
 const mockSecrets: EnvSecrets = {
-  yolinkUaCid: "ua-cid",
-  yolinkSecretKey: "secret-key",
-  iftttWebhookKey: "ifttt-key",
   qstashToken: "qstash-token",
   qstashCurrentSigningKey: "current-key",
   qstashNextSigningKey: "next-key",

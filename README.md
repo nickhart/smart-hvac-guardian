@@ -85,7 +85,7 @@ Set these in your Vercel project (Settings → Environment Variables). Also put 
 
 YoLink and IFTTT credentials are **not** environment variables. They're entered in the setup wizard and stored encrypted per tenant.
 
-> Earlier versions had a single-tenant mode configured from `APP_CONFIG`, with no database. It has been removed: without `DATABASE_URL` every route refuses with a 503. Deployments ignore `APP_CONFIG` and `OWNER_EMAIL`. **Don't set `YOLINK_UA_CID`, `YOLINK_SECRET_KEY` or `IFTTT_WEBHOOK_KEY` either** — each tenant has its own, entered in the wizard.
+> Earlier versions had a single-tenant mode configured from `APP_CONFIG`, with no database. It has been removed: without `DATABASE_URL` every route refuses with a 503. Deployments ignore `APP_CONFIG`, `OWNER_EMAIL`, `YOLINK_UA_CID`, `YOLINK_SECRET_KEY` and `IFTTT_WEBHOOK_KEY`; each tenant's YoLink and IFTTT keys are its own, entered in the wizard.
 
 ### 3. Create the database schema
 
@@ -163,7 +163,7 @@ The powered on/off applets matter. Without them the system can't tell that a uni
 
 IFTTT answers every webhook with `200` whether or not an applet is listening for that event. A missing or misnamed turn-off applet therefore fails silently, which is what the wizard's test step is for.
 
-Keep the webhook secret private. Anyone who has it and your tenant ID can send events for your property.
+Keep the webhook secret private. Anyone who has it and your tenant ID can send events for your property. The secret is only accepted in the `Authorization` header, never in the URL, where it would end up in request logs.
 
 ### 9. Watch it in shadow mode, then enable it
 
@@ -388,14 +388,15 @@ pnpm cli --env-file .env <command> [...args]
 
 #### Tenant commands
 
-| Command                      | Description                               |
-| ---------------------------- | ----------------------------------------- |
-| `tenant:create <name>`       | Create a new tenant (auto-generates slug) |
-| `tenant:list`                | List all tenants                          |
-| `tenant:activate <tenantId>` | Activate a tenant                         |
-| `tenant:suspend <tenantId>`  | Suspend a tenant                          |
-| `tenant:delete <tenantId>`   | Delete tenant and all related data        |
-| `redis:flush <tenantId>`     | Delete all Redis state keys for a tenant  |
+| Command                          | Description                                   |
+| -------------------------------- | --------------------------------------------- |
+| `tenant:create <name>`           | Create a new tenant (auto-generates slug)     |
+| `tenant:list`                    | List all tenants                              |
+| `tenant:activate <tenantId>`     | Activate a tenant                             |
+| `tenant:suspend <tenantId>`      | Suspend a tenant                              |
+| `tenant:delete <tenantId>`       | Delete tenant and all related data            |
+| `redis:flush <tenantId>`         | Delete all Redis state keys for a tenant      |
+| `tenant:clear-drafts <tenantId>` | Delete an active tenant's setup-wizard drafts |
 
 #### User commands
 
