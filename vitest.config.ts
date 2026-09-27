@@ -23,7 +23,6 @@ export default defineConfig({
         "src/providers/yolink/types.ts",
         "src/db/client.ts",
         "src/db/queries/**",
-        "src/migration/**",
         "api/onboarding/**",
         "api/auth/**",
         "api/settings/**",

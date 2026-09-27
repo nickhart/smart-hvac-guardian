@@ -5,6 +5,11 @@ import { ConfigError } from "../utils/errors.js";
 let cachedConfig: AppConfig | null = null;
 let cachedSecrets: EnvSecrets | null = null;
 
+/**
+ * Parse an APP_CONFIG value. Only the local dev server uses this: deployed
+ * tenants keep their config in the database, and there is no mode that reads
+ * APP_CONFIG from the environment any more.
+ */
 export function loadConfig(envValue?: string): AppConfig {
   if (cachedConfig) return cachedConfig;
 
@@ -47,7 +52,6 @@ export function loadEnvSecrets(env?: Record<string, string | undefined>): EnvSec
     tinybirdUrl: source.TINYBIRD_URL || undefined,
     resendApiKey: source.RESEND_API_KEY || undefined,
     emailFrom: source.EMAIL_FROM || undefined,
-    ownerEmail: source.OWNER_EMAIL || undefined,
     appUrl: source.APP_URL || undefined,
     siteName: source.SITE_NAME || undefined,
     logoUrl: source.LOGO_URL || undefined,

@@ -1,5 +1,13 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { handleSession, type SessionDeps } from "../../../api/auth/session";
+import { fakeDb } from "./fake-db";
+
+const STORED_SESSION = JSON.stringify({
+  email: "owner@example.com",
+  tenantId: "tenant-1",
+  userId: "user-1",
+  tenantStatus: "active",
+});
 import type { Logger } from "@/utils/logger";
 
 const mockLogger: Logger = {
@@ -16,13 +24,18 @@ function createDeps(overrides?: Partial<SessionDeps>): SessionDeps {
       getMagicToken: vi.fn(),
       deleteMagicToken: vi.fn(),
       setSession: vi.fn(),
-      getSession: vi.fn().mockResolvedValue("owner@example.com"),
+      getSession: vi.fn().mockResolvedValue(STORED_SESSION),
       deleteSession: vi.fn(),
     },
     logger: mockLogger,
+    db: fakeDb(),
     ...overrides,
   };
 }
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("session handler", () => {
   it("returns 405 for non-GET", async () => {
@@ -74,15 +87,26 @@ describe("session handler", () => {
     expect(res.status).toBe(200);
     expect(body.authenticated).toBe(true);
     expect(body.email).toBe("owner@example.com");
+    expect(body.tenantId).toBe("tenant-1");
+    expect(body.tenantStatus).toBe("active");
     expect(deps.authStore.getSession).toHaveBeenCalledWith("valid-token");
   });
 
-  it("returns unauthenticated when DB is present but getSessionPayload returns null", async () => {
-    const mockDb = {
-      query: { users: { findFirst: vi.fn().mockResolvedValue(undefined) } },
-    } as unknown as import("@/db/client").Database;
+  it("returns 503 when there is no database", async () => {
+    vi.stubEnv("DATABASE_URL", "");
+    const req = new Request("https://example.com/api/auth/session", {
+      method: "GET",
+      headers: { Cookie: "session=valid-token" },
+    });
+    const res = await handleSession(req, createDeps({ db: undefined }));
+    expect(res.status).toBe(503);
+  });
+
+  // A session from before sessions carried the tenant: a bare email, looked
+  // up in the database. An email with no user is not a session.
+  it("returns unauthenticated for an old-style session whose user is gone", async () => {
     const deps = createDeps({
-      db: mockDb,
+      db: fakeDb({}),
       authStore: {
         setMagicToken: vi.fn(),
         getMagicToken: vi.fn(),

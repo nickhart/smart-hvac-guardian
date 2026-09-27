@@ -45,44 +45,26 @@ export async function handleSession(request: Request, deps?: SessionDeps): Promi
       })();
 
     const db = deps?.db ?? (process.env.DATABASE_URL ? getDb() : undefined);
+    if (!db) {
+      logger.error("DATABASE_URL is not set", { requestId });
+      return errorResponse("Database not configured", 503);
+    }
 
-    // Try multi-tenant session (JSON payload with tenantId)
-    if (db) {
-      const payload = await getSessionPayload(authStore, token, db);
-      if (payload) {
-        logger.info("Session validated (multi-tenant)", { requestId, email: payload.email });
-        return jsonResponse({
-          authenticated: true,
-          email: payload.email,
-          tenantId: payload.tenantId,
-          tenantStatus: payload.tenantStatus,
-          siteName,
-          logoUrl,
-          primaryColor,
-        });
-      }
-      // DB is configured but payload reconstruction failed — session is invalid
+    const payload = await getSessionPayload(authStore, token, db);
+    if (!payload) {
       return jsonResponse({ authenticated: false, siteName, logoUrl, primaryColor });
     }
 
-    // Legacy fallback: session stores plain email (only when no DB)
-    const email = await authStore.getSession(token);
-
-    if (!email) {
-      return jsonResponse({ authenticated: false, siteName, logoUrl, primaryColor });
-    }
-
-    // If it looks like JSON, it was a multi-tenant session but DB is unavailable
-    try {
-      JSON.parse(email);
-      // It's JSON but we have no DB — can't validate
-      return jsonResponse({ authenticated: false, siteName, logoUrl, primaryColor });
-    } catch {
-      // Plain email string — legacy single-tenant
-    }
-
-    logger.info("Session validated", { requestId, email });
-    return jsonResponse({ authenticated: true, email, siteName, logoUrl, primaryColor });
+    logger.info("Session validated", { requestId, email: payload.email });
+    return jsonResponse({
+      authenticated: true,
+      email: payload.email,
+      tenantId: payload.tenantId,
+      tenantStatus: payload.tenantStatus,
+      siteName,
+      logoUrl,
+      primaryColor,
+    });
   } catch (error) {
     logger.error("session check error", {
       requestId,

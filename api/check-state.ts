@@ -1,9 +1,7 @@
 export const config = { runtime: "edge" };
 
-import { loadConfig, loadEnvSecrets } from "../src/config/index.js";
-import { createDependencies } from "../src/handlers/dependencies.js";
 import type { Dependencies } from "../src/handlers/dependencies.js";
-import { resolveTenantFromSession } from "../src/middleware/tenant.js";
+import { dependenciesForSession } from "../src/middleware/resolve-dependencies.js";
 import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
 import { evaluateZoneGraph } from "../src/zone-graph/index.js";
@@ -20,22 +18,8 @@ export async function handleCheckState(request: Request, deps?: Dependencies): P
       return errorResponse("Method not allowed", 405);
     }
 
-    // Resolve dependencies: multi-tenant (session) or legacy
-    let d: Dependencies;
-    if (deps) {
-      d = deps;
-    } else if (process.env.DATABASE_URL) {
-      const ctx = await resolveTenantFromSession(request);
-      if (!ctx) {
-        return errorResponse("Unauthorized", 401);
-      }
-      d = createDependencies(ctx.config, ctx.envSecrets, logger, {
-        tenantId: ctx.tenantId,
-        tenantSecrets: ctx.tenantSecrets,
-      });
-    } else {
-      d = createDependencies(loadConfig(), loadEnvSecrets(), logger);
-    }
+    const d = deps ?? (await dependenciesForSession(request, logger, requestId));
+    if (d instanceof Response) return d;
 
     const siteName = process.env.SITE_NAME || "HVAC Guardian";
 

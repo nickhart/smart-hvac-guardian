@@ -1,10 +1,8 @@
 export const config = { runtime: "edge" };
 
 import { z } from "zod";
-import { loadConfig, loadEnvSecrets } from "../src/config/index.js";
-import { createDependencies } from "../src/handlers/dependencies.js";
 import type { Dependencies } from "../src/handlers/dependencies.js";
-import { resolveTenantFromSession } from "../src/middleware/tenant.js";
+import { dependenciesForSession } from "../src/middleware/resolve-dependencies.js";
 import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
 
@@ -13,30 +11,13 @@ const SetDelayPayload = z.object({
   delaySeconds: z.number().int().positive(),
 });
 
-async function resolveDeps(
-  request: Request,
-  logger: ReturnType<typeof createLogger>,
-  deps?: Dependencies,
-): Promise<Dependencies | null> {
-  if (deps) return deps;
-  if (process.env.DATABASE_URL) {
-    const ctx = await resolveTenantFromSession(request);
-    if (!ctx) return null;
-    return createDependencies(ctx.config, ctx.envSecrets, logger, {
-      tenantId: ctx.tenantId,
-      tenantSecrets: ctx.tenantSecrets,
-    });
-  }
-  return createDependencies(loadConfig(), loadEnvSecrets(), logger);
-}
-
 export async function handleUnitDelay(request: Request, deps?: Dependencies): Promise<Response> {
   const logger = deps?.logger ?? createLogger();
   const requestId = crypto.randomUUID().slice(0, 8);
 
   try {
-    const d = await resolveDeps(request, logger, deps);
-    if (!d) return errorResponse("Unauthorized", 401);
+    const d = deps ?? (await dependenciesForSession(request, logger, requestId));
+    if (d instanceof Response) return d;
 
     if (request.method === "GET") {
       const url = new URL(request.url);

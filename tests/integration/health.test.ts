@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { handleHealth } from "../../api/health";
 import type { HealthReport } from "../../api/health";
 import type { Logger } from "@/utils/logger";
@@ -8,6 +8,14 @@ const logger: Logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi
 function makeRequest(): Request {
   return new Request("https://example.com/api/health");
 }
+
+beforeEach(() => {
+  vi.stubEnv("DATABASE_URL", "postgres://example");
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("health handler", () => {
   it("reports ok when every dependency is reachable", async () => {
@@ -23,9 +31,25 @@ describe("health handler", () => {
     expect(body.checks).toMatchObject({
       config: "ok",
       redis: "ok",
+      database: "ok",
       analytics: "ok",
       email: "ok",
     });
+  });
+
+  // Every route refuses without a database, so a deployment missing it is down
+  // even if everything else answers.
+  it("returns 503 when DATABASE_URL is not set", async () => {
+    vi.stubEnv("DATABASE_URL", "");
+    const res = await handleHealth(makeRequest(), {
+      logger,
+      checkRedis: vi.fn().mockResolvedValue(undefined),
+      loadSecrets: () => ({ tinybirdToken: "tb", resendApiKey: "re" }),
+    });
+
+    expect(res.status).toBe(503);
+    const body = (await res.json()) as HealthReport;
+    expect(body.checks.database).toBe("fail");
   });
 
   it("returns 503 when Redis is unreachable", async () => {
@@ -60,7 +84,7 @@ describe("health handler", () => {
       logger,
       checkRedis,
       loadSecrets: () => {
-        throw new Error("APP_CONFIG missing");
+        throw new Error("QSTASH_TOKEN missing");
       },
     });
 

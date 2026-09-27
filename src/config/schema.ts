@@ -186,7 +186,6 @@ export const EnvSecretsSchema = z.object({
   tinybirdUrl: z.string().url().optional(),
   resendApiKey: z.string().min(1).optional(),
   emailFrom: z.string().min(1).optional(),
-  ownerEmail: z.string().email().optional(),
   appUrl: z.string().url().optional(),
   siteName: z.string().min(1).optional(),
   logoUrl: z.string().url().optional(),

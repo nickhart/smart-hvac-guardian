@@ -505,3 +505,27 @@ describe("sensor-event schedules units in parallel", () => {
     }
   });
 });
+
+/**
+ * The URL without a tenant — /api/sensor-event — used to run against
+ * APP_CONFIG with no webhook secret, so anyone could post fake door events.
+ * With single-tenant mode gone it names no tenant, and is refused before
+ * anything is read or written.
+ */
+describe("sensor-event without a tenant", () => {
+  it("refuses the legacy URL", async () => {
+    vi.stubEnv("DATABASE_URL", "postgres://example");
+    try {
+      const res = await handleSensorEvent(
+        new Request("https://example.com/api/sensor-event", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sensorId: "front_door", event: "open" }),
+        }),
+      );
+      expect(res.status).toBe(404);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});

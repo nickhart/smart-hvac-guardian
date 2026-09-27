@@ -1,10 +1,8 @@
 export const config = { runtime: "edge" };
 
 import { z } from "zod";
-import { loadConfig, loadEnvSecrets } from "../src/config/index.js";
-import { createDependencies } from "../src/handlers/dependencies.js";
 import type { Dependencies } from "../src/handlers/dependencies.js";
-import { resolveTenantFromSession } from "../src/middleware/tenant.js";
+import { dependenciesForSession } from "../src/middleware/resolve-dependencies.js";
 import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
 import { evaluateZoneGraph, computeTimerActions } from "../src/zone-graph/index.js";
@@ -14,31 +12,14 @@ const TogglePayload = z.object({
   enabled: z.boolean(),
 });
 
-async function resolveDeps(
-  request: Request,
-  logger: ReturnType<typeof createLogger>,
-  deps?: Dependencies,
-): Promise<Dependencies | null> {
-  if (deps) return deps;
-  if (process.env.DATABASE_URL) {
-    const ctx = await resolveTenantFromSession(request);
-    if (!ctx) return null;
-    return createDependencies(ctx.config, ctx.envSecrets, logger, {
-      tenantId: ctx.tenantId,
-      tenantSecrets: ctx.tenantSecrets,
-    });
-  }
-  return createDependencies(loadConfig(), loadEnvSecrets(), logger);
-}
-
 export async function handleSystemToggle(request: Request, deps?: Dependencies): Promise<Response> {
   const logger = deps?.logger ?? createLogger();
   const requestId = crypto.randomUUID().slice(0, 8);
 
   try {
     if (request.method === "GET") {
-      const d = await resolveDeps(request, logger, deps);
-      if (!d) return errorResponse("Unauthorized", 401);
+      const d = deps ?? (await dependenciesForSession(request, logger, requestId));
+      if (d instanceof Response) return d;
       const enabled = await d.stateStore.getSystemEnabled();
       return jsonResponse({ status: "ok", enabled });
     }
@@ -56,8 +37,8 @@ export async function handleSystemToggle(request: Request, deps?: Dependencies):
     }
 
     const { enabled } = parsed.data;
-    const d = await resolveDeps(request, logger, deps);
-    if (!d) return errorResponse("Unauthorized", 401);
+    const d = deps ?? (await dependenciesForSession(request, logger, requestId));
+    if (d instanceof Response) return d;
 
     await d.stateStore.setSystemEnabled(enabled);
     logger.info("System toggle updated", { requestId, enabled });

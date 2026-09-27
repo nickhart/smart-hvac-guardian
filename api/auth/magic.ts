@@ -76,22 +76,14 @@ export async function handleMagic(request: Request, deps?: MagicDeps): Promise<R
     // Single-use: delete the magic token
     await authStore.deleteMagicToken(token);
 
-    // Try multi-tenant session creation (DB-backed)
     const db = deps?.db ?? (process.env.DATABASE_URL ? getDb() : undefined);
+    if (!db) {
+      logger.error("DATABASE_URL is not set", { requestId });
+      return errorResponse("Database not configured", 503);
+    }
 
-    if (db) {
-      const sessionResult = await createSession(authStore, email, db, logger);
-      if (sessionResult) {
-        logger.info("Magic link login (multi-tenant)", { requestId, email });
-        return new Response(null, {
-          status: 302,
-          headers: {
-            Location: "/",
-            "Set-Cookie": `session=${sessionResult.token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL}; Secure`,
-          },
-        });
-      }
-      // DB is available but session creation failed — don't fall through to legacy
+    const sessionResult = await createSession(authStore, email, db, logger);
+    if (!sessionResult) {
       logger.error("Session creation failed — user or tenant not found", { requestId, email });
       return htmlPage(
         "Login failed",
@@ -99,17 +91,12 @@ export async function handleMagic(request: Request, deps?: MagicDeps): Promise<R
       );
     }
 
-    // Legacy single-tenant fallback: store plain email (only when no DB)
-    const sessionToken = crypto.randomUUID();
-    await authStore.setSession(sessionToken, email, SESSION_TTL);
-
     logger.info("Magic link login", { requestId, email });
-
     return new Response(null, {
       status: 302,
       headers: {
         Location: "/",
-        "Set-Cookie": `session=${sessionToken}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL}; Secure`,
+        "Set-Cookie": `session=${sessionResult.token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${SESSION_TTL}; Secure`,
       },
     });
   } catch (error) {

@@ -1,5 +1,3 @@
-import * as api from "../../lib/api";
-
 interface StepProps {
   data: Record<string, unknown>;
   allStepData: Record<string, Record<string, unknown>>;
@@ -8,8 +6,6 @@ interface StepProps {
 }
 
 export function Step1Account({ onSave }: StepProps) {
-  const hasLegacyConfig = false; // Will be detected server-side
-
   return (
     <div>
       <h2 className="text-lg font-semibold mb-2">Welcome to HVAC Guardian</h2>
@@ -27,28 +23,6 @@ export function Step1Account({ onSave }: StepProps) {
           <li>Knowledge of your property&apos;s layout (rooms, doors, HVAC units)</li>
         </ul>
       </div>
-
-      {hasLegacyConfig && (
-        <div className="mt-4 p-3 bg-primary-50 border border-primary-200 rounded">
-          <p className="text-sm text-primary-800 mb-2">
-            Existing configuration detected. Would you like to import it?
-          </p>
-          <button
-            type="button"
-            onClick={async () => {
-              try {
-                await api.importEnvConfig();
-                window.location.reload();
-              } catch {
-                // handled by parent error state
-              }
-            }}
-            className="text-sm bg-primary-600 text-white px-3 py-1 rounded hover:bg-primary-700"
-          >
-            Import existing config
-          </button>
-        </div>
-      )}
 
       <form
         data-step-form

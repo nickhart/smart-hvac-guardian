@@ -1,10 +1,8 @@
 export const config = { runtime: "edge" };
 
 import { z } from "zod";
-import { loadConfig, loadEnvSecrets } from "../src/config/index.js";
-import { createDependencies } from "../src/handlers/dependencies.js";
 import type { Dependencies } from "../src/handlers/dependencies.js";
-import { resolveTenantFromWebhook } from "../src/middleware/tenant.js";
+import { dependenciesForTenant } from "../src/middleware/resolve-dependencies.js";
 import { verifyQStashSignature } from "../src/providers/qstash/verify.js";
 import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
@@ -61,23 +59,10 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
       tenantId,
     });
 
-    // Resolve dependencies: multi-tenant (from QStash payload) or legacy
-    let d: Dependencies;
-    if (deps) {
-      d = deps;
-    } else if (tenantId && process.env.DATABASE_URL) {
-      const ctx = await resolveTenantFromWebhook(tenantId);
-      if (!ctx) {
-        logger.warn("Unknown or suspended tenant", { requestId, tenantId });
-        return errorResponse("Unknown tenant", 404);
-      }
-      d = createDependencies(ctx.config, ctx.envSecrets, logger, {
-        tenantId: ctx.tenantId,
-        tenantSecrets: ctx.tenantSecrets,
-      });
-    } else {
-      d = createDependencies(loadConfig(), loadEnvSecrets(), logger);
-    }
+    // No request passed: QStash callbacks carry no webhook secret. The
+    // signature, checked next, is what authenticates them.
+    const d = deps ?? (await dependenciesForTenant(tenantId, logger, requestId));
+    if (d instanceof Response) return d;
 
     // Verify QStash signature
     const signature = request.headers.get("upstash-signature") ?? "";

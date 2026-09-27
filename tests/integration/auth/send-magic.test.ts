@@ -1,7 +1,8 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { handleSendMagic, type SendMagicDeps } from "../../../api/auth/send-magic";
 import type { Logger } from "@/utils/logger";
 import type { EnvSecrets } from "@/config/schema";
+import { fakeDb } from "./fake-db";
 
 const mockLogger: Logger = {
   debug: vi.fn(),
@@ -20,7 +21,6 @@ const mockSecrets: EnvSecrets = {
   upstashRedisUrl: "https://redis.upstash.io",
   upstashRedisToken: "redis-token",
   resendApiKey: "re_test_123",
-  ownerEmail: "owner@example.com",
   appUrl: "https://myapp.example.com",
 };
 
@@ -36,6 +36,7 @@ function createDeps(overrides?: Partial<SendMagicDeps>): SendMagicDeps {
       deleteSession: vi.fn(),
     },
     logger: mockLogger,
+    db: fakeDb(),
     sendEmail: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
@@ -49,6 +50,10 @@ function makeRequest(body: unknown, method = "POST"): Request {
   });
 }
 
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
 describe("send-magic handler", () => {
   it("returns 405 for non-POST", async () => {
     const req = new Request("https://example.com/api/auth/send-magic", { method: "GET" });
@@ -58,7 +63,7 @@ describe("send-magic handler", () => {
 
   it("returns 503 when auth is not configured", async () => {
     const deps = createDeps({
-      secrets: { ...mockSecrets, resendApiKey: undefined, ownerEmail: undefined },
+      secrets: { ...mockSecrets, resendApiKey: undefined },
     });
     const res = await handleSendMagic(makeRequest({ email: "test@example.com" }), deps);
     expect(res.status).toBe(503);
@@ -69,8 +74,18 @@ describe("send-magic handler", () => {
     expect(res.status).toBe(400);
   });
 
-  it("returns ok for unauthorized email without storing token", async () => {
-    const deps = createDeps();
+  // Users live only in the database. There used to be a fallback to an
+  // OWNER_EMAIL variable when it was missing; now it's an error.
+  it("returns 503 when there is no database", async () => {
+    vi.stubEnv("DATABASE_URL", "");
+    const deps = createDeps({ db: undefined });
+    const res = await handleSendMagic(makeRequest({ email: "owner@example.com" }), deps);
+    expect(res.status).toBe(503);
+    expect(deps.sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("returns ok for an unregistered email without storing a token", async () => {
+    const deps = createDeps({ db: fakeDb({}) });
     const res = await handleSendMagic(makeRequest({ email: "stranger@example.com" }), deps);
     const body = (await res.json()) as Record<string, unknown>;
 
@@ -100,13 +115,6 @@ describe("send-magic handler", () => {
       "Your login link",
       expect.stringContaining("https://myapp.example.com/api/auth/magic?token="),
     );
-  });
-
-  it("handles case-insensitive email matching", async () => {
-    const deps = createDeps();
-    const res = await handleSendMagic(makeRequest({ email: "Owner@Example.COM" }), deps);
-    expect(res.status).toBe(200);
-    expect(deps.authStore.setMagicToken).toHaveBeenCalled();
   });
 
   it("returns 500 on authStore failure", async () => {
