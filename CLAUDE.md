@@ -32,7 +32,7 @@ Config: `vitest.config.ts`
 - Path alias: `@/` → `src/`
 - Coverage thresholds: 80% lines/statements/branches, 75% functions
 - Test dirs: `tests/unit/` and `tests/integration/`, mirroring `src/` structure
-- DB-dependent code excluded from coverage (queries, migrations, onboarding/auth API routes)
+- DB-dependent code excluded from coverage (queries, onboarding/auth/settings API routes)
 
 ## Project Structure
 

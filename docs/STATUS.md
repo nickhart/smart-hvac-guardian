@@ -26,7 +26,7 @@ Per-zone HVAC control using interior door sensors. BFS over zones connected by o
 
 ### Remote delay configuration
 
-Per-HVAC-unit delay overrides stored in Redis (`delay:{hvacUnitId}` keys), with fallback to `APP_CONFIG` defaults. Exposed via `POST /api/unit-delay`. Configurable from the dashboard via a delay preset dropdown on each HVAC unit card.
+Per-HVAC-unit delay overrides stored in Redis (`delay:{hvacUnitId}` keys), with fallback to the unit's configured delay. Exposed via `POST /api/unit-delay`. Configurable from the dashboard via a delay preset dropdown on each HVAC unit card.
 
 ### System on/off toggle
 
@@ -42,7 +42,7 @@ All sending goes through `createResendSender()` in `src/utils/email.ts`, which *
 
 ### User authentication (magic links)
 
-Email/magic-link login flow — no passwords, no OTP entry. Users are looked up in the database for multi-tenant deployments, falling back to `OWNER_EMAIL` for single-tenant. Sessions stored in Redis with 7-day TTL. Logout clears the session.
+Email/magic-link login flow — no passwords, no OTP entry. Users are looked up in the database. Sessions stored in Redis with 7-day TTL. Logout clears the session.
 
 ### Web dashboard
 
@@ -89,6 +89,26 @@ Still open: extending the breaker to YoLink, and surfacing circuit state in the 
 ### Health endpoint
 
 `GET /api/health` — unauthenticated probe for an external uptime monitor, reporting per-dependency status without exposing config or credentials. Returns 503 when Redis or config fails; unconfigured optional services report `not_configured`. See the README.
+
+### Single-tenant mode removed
+
+The app used to have a second mode: no database, configuration from
+`APP_CONFIG`, one owner from `OWNER_EMAIL`. In that mode every route fell back
+to the env config **with no authentication** — anyone could post sensor events,
+toggle the system or read occupancy — and the fallback also answered the
+tenant-less URLs (`/api/sensor-event`) on a deployment that still had
+`APP_CONFIG` set. Tinybird showed no traffic on those URLs, so it was removed:
+
+- Handlers get their dependencies only through
+  `src/middleware/resolve-dependencies.ts`: no database is a 503, a request
+  naming no tenant is a 404, a failed secret or session is a 404 or 401.
+- The auth routes no longer accept `OWNER_EMAIL` or plain-email sessions.
+- Deleted: the public `POST /api/onboarding/start` (anyone could create a
+  tenant; the web app never called it), the `APP_CONFIG` import into the
+  wizard, and the one-time Redis key migration.
+- `/api/health` fails when `DATABASE_URL` is not set.
+
+`APP_CONFIG` survives only as the local dev server's config format.
 
 ### CI safety nets
 

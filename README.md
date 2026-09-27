@@ -85,7 +85,7 @@ Set these in your Vercel project (Settings → Environment Variables). Also put 
 
 YoLink and IFTTT credentials are **not** environment variables. They're entered in the setup wizard and stored encrypted per tenant.
 
-> **Do not set `APP_CONFIG`, `YOLINK_UA_CID`, `YOLINK_SECRET_KEY`, `IFTTT_WEBHOOK_KEY` or `OWNER_EMAIL` in a deployed environment.** They belong to a legacy single-tenant mode that is being removed, and they're only used by the local dev server.
+> Earlier versions had a single-tenant mode configured from `APP_CONFIG`, with no database. It has been removed: without `DATABASE_URL` every route refuses with a 503. Deployments ignore `APP_CONFIG` and `OWNER_EMAIL`. **Don't set `YOLINK_UA_CID`, `YOLINK_SECRET_KEY` or `IFTTT_WEBHOOK_KEY` either** — each tenant has its own, entered in the wizard.
 
 ### 3. Create the database schema
 
@@ -281,13 +281,15 @@ without exposing config values or credentials:
 ```json
 {
   "status": "ok",
-  "checks": { "config": "ok", "redis": "ok", "analytics": "ok", "email": "ok" },
+  "checks": { "config": "ok", "redis": "ok", "database": "ok", "analytics": "ok", "email": "ok" },
   "durationMs": 42
 }
 ```
 
-Redis is the only hard dependency — it returns **503** when Redis is unreachable
-or config fails to validate, so a monitor can alert on status code alone.
+Redis and the database are the hard dependencies — it returns **503** when Redis
+is unreachable, `DATABASE_URL` is not set, or config fails to validate, so a
+monitor can alert on status code alone. The database is checked for being
+configured, not queried, so polling doesn't keep a serverless Postgres awake.
 Unconfigured optional services report `not_configured` rather than failing.
 
 Provider health is also recorded to the Tinybird `provider_events_v2` datasource

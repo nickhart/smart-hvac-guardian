@@ -361,12 +361,6 @@ A first-run experience that configures the platform-level infrastructure secrets
 5. Run DB migrations automatically
 6. Redirect to tenant creation → existing onboarding wizard
 
-**Migrate from existing env-based config:**
-
-- Detect pre-existing `APP_CONFIG` / `OWNER_EMAIL` / provider credentials
-- Pre-populate the bootstrap wizard fields from current env values
-- After bootstrap, offer to import the existing single-tenant setup as the first tenant (reuse the env-to-tenant migration)
-
 **Goal:** A new user can deploy, walk through system setup in a browser, create their first tenant, and go directly into the tenant onboarding flow — no manual env var editing required.
 
 ---
@@ -439,7 +433,7 @@ neither belongs in this public repository.
 
 ### Web configuration UI
 
-Browser-based management to replace manual `APP_CONFIG` editing.
+Browser-based management of the tenant's configuration.
 
 - Manage sensors (names, types, assignments to zones)
 - Manage HVAC units (names, IFTTT event names, default delays)
@@ -509,19 +503,11 @@ _Superseded by [IFTTT applet setup wizard](#ifttt-applet-setup-wizard), which co
 - Show a summary of the complete configuration
 - Enable the system
 
-### Migrate from environment config
+### ~~Migrate from environment config~~ (done, then removed)
 
-For existing single-tenant deployments (like ours), provide a migration path that imports the current `APP_CONFIG`, `ENV_SECRETS`, and related environment variables into a new tenant record.
-
-- Detect existing env-based config on first login (`APP_CONFIG` is set, no tenants in DB yet)
-- Offer to run the onboarding wizard with all fields pre-filled from the environment
-  - Zones, sensors, sensor names, delays — from `APP_CONFIG`
-  - YoLink credentials, IFTTT webhook key, Resend key — from env secrets
-  - Owner email — from `OWNER_EMAIL`
-- User walks through each step to review and confirm (not a silent import — they should see and understand what's configured)
-- On completion, tenant + config + credentials are stored in the database
-- The system switches to reading from DB; env vars are no longer consulted at runtime
-- Print a summary of which env vars are now safe to remove (or convert to example values in `.env.example`)
+The one existing single-tenant deployment was migrated into a tenant, after
+which single-tenant mode and the import path were removed together. See
+"Single-tenant mode removed" in [STATUS.md](./STATUS.md).
 
 ---
 
