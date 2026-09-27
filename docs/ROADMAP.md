@@ -75,13 +75,59 @@ auto-disable" below also wants.
 
 ### HVAC state tracking in Redis
 
-Persist HVAC on/off state from `hvac-event` handler to avoid scheduling redundant turn-off timers.
+**Priority: before the shutoff applets go live in February.** Today the system
+has no idea whether a unit is already off, so it re-issues turn-offs for as long
+as a zone stays exposed. On 2026-09-26 one door stood open for four hours; each
+turn-off cleared its timer, the next door event anywhere scheduled another, and
+three units each collected **11 turn-offs** for that one exposure. In the dry run
+that is only noise. Live, it is eleven redundant IFTTT calls per unit — each a
+beep, and each a chance to switch off a unit a guest has just turned back on.
 
-- Store `hvac-state:{unitId}` in Redis on each on/off event
-- Check state before scheduling a timer — skip if unit is already off
-- Open concerns:
+**The reported state can't be the source of truth.** It arrives through Cielo's
+IFTTT triggers, and the September data shows how thin that is: the "powered
+off" applets have never run except in a manual test (guests leave the AC on),
+and on 2026-09-26 a "powered on" trigger failed on Cielo's side — _"There was a
+problem with the trigger"_ — so the event never reached us at all. Cielo offers
+no API to ask instead.
+
+So track what the system itself knows, and treat reported events as hints:
+
+- After a turn-off, record the unit as off-by-us, and don't issue another while
+  the same exposure lasts. A reported `on` clears it; so does the exposure
+  ending.
+- The cost: if the turn-off silently failed, nothing retries it. Worth a bounded
+  retry — say one more after a set interval — rather than none or unlimited.
+- Open concerns carried over:
   - Does a redundant IFTTT "off" command cause an extra beep?
-  - Race condition: user manually turns on AC, server fires a stale turn-off
+  - Race: a guest turns the unit on just as a stale turn-off fires.
+
+### Order sensor events by when they happened
+
+Events are applied in the order they arrive, and the last write wins. On
+2026-09-25 at 21:40:25 a door bounced; its `close` and `open` webhooks arrived
+in the same second and were applied open-last, so the system believed the door
+open while it was shut. The pre-shutoff YoLink check caught it ten minutes later
+and aborted the turn-offs — the safety net working — but the belief was wrong
+until then, and any other decision in that window used it.
+
+IFTTT exposes when the trigger fired (the YoLink trigger's `CreatedAt`
+ingredient). Add it to the applet body as an optional `occurredAt`, keep the
+latest time applied per sensor, and ignore anything older. Without the field,
+behave as today, so existing applets keep working. Check the ingredient's format
+and precision first — if it is only to the minute, it can't order a bounce.
+
+### Flag sensors that go quiet
+
+One of five sensors reported 18 events in its first week, then nothing
+after 2026-09-24 while the other four stayed busy. It may be a door nobody uses;
+it may be a dead battery or a broken applet. The system fails safe — a silent
+sensor is treated as closed, so the AC keeps running — but that also means the
+protection for that opening is quietly gone.
+
+Flag a sensor whose silence is long for its usual rate, and confirm with YoLink
+(the `?verify=yolink` check already reports unreachable devices). Belongs on the
+dashboard next to the sensor check ("Dashboard surfacing for health and sensor
+verification"), not in `/api/health`.
 
 ### ~~Proactive timer cancellation on system disable~~ (superseded)
 
@@ -189,12 +235,20 @@ A turn-off with no corresponding state change within a couple of minutes is a
 failed shutoff, whatever IFTTT reported. Run against the September data it would
 have been 0 for 72.
 
+**But a missing `off` is not proof of failure.** The `off` itself arrives
+through a Cielo trigger, and those fail on Cielo's side: on 2026-09-26 a
+"powered on" trigger reported _"There was a problem with the trigger"_ and never
+posted. So the result is **confirmed** or **unconfirmed**, not succeeded or
+failed — and an unconfirmed rate that stays high says more about the trigger
+than about the shutoff.
+
 **Prerequisite, now mostly met.** The "Device is powered off" applets did not
 exist until 2026-09-25 — only "powered on" had ever been created — so this item
 could not have produced a result at all, the signal it correlates against being
-absent. All four now exist. `loft_bedroom` is verified in both directions; the
-other three are created but untested, and a typo in one of four is a per-unit
-failure nothing else reports.
+absent. All four now exist. `loft_bedroom` is verified in both directions. As of
+2026-09-27 the other three "powered off" applets have never run — consistent
+with guests never switching a unit off, but not yet proof they work — and a
+typo in one of four is a per-unit failure nothing else reports.
 
 One caveat to design around: HVAC state also arrives through IFTTT, so a silent
 result means the chain is broken but not which link. It cannot separate "the
