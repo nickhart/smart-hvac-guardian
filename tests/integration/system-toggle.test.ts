@@ -123,3 +123,23 @@ describe("system-toggle handler", () => {
     expect(res.status).toBe(500);
   });
 });
+
+// Without a database this used to fall back to APP_CONFIG and let anyone
+// switch the whole system on or off, with no session check.
+describe("system-toggle without a database", () => {
+  it("refuses instead of running unauthenticated", async () => {
+    vi.stubEnv("DATABASE_URL", "");
+    try {
+      const res = await handleSystemToggle(
+        new Request("https://example.com/api/system-toggle", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enabled: false }),
+        }),
+      );
+      expect(res.status).toBe(503);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+});
