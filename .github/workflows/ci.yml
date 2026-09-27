@@ -163,6 +163,64 @@ jobs:
           path: web/playwright-report/
           retention-days: 7
 
+  # Secrets and identifying data. Runs on every change, docs included: a device
+  # ID pasted into a Markdown file leaks as easily as one in code.
+  secrets:
+    runs-on: ubuntu-latest
+    env:
+      GITLEAKS_VERSION: "8.28.0"
+      GITLEAKS_SHA256: "a65b5253807a68ac0cafa4414031fd740aeb55f54fb7e55f386acb52e6a840eb"
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      # A pinned, checksum-verified binary rather than gitleaks-action, which
+      # needs a paid license for repositories owned by an organization.
+      - name: Install gitleaks
+        run: |
+          set -euo pipefail
+          curl -sSfL -o gitleaks.tgz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  gitleaks.tgz" | sha256sum -c -
+          tar -xzf gitleaks.tgz gitleaks
+
+      # The whole history, every time: it takes under a second, and a leak that
+      # is only "in history" is still public.
+      - name: Scan history (gitleaks + project rules)
+        run: ./gitleaks git --no-banner --redact --config .gitleaks.toml --log-opts="--all" .
+
+      # Values no pattern can catch — the owner's email, the property's name or
+      # address, real device and tenant IDs — kept in a repository secret, one
+      # per line. Skipped when the secret isn't set (including on forks).
+      # Prints file names only, never what matched.
+      - name: Scan for private strings
+        env:
+          FORBIDDEN_STRINGS: ${{ secrets.FORBIDDEN_STRINGS }}
+          EVENT: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+          if [ -z "${FORBIDDEN_STRINGS}" ]; then
+            echo "FORBIDDEN_STRINGS is not set; skipping."
+            exit 0
+          fi
+          patterns="$(mktemp)"
+          # Drop blank lines: an empty pattern would match every line.
+          printf '%s\n' "${FORBIDDEN_STRINGS}" | tr -d '\r' | sed '/^[[:space:]]*$/d' > "$patterns"
+          found=0
+          if files="$(git grep -lIiF -f "$patterns")"; then
+            echo "$files" | sed 's/^/::error file=/;s/$/::contains a private string/'
+            found=1
+          fi
+          if [ "$EVENT" = "pull_request" ] &&
+            git log --format=%B "${BASE_SHA}..HEAD" | grep -qiF -f "$patterns"; then
+            echo "::error::A commit message in this pull request contains a private string"
+            found=1
+          fi
+          rm -f "$patterns"
+          exit "$found"
+
   # The single check to mark required in branch protection.
   #
   # A job skipped by a path filter reports as "skipped", not "success", so
@@ -170,7 +228,7 @@ jobs:
   # forever. This one always runs and fails only if something that did run
   # failed.
   gate:
-    needs: [changes, docs, code, e2e, web]
+    needs: [changes, docs, code, e2e, web, secrets]
     if: always()
     runs-on: ubuntu-latest
     steps:
@@ -181,5 +239,6 @@ jobs:
           echo "code:    ${{ needs.code.result }}"
           echo "e2e:     ${{ needs.e2e.result }}"
           echo "web:     ${{ needs.web.result }}"
+          echo "secrets: ${{ needs.secrets.result }}"
       - if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
         run: exit 1

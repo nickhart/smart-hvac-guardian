@@ -46,7 +46,8 @@ Config: `vitest.config.ts`
 
 - Imperative mood, concise first line
 - Co-authored-by trailer for AI-assisted commits
-- Never commit `.env`, credentials, or secrets
+- Never commit `.env`, credentials, or secrets — nor real device IDs, tenant IDs, or anything identifying the property; use made-up values in docs and tests
+- CI's `secrets` job scans the whole history with gitleaks (`.gitleaks.toml` adds rules for YoLink device IDs, UUIDs, IFTTT/Resend keys and Postgres URLs) and checks the private strings in the `FORBIDDEN_STRINGS` repository secret
 
 ## Key Patterns
 
