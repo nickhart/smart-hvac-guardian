@@ -6,37 +6,12 @@ import { getOnboardingProgress } from "../../src/db/queries/onboarding.js";
 import { getTenantById } from "../../src/db/queries/tenants.js";
 import { RedisStateStore } from "../../src/providers/redis/index.js";
 import { loadEnvSecrets } from "../../src/config/index.js";
-import { AppConfigSchema } from "../../src/config/schema.js";
+import {
+  tenantWebhookUrls,
+  validateOnboardingConfig,
+} from "../../src/onboarding/assemble-config.js";
 import { createLogger } from "../../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../../src/utils/response.js";
-
-/**
- * Assemble a full AppConfig from onboarding step data.
- */
-function assembleConfig(
-  stepData: Record<string, Record<string, unknown>>,
-  tenantId: string,
-): unknown {
-  const step3 = (stepData["3"] ?? {}) as Record<string, unknown>;
-  const step4 = (stepData["4"] ?? {}) as Record<string, unknown>;
-  const step5 = (stepData["5"] ?? {}) as Record<string, unknown>;
-
-  const appUrl =
-    process.env.APP_URL ||
-    (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
-
-  return {
-    zones: step5["zones"] ?? {},
-    sensorDelays: step3["sensorDelays"] ?? {},
-    hvacUnits: step4["hvacUnits"] ?? {},
-    sensorNames: step3["sensorNames"] ?? {},
-    sensorDefaults: step3["sensorDefaults"] ?? {},
-    yolink: {
-      baseUrl: (step3["yolinkBaseUrl"] as string) ?? "https://api.yosmart.com/open/yolink/v2/api",
-    },
-    turnOffUrl: `${appUrl}/api/t/${tenantId}/hvac-turn-off`,
-  };
-}
 
 export default async function handler(request: Request): Promise<Response> {
   const logger = createLogger();
@@ -66,11 +41,10 @@ export default async function handler(request: Request): Promise<Response> {
     const progress = await getOnboardingProgress(db, session.tenantId);
     if (!progress) return errorResponse("No onboarding data found", 400);
 
-    // Assemble full config from step data
-    const rawConfig = assembleConfig(progress, session.tenantId);
-
-    // Validate with AppConfigSchema
-    const result = AppConfigSchema.safeParse(rawConfig);
+    const appUrl =
+      process.env.APP_URL ||
+      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000");
+    const result = validateOnboardingConfig(progress, session.tenantId, appUrl);
 
     if (!result.success) {
       logger.warn("Config validation failed", {
@@ -94,10 +68,7 @@ export default async function handler(request: Request): Promise<Response> {
       status: "ok",
       message: "Configuration is valid",
       config: result.data,
-      webhookUrls: {
-        sensorEvent: `${result.data.turnOffUrl.replace("/hvac-turn-off", "/sensor-event")}`,
-        hvacEvent: `${result.data.turnOffUrl.replace("/hvac-turn-off", "/hvac-event")}`,
-      },
+      webhookUrls: tenantWebhookUrls(appUrl, session.tenantId),
     });
   } catch (error) {
     logger.error("onboarding verify error", {
