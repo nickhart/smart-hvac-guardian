@@ -1,0 +1,52 @@
+# Secret scanning — run by the `secrets` job in .github/workflows/ci.yml.
+# Local: `gitleaks git --config .gitleaks.toml --log-opts=--all .`
+#
+# gitleaks' built-in rules cover common credential formats. The rules below add
+# the identifiers specific to this project, which say where a property is and
+# when it's occupied: device IDs, tenant IDs, and the keys that control it.
+
+title = "smart-hvac-guardian"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "yolink-device-id"
+description = "YoLink device ID — use a made-up ID like front_door in docs and tests"
+regex = '''\bd88b4c[0-9a-f]{10}\b'''
+keywords = ["d88b4c"]
+
+[[rules]]
+id = "uuid-v4"
+description = "Random UUID — tenant and user IDs are UUIDv4; use a fixed fake in tests"
+regex = '''\b[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}\b'''
+
+[[rules]]
+id = "ifttt-webhook-key"
+description = "IFTTT Maker webhook key in a trigger URL"
+regex = '''maker\.ifttt\.com/[^\s"'`]*/with/key/[A-Za-z0-9_-]{15,}'''
+keywords = ["maker.ifttt.com"]
+
+[[rules]]
+id = "resend-api-key"
+description = "Resend API key"
+regex = '''\bre_[A-Za-z0-9]{8,}_[A-Za-z0-9]{16,}\b'''
+keywords = ["re_"]
+
+[[rules]]
+id = "postgres-url-with-password"
+description = "Postgres connection string with a password (e.g. a Neon DATABASE_URL)"
+regex = '''postgres(?:ql)?://[^:/\s"'@]+:[^@\s"']+@[^\s"']+'''
+keywords = ["postgres"]
+
+[allowlist]
+description = "Deliberately fake values, and a third-party docs example"
+regexes = [
+  # Test encryption key and webhook secret: obviously patterned, never real.
+  '''(0123456789abcdef){4}''',
+  '''(a1b2c3d4e5f6){5}a1b2''',
+  # The example UUID from RFC 4122, used as a fixed fake ID in tests.
+  '''550e8400-e29b-41d4-a716-446655440000''',
+  # Tinybird skill docs: "sorting_key_1" trips the generic "key" rule.
+  '''sorting_key_\d''',
+]

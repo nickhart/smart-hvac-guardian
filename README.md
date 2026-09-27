@@ -327,6 +327,10 @@ The first run needs a browser: `pnpm --filter smart-hvac-guardian-web exec playw
 
 To click through the wizard yourself, run `pnpm web:sandbox`. It opens a browser on a fresh tenant in onboarding, with the same fake backend answering, and waits. Close the Playwright Inspector window when you're done. Each run starts from scratch.
 
+### Secret scanning
+
+CI's `secrets` job fails if a credential or identifying value appears anywhere in the history. It runs [gitleaks](https://github.com/gitleaks/gitleaks) with the project rules in `.gitleaks.toml` (YoLink device IDs, UUIDs such as tenant IDs, IFTTT and Resend keys, Postgres URLs with passwords), and then checks for exact strings no pattern can know about — your email, your property's name, real device IDs — listed one per line in a `FORBIDDEN_STRINGS` repository secret (Settings → Secrets and variables → Actions). It reports file names, never the matched text. To run the gitleaks part locally: `gitleaks git --config .gitleaks.toml --log-opts=--all .`
+
 ### Dev Server
 
 The dev server (`dev/server.ts`) is a local server that emulates the full production stack — QStash scheduling, Redis state, sensor events, and the dashboard — all in-process with no external dependencies. It doesn't use the database: it reads a single configuration from an `APP_CONFIG` value in a local env file, in the format shown under [Configuration model](#configuration-model).
