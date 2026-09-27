@@ -313,6 +313,7 @@ pnpm db:push        # apply the database schema to DATABASE_URL
 pnpm web:dev        # start the web dashboard dev server
 pnpm web:build      # build the web dashboard for production
 pnpm web:test       # browser tests for the web app (Playwright)
+pnpm web:sandbox    # click through the app by hand against the fake backend
 pnpm cli            # tenant & user management CLI (see below)
 ```
 
@@ -321,6 +322,8 @@ pnpm cli            # tenant & user management CLI (see below)
 `pnpm web:test` drives the web app in Chromium with Playwright (`web/e2e/`). Every `/api/*` request is answered by a fake backend (`web/e2e/fake-backend.ts`), so the setup wizard can be run end to end with no database, YoLink or IFTTT — and nothing a test does can reach a real HVAC unit. The fake validates the wizard's answers with the same code and schema as the real verify and activate endpoints.
 
 The first run needs a browser: `pnpm --filter smart-hvac-guardian-web exec playwright install chromium`. Add `--ui` to the test command (`pnpm --filter smart-hvac-guardian-web test:e2e --ui`) to watch the tests click through the wizard.
+
+To click through the wizard yourself, run `pnpm web:sandbox`. It opens a browser on a fresh tenant in onboarding, with the same fake backend answering, and waits. Close the Playwright Inspector window when you're done. Each run starts from scratch.
 
 ### Dev Server
 

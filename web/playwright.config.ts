@@ -22,6 +22,7 @@ export default defineConfig({
   projects: [
     {
       name: "chromium",
+      testIgnore: "sandbox.spec.ts",
       use: {
         ...devices["Desktop Chrome"],
         // For environments with a preinstalled Chromium that doesn't match this
@@ -29,6 +30,25 @@ export default defineConfig({
         launchOptions: { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined },
       },
     },
+    // `pnpm web:sandbox`: the app in a headed browser against the fake backend,
+    // for clicking through by hand. Only defined when asked for.
+    ...(process.env.WEB_SANDBOX
+      ? [
+          {
+            name: "sandbox",
+            testMatch: "sandbox.spec.ts",
+            use: {
+              browserName: "chromium" as const,
+              headless: false,
+              // A normal, resizable window rather than a fixed test viewport.
+              viewport: null,
+              launchOptions: {
+                executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE || undefined,
+              },
+            },
+          },
+        ]
+      : []),
   ],
   webServer: {
     command: `pnpm exec vite --port ${PORT} --strictPort`,
