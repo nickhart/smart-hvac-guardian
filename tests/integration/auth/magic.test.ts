@@ -1,5 +1,6 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, afterEach } from "vitest";
 import { handleMagic, type MagicDeps } from "../../../api/auth/magic";
+import { fakeDb } from "./fake-db";
 import type { Logger } from "@/utils/logger";
 import type { EnvSecrets } from "@/config/schema";
 
@@ -20,7 +21,6 @@ const mockSecrets: EnvSecrets = {
   upstashRedisUrl: "https://redis.upstash.io",
   upstashRedisToken: "redis-token",
   resendApiKey: "re_test_123",
-  ownerEmail: "owner@example.com",
 };
 
 const VALID_TOKEN = "550e8400-e29b-41d4-a716-446655440000";
@@ -37,6 +37,7 @@ function createDeps(overrides?: Partial<MagicDeps>): MagicDeps {
       deleteSession: vi.fn(),
     },
     logger: mockLogger,
+    db: fakeDb(),
     ...overrides,
   };
 }
@@ -47,6 +48,10 @@ function makeRequest(token?: string, method = "GET"): Request {
     : "https://example.com/api/auth/magic";
   return new Request(url, { method });
 }
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
 
 describe("magic handler", () => {
   it("returns 405 for non-GET", async () => {
@@ -96,12 +101,14 @@ describe("magic handler", () => {
     // Token was deleted (single-use)
     expect(deps.authStore.deleteMagicToken).toHaveBeenCalledWith(VALID_TOKEN);
 
-    // Session was created
+    // Session was created, tied to the user's tenant
     expect(deps.authStore.setSession).toHaveBeenCalledWith(
       expect.any(String),
-      "owner@example.com",
+      expect.any(String),
       604800,
     );
+    const stored = JSON.parse(vi.mocked(deps.authStore.setSession).mock.calls[0][1] as string);
+    expect(stored).toMatchObject({ email: "owner@example.com", tenantId: "tenant-1" });
 
     // Cookie was set
     const cookie = res.headers.get("Set-Cookie")!;
@@ -110,11 +117,16 @@ describe("magic handler", () => {
     expect(cookie).toContain("Secure");
   });
 
-  it("returns error page when DB is present but createSession returns null", async () => {
-    const mockDb = {
-      query: { users: { findFirst: vi.fn().mockResolvedValue(undefined) } },
-    } as unknown as import("@/db/client").Database;
-    const deps = createDeps({ db: mockDb });
+  it("returns 503 when there is no database", async () => {
+    vi.stubEnv("DATABASE_URL", "");
+    const deps = createDeps({ db: undefined });
+    const res = await handleMagic(makeRequest(VALID_TOKEN), deps);
+    expect(res.status).toBe(503);
+    expect(deps.authStore.setSession).not.toHaveBeenCalled();
+  });
+
+  it("returns error page when the email has no user", async () => {
+    const deps = createDeps({ db: fakeDb({}) });
     const res = await handleMagic(makeRequest(VALID_TOKEN), deps);
     expect(res.status).toBe(400);
     const body = await res.text();

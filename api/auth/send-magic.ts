@@ -57,19 +57,15 @@ export async function handleSendMagic(request: Request, deps?: SendMagicDeps): P
 
     const { email } = parsed.data;
 
-    // Multi-tenant: look up user in DB. Fall back to OWNER_EMAIL for legacy single-tenant.
+    // Users live in the database; there is no other list of who may sign in.
     const db = deps?.db ?? (process.env.DATABASE_URL ? getDb() : undefined);
-    let isAuthorized = false;
-
-    if (db) {
-      const user = await getUserByEmail(db, email);
-      isAuthorized = !!user;
-    } else if (secrets.ownerEmail) {
-      // Legacy single-tenant fallback
-      isAuthorized = email.toLowerCase() === secrets.ownerEmail.toLowerCase();
+    if (!db) {
+      logger.error("DATABASE_URL is not set", { requestId });
+      return errorResponse("Database not configured", 503);
     }
 
-    if (!isAuthorized) {
+    const user = await getUserByEmail(db, email);
+    if (!user) {
       logger.warn("Unauthorized email attempt", { requestId, email });
       // Return success to avoid email enumeration
       return jsonResponse({ status: "ok" });
