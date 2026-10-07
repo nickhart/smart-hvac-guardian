@@ -73,33 +73,18 @@ the first two mean we could not ask, not that anything disagrees.
 Worth showing alongside: circuit state per provider, which "Service outage
 auto-disable" below also wants.
 
-### HVAC state tracking in Redis
+### ~~HVAC state tracking in Redis~~ (done)
 
-**Priority: before the shutoff applets go live in February.** Today the system
-has no idea whether a unit is already off, so it re-issues turn-offs for as long
-as a zone stays exposed. On 2026-09-26 one door stood open for four hours; each
-turn-off cleared its timer, the next door event anywhere scheduled another, and
-three units each collected **11 turn-offs** for that one exposure. In the dry run
-that is only noise. Live, it is eleven redundant IFTTT calls per unit — each a
-beep, and each a chance to switch off a unit a guest has just turned back on.
+Built as "a unit is turned off once per exposure" — see STATUS.md. The design
+followed what the data showed: the reported state is too sparse to rely on, so
+the system marks what it turned off itself, treats reported events as
+corrections, and lets the marker expire as a bounded retry.
 
-**The reported state can't be the source of truth.** It arrives through Cielo's
-IFTTT triggers, and the September data shows how thin that is: the "powered
-off" applets have never run except in a manual test (guests leave the AC on),
-and on 2026-09-26 a "powered on" trigger failed on Cielo's side — _"There was a
-problem with the trigger"_ — so the event never reached us at all. Cielo offers
-no API to ask instead.
+Still open from the original concerns:
 
-So track what the system itself knows, and treat reported events as hints:
-
-- After a turn-off, record the unit as off-by-us, and don't issue another while
-  the same exposure lasts. A reported `on` clears it; so does the exposure
-  ending.
-- The cost: if the turn-off silently failed, nothing retries it. Worth a bounded
-  retry — say one more after a set interval — rather than none or unlimited.
-- Open concerns carried over:
-  - Does a redundant IFTTT "off" command cause an extra beep?
-  - Race: a guest turns the unit on just as a stale turn-off fires.
+- Does a redundant IFTTT "off" command cause an extra beep? Now at most one
+  every 30 minutes per exposure, so it matters less; worth checking on site.
+- Race: a guest turns the unit on just as a turn-off fires. Unchanged.
 
 ### Order sensor events by when they happened
 
@@ -266,51 +251,18 @@ Two weaker signals worth considering alongside, neither sufficient alone:
 Belongs in the authenticated diagnostics, not `/api/health`: it needs real
 queries, and it is per-tenant.
 
-### Mark a completed shutoff so its retry cannot re-arm
+### ~~Mark a completed shutoff so its retry cannot re-arm~~ (superseded)
 
-**Low priority — do not build until the trigger condition below is met.**
+Covered by the per-unit "turned off this exposure" marker (STATUS.md): a QStash
+retry of a turn-off that went through finds the marker and records
+`skipped_already_off` instead of re-arming.
 
-A turn-off that succeeds but responds slowly is retried by QStash. The retry
-finds no timer token (the successful run deleted it), sees the door still open,
-and re-arms — leaving a timer nobody asked for:
-
-```
-t=0      Door opens. Token A, message queued for t=600.
-t=600    Message arrives, token matches, IFTTT turn-off, AC off.
-         Token deleted. Response is slow; QStash never sees the 200.
-t=630    QStash retries with token A. No token stored, door still open
-         → RE-ARM → token B, message queued for t=1230.
-t=1200   Guest turns the AC on. Their hvac-event webhook is lost.
-t=1230   The re-armed timer fires → AC off.
-```
-
-The guest gets 30 seconds instead of ten minutes, cut off by a timer they never
-triggered. It needs two failures at once — a slow turn-off response and a lost
-`on` event — but both have the same root cause, so they are correlated rather
-than independent.
-
-**The fix:** after a successful turn-off, write `shutoff-done:{unitId}:{token}`
-with a short TTL. In the absent-token branch, check it before re-arming; if this
-exact token already actuated, return 200 and do nothing.
-
-**Key by token, never by unit.** A per-unit marker would suppress a _legitimate_
-re-arm for a different, genuinely lost timer on the same unit inside the TTL —
-trading one silent failure for another. Tokens are minted per exposure, so a
-token-keyed marker suppresses only the message that already ran.
-
-**Rejected alternative:** overwriting the timer token with a `"completed"`
-sentinel, so the retry falls into the existing `superseded` branch. Elegant, but
-`getActiveTimerUnitIds` scans `timer:*`, so the sentinel would make the unit look
-armed and sensor events would decline to reschedule it for the whole TTL. A
-separate key namespace avoids that.
-
-If the marker write fails, behaviour degrades to today's. A try/catch is enough.
-
-**Trigger condition:** `rearmed` rows with a small `late_by_seconds`, meaning
-retries are landing on turn-offs that already completed. Parallelising the
-scheduling loop may have removed the timeouts that make this reachable at all —
-if that count stays at zero, this is machinery guarding an empty room. Build it
-when the count is non-zero, and use the observed lateness to size the TTL.
+This entry argued for keying by token, because a per-unit marker could suppress
+a _legitimate_ re-arm on the same unit. The marker does accept that, deliberately
+and with a bound: within its 30-minute life a unit already turned off this
+exposure is not re-armed, and after it, it is. The case it gives up — a guest
+turning the unit back on behind a lost `on` event — is the same case its expiry
+retries.
 
 ### Service outage auto-disable
 

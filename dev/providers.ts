@@ -57,6 +57,7 @@ export class InMemoryStateStore implements StateStore {
   private sensors = new Map<string, SensorState>();
   private timers = new Map<string, TimerEntry>();
   private unitDelays = new Map<string, number>();
+  private turnedOffUntil = new Map<string, number>();
   private circuitFailures = new Map<string, number>();
   private circuitOpenUntil = new Map<string, number>();
   private systemEnabled = true;
@@ -140,6 +141,20 @@ export class InMemoryStateStore implements StateStore {
 
   async getActiveTimerUnitIds(): Promise<string[]> {
     return [...this.timers.keys()];
+  }
+
+  async getTurnedOffUnitIds(hvacUnitIds: string[]): Promise<string[]> {
+    const now = Date.now();
+    return hvacUnitIds.filter((id) => (this.turnedOffUntil.get(id) ?? 0) > now);
+  }
+
+  async markTurnedOff(hvacUnitId: string, ttlSeconds: number): Promise<void> {
+    this.turnedOffUntil.set(hvacUnitId, Date.now() + ttlSeconds * 1000);
+    this.onChange?.("turned-off-marked", { hvacUnitId, ttlSeconds });
+  }
+
+  async clearTurnedOff(hvacUnitIds: string[]): Promise<void> {
+    for (const id of hvacUnitIds) this.turnedOffUntil.delete(id);
   }
 
   async getSystemEnabled(): Promise<boolean> {

@@ -9,6 +9,7 @@ import { jsonResponse, errorResponse } from "../src/utils/response.js";
 import { evaluateZoneGraph } from "../src/zone-graph/index.js";
 import { readEffectiveSensorStates } from "../src/handlers/verify-exposure.js";
 import { getDelayForUnit, TIMER_TOKEN_BUFFER_SECONDS } from "../src/utils/delay.js";
+import { clearTurnedOff, markTurnedOff } from "../src/handlers/turned-off.js";
 
 const HvacEventPayload = z.object({
   hvacId: z.string().min(1),
@@ -62,6 +63,15 @@ export async function handleHvacEvent(request: Request, deps?: Dependencies): Pr
     const sensorStates = await readEffectiveSensorStates(d.config, d.stateStore);
     const { exposedUnits } = evaluateZoneGraph(d.config.zones, sensorStates);
     const wasExposed = exposedUnits.has(hvacId);
+
+    // A reported state corrects what the system remembers doing. Reported
+    // "off": no turn-off needs re-issuing. Reported "on": whatever was turned
+    // off before is running again, so a later door event may turn it off.
+    if (event === "off") {
+      await markTurnedOff(hvacId, d.stateStore, logger, requestId);
+    } else {
+      await clearTurnedOff([hvacId], d.stateStore, logger, requestId);
+    }
 
     if (event === "off") {
       await d.analytics.trackHvacStateEvent({

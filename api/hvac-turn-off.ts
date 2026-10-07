@@ -12,6 +12,7 @@ import {
 } from "../src/handlers/verify-exposure.js";
 import { evaluateZoneGraph } from "../src/zone-graph/index.js";
 import { getDelayForUnit, TIMER_TOKEN_BUFFER_SECONDS } from "../src/utils/delay.js";
+import { markTurnedOff, skipUnitsAlreadyOff } from "../src/handlers/turned-off.js";
 import {
   CircuitOpenError,
   TerminalProviderError,
@@ -119,6 +120,29 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
       const sensorStates = await readEffectiveSensorStates(d.config, d.stateStore);
       const { exposedUnits } = evaluateZoneGraph(d.config.zones, sensorStates);
 
+      // Still exposed, but already turned off this exposure: this message is
+      // most likely QStash retrying a turn-off that went through. Re-arming
+      // would only issue the same turn-off again.
+      const { alreadyOff } = exposedUnits.has(hvacUnitId)
+        ? await skipUnitsAlreadyOff([hvacUnitId], d.stateStore, logger, requestId)
+        : { alreadyOff: [] as string[] };
+
+      if (alreadyOff.length > 0) {
+        logger.info("Not re-arming: unit already turned off this exposure", {
+          requestId,
+          hvacUnitId,
+        });
+        await d.analytics.trackHvacCommand({
+          requestId,
+          hvacUnitId,
+          unitName: unitConfig.name,
+          action: "skipped_already_off",
+          triggerSource: "sensor_open",
+          shutoffEnabled: systemEnabled,
+        });
+        return jsonResponse({ status: "ok", action: "skipped_already_off", hvacUnitId });
+      }
+
       if (exposedUnits.has(hvacUnitId)) {
         // How far past its intended fire time this message arrived. A few
         // seconds means TIMER_TOKEN_BUFFER_SECONDS is slightly too tight;
@@ -224,6 +248,9 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
         hvacUnitId,
       });
       await d.stateStore.deleteTimerToken(hvacUnitId);
+      // Marked as though it went through, so shadow mode re-issues exactly as
+      // often as live operation would.
+      await markTurnedOff(hvacUnitId, d.stateStore, logger, requestId);
       await d.analytics.trackHvacCommand({
         requestId,
         hvacUnitId,
@@ -249,6 +276,7 @@ export async function handleHvacTurnOff(request: Request, deps?: Dependencies): 
 
     await d.hvac.turnOff(unitConfig.iftttEvent, requestId);
     await d.stateStore.deleteTimerToken(hvacUnitId);
+    await markTurnedOff(hvacUnitId, d.stateStore, logger, requestId);
 
     logger.info("HVAC unit turned off successfully", { requestId, hvacUnitId });
 

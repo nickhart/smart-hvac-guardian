@@ -128,6 +128,19 @@ Follow-up to the single-tenant removal, closing the gaps it left:
   keys in plaintext, beside the encrypted copy, indefinitely. For tenants
   activated earlier: `pnpm cli tenant:clear-drafts <tenantId>`.
 
+### A unit is turned off once per exposure
+
+A turn-off clears its timer, so the next door event in a still-open zone used to
+schedule another: in the dry run half of all turn-offs came within 30 minutes of
+the previous one for the same unit. Now `src/handlers/turned-off.ts` marks a unit
+when its turn-off goes through (or is recorded in shadow mode), or when it
+reports `off`; door events, re-enables and re-arms skip marked units and record
+`skipped_already_off`. A reported `on` clears the marker and always schedules a
+fresh turn-off; so does the exposure ending. The marker expires after 30
+minutes — a bounded retry, since Cielo's `on` trigger has been seen to fail. It
+also covers the roadmap's "completed shutoff re-arms" case: a QStash retry of a
+turn-off that went through no longer re-arms.
+
 ### CI safety nets
 
 - `no-floating-promises` and `no-misused-promises` are enabled (type-aware, scoped to files `tsconfig.json` covers). A dropped analytics promise on Edge runtime is now a lint error rather than a silent data loss.

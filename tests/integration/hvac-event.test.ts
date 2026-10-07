@@ -32,6 +32,9 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
       getTimerToken: vi.fn().mockResolvedValue(null),
       deleteTimerToken: vi.fn(),
       getActiveTimerUnitIds: vi.fn().mockResolvedValue([]),
+      getTurnedOffUnitIds: vi.fn().mockResolvedValue([]),
+      markTurnedOff: vi.fn().mockResolvedValue(undefined),
+      clearTurnedOff: vi.fn().mockResolvedValue(undefined),
       getSystemEnabled: vi.fn().mockResolvedValue(true),
       setSystemEnabled: vi.fn().mockResolvedValue(undefined),
       getUnitDelay: vi.fn().mockResolvedValue(null),
@@ -183,6 +186,9 @@ describe("hvac-event handler", () => {
         getTimerToken: vi.fn().mockResolvedValue(null),
         deleteTimerToken: vi.fn(),
         getActiveTimerUnitIds: vi.fn().mockResolvedValue([]),
+        getTurnedOffUnitIds: vi.fn().mockResolvedValue([]),
+        markTurnedOff: vi.fn().mockResolvedValue(undefined),
+        clearTurnedOff: vi.fn().mockResolvedValue(undefined),
         getSystemEnabled: vi.fn().mockResolvedValue(true),
         setSystemEnabled: vi.fn().mockResolvedValue(undefined),
         getUnitDelay: vi.fn().mockResolvedValue(null),
@@ -230,6 +236,9 @@ describe("hvac-event handler", () => {
         getTimerToken: vi.fn(),
         deleteTimerToken: vi.fn(),
         getActiveTimerUnitIds: vi.fn(),
+        getTurnedOffUnitIds: vi.fn().mockResolvedValue([]),
+        markTurnedOff: vi.fn().mockResolvedValue(undefined),
+        clearTurnedOff: vi.fn().mockResolvedValue(undefined),
         getSystemEnabled: vi.fn().mockResolvedValue(false),
         setSystemEnabled: vi.fn(),
         getUnitDelay: vi.fn().mockResolvedValue(null),
@@ -269,6 +278,9 @@ describe("hvac-event handler", () => {
         getTimerToken: vi.fn(),
         deleteTimerToken: vi.fn(),
         getActiveTimerUnitIds: vi.fn(),
+        getTurnedOffUnitIds: vi.fn().mockResolvedValue([]),
+        markTurnedOff: vi.fn().mockResolvedValue(undefined),
+        clearTurnedOff: vi.fn().mockResolvedValue(undefined),
         getSystemEnabled: vi.fn().mockResolvedValue(true),
         setSystemEnabled: vi.fn(),
         getUnitDelay: vi.fn().mockResolvedValue(null),
@@ -281,5 +293,34 @@ describe("hvac-event handler", () => {
     });
     const res = await handleHvacEvent(makeRequest({ hvacId: "ac_living", event: "on" }), deps);
     expect(res.status).toBe(500);
+  });
+});
+
+describe("hvac-event corrects the turned-off marker", () => {
+  it("clears it when a unit reports on, then schedules as usual if exposed", async () => {
+    const deps = createMockDeps({
+      stateStore: {
+        ...createMockDeps().stateStore,
+        getAllSensorStates: vi.fn().mockResolvedValue(new Map([["front_door", "open"]])),
+        // Even with the marker still readable, a turn-on is never held back.
+        getTurnedOffUnitIds: vi.fn().mockResolvedValue(["ac_living"]),
+      },
+    });
+
+    const res = await handleHvacEvent(makeRequest({ hvacId: "ac_living", event: "on" }), deps);
+    const body = (await res.json()) as { action: string };
+
+    expect(deps.stateStore.clearTurnedOff).toHaveBeenCalledWith(["ac_living"]);
+    expect(body.action).toBe("scheduled");
+    expect(deps.scheduler.scheduleUnitTurnOff).toHaveBeenCalled();
+  });
+
+  // A guest switching the unit off is as good as our turn-off: nothing to re-issue.
+  it("sets it when a unit reports off", async () => {
+    const deps = createMockDeps();
+
+    await handleHvacEvent(makeRequest({ hvacId: "ac_living", event: "off" }), deps);
+
+    expect(deps.stateStore.markTurnedOff).toHaveBeenCalledWith("ac_living", 1800);
   });
 });

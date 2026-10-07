@@ -26,6 +26,9 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
       getTimerToken: vi.fn(),
       deleteTimerToken: vi.fn(),
       getActiveTimerUnitIds: vi.fn().mockResolvedValue([]),
+      getTurnedOffUnitIds: vi.fn().mockResolvedValue([]),
+      markTurnedOff: vi.fn().mockResolvedValue(undefined),
+      clearTurnedOff: vi.fn().mockResolvedValue(undefined),
       getSystemEnabled: vi.fn().mockResolvedValue(true),
       setSystemEnabled: vi.fn().mockResolvedValue(undefined),
       getUnitDelay: vi.fn().mockResolvedValue(null),
@@ -108,6 +111,9 @@ describe("system-toggle handler", () => {
         getTimerToken: vi.fn(),
         deleteTimerToken: vi.fn(),
         getActiveTimerUnitIds: vi.fn(),
+        getTurnedOffUnitIds: vi.fn().mockResolvedValue([]),
+        markTurnedOff: vi.fn().mockResolvedValue(undefined),
+        clearTurnedOff: vi.fn().mockResolvedValue(undefined),
         getSystemEnabled: vi.fn().mockRejectedValue(new Error("Redis down")),
         setSystemEnabled: vi.fn(),
         getUnitDelay: vi.fn(),
@@ -141,5 +147,54 @@ describe("system-toggle without a database", () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+});
+
+// Re-enabling re-evaluates every zone; a unit already turned off this exposure
+// shouldn't be scheduled again just because the system came back on.
+describe("system-toggle re-enable with a unit already turned off", () => {
+  it("skips it", async () => {
+    const base = createMockDeps();
+    const deps = createMockDeps({
+      // The base config is empty; this test needs two exposed units.
+      config: {
+        ...base.config,
+        zones: {
+          living_room: {
+            minisplits: ["ac_living", "ac_den"],
+            exteriorOpenings: ["front_door"],
+            interiorDoors: [],
+          },
+        },
+        sensorDelays: { front_door: 90 },
+        hvacUnits: {
+          ac_living: { name: "Living Room AC", iftttEvent: "turn_off_ac_living", delaySeconds: 90 },
+          ac_den: { name: "Den AC", iftttEvent: "turn_off_ac_den", delaySeconds: 90 },
+        },
+      },
+      stateStore: {
+        ...base.stateStore,
+        getAllSensorStates: vi.fn().mockResolvedValue(new Map([["front_door", "open"]])),
+        getTurnedOffUnitIds: vi.fn(async (ids: string[]) => ids.filter((id) => id === "ac_living")),
+      },
+    });
+
+    const res = await handleSystemToggle(
+      new Request("https://example.com/api/system-toggle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: true }),
+      }),
+      deps,
+    );
+    const body = (await res.json()) as { scheduled: string[] };
+
+    // The unmarked unit in the same zone is still scheduled.
+    expect(body.scheduled).toEqual(["ac_den"]);
+    expect(deps.scheduler.scheduleUnitTurnOff).not.toHaveBeenCalledWith(
+      "ac_living",
+      expect.anything(),
+      expect.anything(),
+    );
   });
 });

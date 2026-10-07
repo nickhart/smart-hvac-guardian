@@ -32,6 +32,9 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
       getTimerToken: vi.fn().mockResolvedValue(null),
       deleteTimerToken: vi.fn().mockResolvedValue(undefined),
       getActiveTimerUnitIds: vi.fn().mockResolvedValue([]),
+      getTurnedOffUnitIds: vi.fn().mockResolvedValue([]),
+      markTurnedOff: vi.fn().mockResolvedValue(undefined),
+      clearTurnedOff: vi.fn().mockResolvedValue(undefined),
       getSystemEnabled: vi.fn().mockResolvedValue(true),
       setSystemEnabled: vi.fn().mockResolvedValue(undefined),
       getUnitDelay: vi.fn().mockResolvedValue(null),
@@ -128,6 +131,9 @@ describe("sensor-event handler", () => {
         getTimerToken: vi.fn().mockResolvedValue(null),
         deleteTimerToken: vi.fn().mockResolvedValue(undefined),
         getActiveTimerUnitIds: vi.fn().mockResolvedValue([]),
+        getTurnedOffUnitIds: vi.fn().mockResolvedValue([]),
+        markTurnedOff: vi.fn().mockResolvedValue(undefined),
+        clearTurnedOff: vi.fn().mockResolvedValue(undefined),
         getSystemEnabled: vi.fn().mockResolvedValue(true),
         setSystemEnabled: vi.fn().mockResolvedValue(undefined),
         getUnitDelay: vi.fn().mockResolvedValue(null),
@@ -177,6 +183,9 @@ describe("sensor-event handler", () => {
         getTimerToken: vi.fn().mockResolvedValue(null),
         deleteTimerToken: vi.fn().mockResolvedValue(undefined),
         getActiveTimerUnitIds: vi.fn().mockResolvedValue(["ac_living"]),
+        getTurnedOffUnitIds: vi.fn().mockResolvedValue([]),
+        markTurnedOff: vi.fn().mockResolvedValue(undefined),
+        clearTurnedOff: vi.fn().mockResolvedValue(undefined),
         getSystemEnabled: vi.fn().mockResolvedValue(true),
         setSystemEnabled: vi.fn().mockResolvedValue(undefined),
         getUnitDelay: vi.fn().mockResolvedValue(null),
@@ -215,6 +224,9 @@ describe("sensor-event handler", () => {
         getTimerToken: vi.fn(),
         deleteTimerToken: vi.fn(),
         getActiveTimerUnitIds: vi.fn(),
+        getTurnedOffUnitIds: vi.fn().mockResolvedValue([]),
+        markTurnedOff: vi.fn().mockResolvedValue(undefined),
+        clearTurnedOff: vi.fn().mockResolvedValue(undefined),
         getSystemEnabled: vi.fn().mockResolvedValue(true),
         setSystemEnabled: vi.fn(),
         getUnitDelay: vi.fn().mockResolvedValue(null),
@@ -272,6 +284,9 @@ describe("sensor-event handler", () => {
         getTimerToken: vi.fn().mockResolvedValue(null),
         deleteTimerToken: vi.fn().mockResolvedValue(undefined),
         getActiveTimerUnitIds: vi.fn().mockResolvedValue([]),
+        getTurnedOffUnitIds: vi.fn().mockResolvedValue([]),
+        markTurnedOff: vi.fn().mockResolvedValue(undefined),
+        clearTurnedOff: vi.fn().mockResolvedValue(undefined),
         getSystemEnabled: vi.fn().mockResolvedValue(true),
         setSystemEnabled: vi.fn().mockResolvedValue(undefined),
         getUnitDelay: vi.fn().mockResolvedValue(null),
@@ -333,6 +348,9 @@ describe("sensor-event handler", () => {
         getTimerToken: vi.fn().mockResolvedValue(null),
         deleteTimerToken: vi.fn().mockResolvedValue(undefined),
         getActiveTimerUnitIds: vi.fn().mockResolvedValue([]),
+        getTurnedOffUnitIds: vi.fn().mockResolvedValue([]),
+        markTurnedOff: vi.fn().mockResolvedValue(undefined),
+        clearTurnedOff: vi.fn().mockResolvedValue(undefined),
         getSystemEnabled: vi.fn().mockResolvedValue(true),
         setSystemEnabled: vi.fn().mockResolvedValue(undefined),
         getUnitDelay: vi.fn().mockResolvedValue(null),
@@ -366,6 +384,9 @@ describe("sensor-event handler", () => {
         getTimerToken: vi.fn(),
         deleteTimerToken: vi.fn(),
         getActiveTimerUnitIds: vi.fn().mockResolvedValue([]),
+        getTurnedOffUnitIds: vi.fn().mockResolvedValue([]),
+        markTurnedOff: vi.fn().mockResolvedValue(undefined),
+        clearTurnedOff: vi.fn().mockResolvedValue(undefined),
         getSystemEnabled: vi.fn().mockResolvedValue(false),
         setSystemEnabled: vi.fn(),
         getUnitDelay: vi.fn().mockResolvedValue(null),
@@ -410,6 +431,9 @@ describe("sensor-event handler", () => {
         getTimerToken: vi.fn().mockResolvedValue(null),
         deleteTimerToken: vi.fn().mockResolvedValue(undefined),
         getActiveTimerUnitIds: vi.fn().mockResolvedValue([]),
+        getTurnedOffUnitIds: vi.fn().mockResolvedValue([]),
+        markTurnedOff: vi.fn().mockResolvedValue(undefined),
+        clearTurnedOff: vi.fn().mockResolvedValue(undefined),
         getSystemEnabled: vi.fn().mockResolvedValue(true),
         setSystemEnabled: vi.fn().mockResolvedValue(undefined),
         getUnitDelay: vi.fn().mockResolvedValue(null),
@@ -527,5 +551,79 @@ describe("sensor-event without a tenant", () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+});
+
+/**
+ * Half of all turn-offs used to be repeats: a turn-off clears its timer, so the
+ * next door event in a still-open zone scheduled another. A unit already
+ * turned off this exposure is now held back until the marker expires.
+ */
+describe("sensor-event with a unit already turned off", () => {
+  function depsWithMarked(marked: string[]) {
+    return createMockDeps({
+      stateStore: {
+        ...createMockDeps().stateStore,
+        getAllSensorStates: vi.fn().mockResolvedValue(
+          new Map([
+            ["front_door", "open"],
+            ["bedroom_window", "closed"],
+            ["door_bedroom", "closed"],
+          ]),
+        ),
+        getTurnedOffUnitIds: vi.fn(async (ids: string[]) =>
+          ids.filter((id) => marked.includes(id)),
+        ),
+      },
+    });
+  }
+
+  it("does not schedule another turn-off for it", async () => {
+    const deps = depsWithMarked(["ac_living"]);
+
+    const res = await handleSensorEvent(
+      makeRequest({ sensorId: "front_door", event: "open" }),
+      deps,
+    );
+    const body = (await res.json()) as { scheduled: string[]; skippedAlreadyOff: string[] };
+
+    expect(body.scheduled).toEqual([]);
+    expect(body.skippedAlreadyOff).toEqual(["ac_living"]);
+    expect(deps.scheduler.scheduleUnitTurnOff).not.toHaveBeenCalled();
+    expect(deps.stateStore.setTimerToken).not.toHaveBeenCalled();
+  });
+
+  it("records the skip, and keeps it out of timers_scheduled", async () => {
+    const deps = depsWithMarked(["ac_living"]);
+
+    await handleSensorEvent(makeRequest({ sensorId: "front_door", event: "open" }), deps);
+
+    expect(deps.analytics.trackHvacCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ hvacUnitId: "ac_living", action: "skipped_already_off" }),
+    );
+    expect(deps.analytics.trackSensorEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ timersScheduled: [] }),
+    );
+  });
+
+  it("still schedules an exposed unit that isn't marked", async () => {
+    const deps = depsWithMarked([]);
+
+    await handleSensorEvent(makeRequest({ sensorId: "front_door", event: "open" }), deps);
+
+    expect(deps.scheduler.scheduleUnitTurnOff).toHaveBeenCalledWith(
+      "ac_living",
+      expect.any(String),
+      90,
+    );
+  });
+
+  // The exposure ended for these units; the next one gets a turn-off again.
+  it("clears the markers of units that are no longer exposed", async () => {
+    const deps = depsWithMarked(["ac_living"]);
+
+    await handleSensorEvent(makeRequest({ sensorId: "front_door", event: "open" }), deps);
+
+    expect(deps.stateStore.clearTurnedOff).toHaveBeenCalledWith(["ac_bedroom"]);
   });
 });

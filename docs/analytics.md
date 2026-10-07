@@ -12,20 +12,21 @@ Analytics are fire-and-forget: ingestion errors are silently swallowed so they n
 
 ## Dates the data changes meaning
 
-Six times this dataset started meaning something different, and none of them
+Seven times this dataset started meaning something different, and none of them
 announce themselves in a query. Check this before comparing anything across a
 date.
 
-| From                 | What changed                                         | Consequence                                                              |
-| -------------------- | ---------------------------------------------------- | ------------------------------------------------------------------------ |
-| through 2026-09-18   | instrumentation still settling                       | treat as unreliable                                                      |
-| before 2026-09-19    | `cancelled` rows hardcoded `shutoff_enabled = 1`     | cancellations cannot be split into live versus shadow                    |
-| before 2026-09-19    | deduplication keyed on a wall-clock bucket           | 34% of scheduled turn-offs never produced a command at all               |
-| 2026-09-19           | shadow mode — decided, no IFTTT call                 | `shutoff_enabled = 0`                                                    |
-| 2026-09-20 onwards   | **dry run** — IFTTT called, shutoff applets disabled | `shutoff_enabled = 1`, identical to real operation; split on date        |
-| before 2026-09-25    | `cancelled` also covered a replaced timer            | the cancellation rate reads as guest behaviour when much of it was churn |
-| before 2026-09-25    | no "powered off" applets existed                     | `on` events with no matching `off`; runtime intervals never close        |
-| when applets enabled | real operation — **record the date here**            | still `shutoff_enabled = 1`                                              |
+| From                 | What changed                                               | Consequence                                                              |
+| -------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------ |
+| through 2026-09-18   | instrumentation still settling                             | treat as unreliable                                                      |
+| before 2026-09-19    | `cancelled` rows hardcoded `shutoff_enabled = 1`           | cancellations cannot be split into live versus shadow                    |
+| before 2026-09-19    | deduplication keyed on a wall-clock bucket                 | 34% of scheduled turn-offs never produced a command at all               |
+| 2026-09-19           | shadow mode — decided, no IFTTT call                       | `shutoff_enabled = 0`                                                    |
+| 2026-09-20 onwards   | **dry run** — IFTTT called, shutoff applets disabled       | `shutoff_enabled = 1`, identical to real operation; split on date        |
+| before 2026-09-25    | `cancelled` also covered a replaced timer                  | the cancellation rate reads as guest behaviour when much of it was churn |
+| before 2026-09-25    | no "powered off" applets existed                           | `on` events with no matching `off`; runtime intervals never close        |
+| from 2026-10-07      | a unit is turned off once per exposure, not per door event | `turned_off` drops sharply; held-back ones are `skipped_already_off`     |
+| when applets enabled | real operation — **record the date here**                  | still `shutoff_enabled = 1`                                              |
 
 Each has its own section below: the dry-run boundary, `cancelled` versus
 `superseded` under `rearmed`, and scheduled-versus-recorded counts.
@@ -212,6 +213,7 @@ The no-shutoff outcomes mean different things:
 | `superseded`          | the door reopened, so a newer timer replaced this one |
 | `aborted_stale_state` | the devices said the exposure was already over        |
 | `rearmed`             | the timer was lost; the door is still open            |
+| `skipped_already_off` | the unit was already turned off this exposure         |
 
 `cancelled` and `superseded` both mean no shutoff happened, but they answer
 different questions. A door closing inside the delay is a **guest-behaviour**
@@ -252,17 +254,47 @@ any action other than `rearmed`.
 Re-arming never actuates — it restarts the delay, so the guest gets a full
 fresh window rather than an immediate cut-off.
 
+### `skipped_already_off`
+
+From 2026-10-07. Before it, a turn-off cleared its timer, so the next door event
+in a zone that was still open saw an exposed unit with no timer and scheduled
+another: half of all turn-offs in the dry run came within 30 minutes of the
+previous one for the same unit, and one four-hour exposure produced 11 per
+unit. Now a unit turned off during an exposure is marked, and door events,
+re-enables and re-arms skip it — recording `skipped_already_off` instead.
+
+The marker is cleared when the unit reports `on` (which always schedules a fresh
+turn-off) or stops being exposed, and set as well when it reports `off`. It
+expires after 30 minutes (`TURNED_OFF_TTL_SECONDS`), and the expiry is a
+deliberate retry: Cielo's `on` trigger has been seen to fail, and a unit turned
+back on behind a lost event would otherwise never be turned off again.
+
+So `turned_off` counts across 2026-10-07 aren't comparable: before, a long
+exposure produced one per door event; after, at most one per unit per half hour.
+`turned_off + skipped_already_off` after the date is roughly what `turned_off`
+alone measured before.
+
+A skip records a timer that was never scheduled, so it isn't an outcome and is
+left out of the count below.
+
 ### Scheduled timers should equal recorded commands
 
-Every scheduled timer ends in exactly one command — `turned_off`, `cancelled`,
-or `aborted_stale_state`. A cancellation still fires and still records, so the
-two counts should match:
+Every scheduled timer ends in exactly one outcome — `turned_off`, `cancelled`,
+`superseded`, `aborted_stale_state` or `rearmed`. A cancellation still fires and
+still records, so the two counts should match. Timers come from door events and
+from a unit turning on while exposed (`scheduled` rows):
 
 ```sql
 SELECT
-    (SELECT sum(length(timers_scheduled)) FROM sensor_events_v2) AS scheduled,
-    (SELECT count() FROM hvac_commands_v2 WHERE trigger_source = 'sensor_open') AS recorded
+    (SELECT sum(length(timers_scheduled)) FROM sensor_events_v2)
+      + (SELECT countIf(action = 'scheduled') FROM hvac_commands_v2) AS scheduled,
+    (SELECT countIf(action IN ('turned_off', 'cancelled', 'superseded',
+                               'aborted_stale_state', 'rearmed'))
+       FROM hvac_commands_v2) AS recorded
 ```
+
+Counted over a window, leave a few minutes off the end: timers still in flight
+are scheduled but not yet recorded.
 
 Before 2026-09-19 they did not: 323 scheduled, 213 recorded, 110 lost. The
 deduplication id was built from a wall-clock ten-minute bucket, so a door that

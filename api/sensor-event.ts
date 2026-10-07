@@ -10,6 +10,7 @@ import { evaluateZoneGraph } from "../src/zone-graph/index.js";
 import { computeTimerActions } from "../src/zone-graph/index.js";
 import type { SensorState } from "../src/zone-graph/index.js";
 import { getDelayForUnit, TIMER_TOKEN_BUFFER_SECONDS } from "../src/utils/delay.js";
+import { clearTurnedOff, skipUnitsAlreadyOff } from "../src/handlers/turned-off.js";
 
 const SensorEventPayload = z.object({
   sensorId: z.string().min(1),
@@ -97,9 +98,22 @@ export async function handleSensorEvent(request: Request, deps?: Dependencies): 
     const activeTimerUnitIds = await d.stateStore.getActiveTimerUnitIds();
     const previouslyExposed = new Set(activeTimerUnitIds);
 
-    // 5. Compute timer actions
-    const { schedule, cancel } = computeTimerActions(previouslyExposed, exposedUnits);
-    logger.info("Timer actions computed", { requestId, schedule, cancel });
+    // 5. Compute timer actions. A unit with no timer is "newly exposed" to the
+    // diff, which is also true of one whose turn-off already went through —
+    // so drop those, or every door event re-issues the turn-off.
+    const actions = computeTimerActions(previouslyExposed, exposedUnits);
+    const { cancel } = actions;
+    const { schedule, alreadyOff } = await skipUnitsAlreadyOff(
+      actions.schedule,
+      d.stateStore,
+      logger,
+      requestId,
+    );
+    logger.info("Timer actions computed", { requestId, schedule, cancel, alreadyOff });
+
+    // The exposure is over for these units, and with it the reason to hold
+    // back: the next time a door exposes them, they get a turn-off again.
+    await clearTurnedOff([...unexposedUnits], d.stateStore, logger, requestId);
 
     // 6. Schedule new timers for newly exposed units.
     //
@@ -132,7 +146,20 @@ export async function handleSensorEvent(request: Request, deps?: Dependencies): 
       }),
     );
 
-    // 8. Track analytics
+    // 8. Track analytics. Each skip is recorded, so the data shows how many
+    // turn-offs the marker held back — the number this exists to reduce.
+    await Promise.all(
+      alreadyOff.map((unitId) =>
+        d.analytics.trackHvacCommand({
+          requestId,
+          hvacUnitId: unitId,
+          unitName: d.config.hvacUnits[unitId]?.name ?? unitId,
+          action: "skipped_already_off",
+          triggerSource: "sensor_open",
+          shutoffEnabled: systemEnabled,
+        }),
+      ),
+    );
     await d.analytics.trackSensorEvent({
       requestId,
       sensorId,
@@ -149,6 +176,7 @@ export async function handleSensorEvent(request: Request, deps?: Dependencies): 
       action: schedule.length > 0 || cancel.length > 0 ? "updated" : "none",
       scheduled: schedule,
       cancelled: cancel,
+      skippedAlreadyOff: alreadyOff,
       shutoffEnabled: systemEnabled,
     });
   } catch (error) {

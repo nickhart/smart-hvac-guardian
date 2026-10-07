@@ -27,6 +27,9 @@ function createMockDeps(overrides?: Partial<Dependencies>): Dependencies {
       getTimerToken: vi.fn().mockResolvedValue("valid-token"),
       deleteTimerToken: vi.fn().mockResolvedValue(undefined),
       getActiveTimerUnitIds: vi.fn(),
+      getTurnedOffUnitIds: vi.fn().mockResolvedValue([]),
+      markTurnedOff: vi.fn().mockResolvedValue(undefined),
+      clearTurnedOff: vi.fn().mockResolvedValue(undefined),
       getSystemEnabled: vi.fn().mockResolvedValue(true),
       setSystemEnabled: vi.fn(),
       getUnitDelay: vi.fn().mockResolvedValue(null),
@@ -113,6 +116,9 @@ describe("hvac-turn-off handler", () => {
         getTimerToken: vi.fn().mockResolvedValue("valid-token"),
         deleteTimerToken: vi.fn().mockResolvedValue(undefined),
         getActiveTimerUnitIds: vi.fn(),
+        getTurnedOffUnitIds: vi.fn().mockResolvedValue([]),
+        markTurnedOff: vi.fn().mockResolvedValue(undefined),
+        clearTurnedOff: vi.fn().mockResolvedValue(undefined),
         getSystemEnabled: vi.fn().mockResolvedValue(true),
         setSystemEnabled: vi.fn(),
         getUnitDelay: vi.fn().mockResolvedValue(null),
@@ -148,6 +154,9 @@ describe("hvac-turn-off handler", () => {
         getTimerToken: vi.fn().mockResolvedValue(null),
         deleteTimerToken: vi.fn(),
         getActiveTimerUnitIds: vi.fn(),
+        getTurnedOffUnitIds: vi.fn().mockResolvedValue([]),
+        markTurnedOff: vi.fn().mockResolvedValue(undefined),
+        clearTurnedOff: vi.fn().mockResolvedValue(undefined),
         getSystemEnabled: vi.fn().mockResolvedValue(true),
         setSystemEnabled: vi.fn(),
         getUnitDelay: vi.fn().mockResolvedValue(null),
@@ -179,6 +188,9 @@ describe("hvac-turn-off handler", () => {
         getTimerToken: vi.fn().mockResolvedValue("new-token"),
         deleteTimerToken: vi.fn(),
         getActiveTimerUnitIds: vi.fn(),
+        getTurnedOffUnitIds: vi.fn().mockResolvedValue([]),
+        markTurnedOff: vi.fn().mockResolvedValue(undefined),
+        clearTurnedOff: vi.fn().mockResolvedValue(undefined),
         getSystemEnabled: vi.fn().mockResolvedValue(true),
         setSystemEnabled: vi.fn(),
         getUnitDelay: vi.fn().mockResolvedValue(null),
@@ -210,6 +222,9 @@ describe("hvac-turn-off handler", () => {
         getTimerToken: vi.fn().mockResolvedValue("valid-token"),
         deleteTimerToken: vi.fn().mockResolvedValue(undefined),
         getActiveTimerUnitIds: vi.fn(),
+        getTurnedOffUnitIds: vi.fn().mockResolvedValue([]),
+        markTurnedOff: vi.fn().mockResolvedValue(undefined),
+        clearTurnedOff: vi.fn().mockResolvedValue(undefined),
         getSystemEnabled: vi.fn().mockResolvedValue(false),
         setSystemEnabled: vi.fn(),
         getUnitDelay: vi.fn().mockResolvedValue(null),
@@ -253,6 +268,9 @@ describe("hvac-turn-off handler", () => {
         getTimerToken: vi.fn().mockResolvedValue("token123"),
         deleteTimerToken: vi.fn(),
         getActiveTimerUnitIds: vi.fn(),
+        getTurnedOffUnitIds: vi.fn().mockResolvedValue([]),
+        markTurnedOff: vi.fn().mockResolvedValue(undefined),
+        clearTurnedOff: vi.fn().mockResolvedValue(undefined),
         getSystemEnabled: vi.fn().mockResolvedValue(true),
         setSystemEnabled: vi.fn(),
         getUnitDelay: vi.fn().mockResolvedValue(null),
@@ -669,6 +687,9 @@ describe("hvac-turn-off retry suppression", () => {
       getTimerToken: vi.fn().mockResolvedValue("valid-token"),
       deleteTimerToken: vi.fn().mockResolvedValue(undefined),
       getActiveTimerUnitIds: vi.fn(),
+      getTurnedOffUnitIds: vi.fn().mockResolvedValue([]),
+      markTurnedOff: vi.fn().mockResolvedValue(undefined),
+      clearTurnedOff: vi.fn().mockResolvedValue(undefined),
       getSystemEnabled: vi.fn().mockResolvedValue(true),
       setSystemEnabled: vi.fn(),
       getUnitDelay: vi.fn().mockResolvedValue(null),
@@ -754,5 +775,89 @@ describe("hvac-turn-off retry suppression", () => {
     );
 
     expect(settled).toBe(true);
+  });
+});
+
+describe("hvac-turn-off marks the unit as turned off", () => {
+  function depsFor(opts: { token: string | null; enabled?: boolean; marked?: boolean }) {
+    return createMockDeps({
+      sensor: { getState: vi.fn().mockResolvedValue("open") },
+      stateStore: {
+        ...createMockDeps().stateStore,
+        getTimerToken: vi.fn().mockResolvedValue(opts.token),
+        getSystemEnabled: vi.fn().mockResolvedValue(opts.enabled ?? true),
+        getAllSensorStates: vi.fn().mockResolvedValue(new Map([["front_door", "open"]])),
+        getTurnedOffUnitIds: vi.fn().mockResolvedValue(opts.marked ? ["ac_living"] : []),
+      },
+    });
+  }
+
+  it("after a turn-off goes through", async () => {
+    const deps = depsFor({ token: "valid-token" });
+
+    await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "valid-token" }),
+      deps,
+    );
+
+    expect(deps.hvac.turnOff).toHaveBeenCalled();
+    expect(deps.stateStore.markTurnedOff).toHaveBeenCalledWith("ac_living", 1800);
+  });
+
+  // Shadow mode should re-issue exactly as often as live operation would.
+  it("after a turn-off recorded in shadow mode", async () => {
+    const deps = depsFor({ token: "valid-token", enabled: false });
+
+    await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "valid-token" }),
+      deps,
+    );
+
+    expect(deps.hvac.turnOff).not.toHaveBeenCalled();
+    expect(deps.stateStore.markTurnedOff).toHaveBeenCalledWith("ac_living", 1800);
+  });
+
+  it("not when the turn-off is superseded", async () => {
+    const deps = depsFor({ token: "newer-token" });
+
+    await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "older-token" }),
+      deps,
+    );
+
+    expect(deps.stateStore.markTurnedOff).not.toHaveBeenCalled();
+  });
+
+  /**
+   * The roadmap's "completed shutoff re-arms" case: a turn-off goes through,
+   * its slow response makes QStash retry, and the retry finds no token and an
+   * open door. With the marker set, it is recognised as already done.
+   */
+  it("so a retry of a completed turn-off doesn't re-arm", async () => {
+    const deps = depsFor({ token: null, marked: true });
+
+    const res = await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "completed-token" }),
+      deps,
+    );
+    const body = (await res.json()) as { action: string };
+
+    expect(body.action).toBe("skipped_already_off");
+    expect(deps.scheduler.scheduleUnitTurnOff).not.toHaveBeenCalled();
+    expect(deps.hvac.turnOff).not.toHaveBeenCalled();
+    expect(deps.analytics.trackHvacCommand).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "skipped_already_off" }),
+    );
+  });
+
+  it("while an unmarked lost timer still re-arms", async () => {
+    const deps = depsFor({ token: null, marked: false });
+
+    const res = await handleHvacTurnOff(
+      makeRequest({ hvacUnitId: "ac_living", cancellationToken: "lost-token" }),
+      deps,
+    );
+
+    expect(((await res.json()) as { action: string }).action).toBe("rearmed");
   });
 });

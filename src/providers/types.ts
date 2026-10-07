@@ -63,6 +63,10 @@ export interface AnalyticsProvider {
      * `aborted_stale_state`: the devices said the exposure was already over.
      * `rearmed`: the timer was gone but the unit was still exposed, so a fresh
      * one was scheduled rather than letting the door go unwatched.
+     * `skipped_already_off`: a turn-off would have been re-issued, but this
+     * unit was already turned off during the same exposure. Not an outcome of
+     * a scheduled timer — it records one that was never scheduled — so it is
+     * left out of scheduled-versus-recorded counts.
      */
     action:
       | "turned_off"
@@ -70,7 +74,8 @@ export interface AnalyticsProvider {
       | "superseded"
       | "scheduled"
       | "aborted_stale_state"
-      | "rearmed";
+      | "rearmed"
+      | "skipped_already_off";
     triggerSource: "sensor_open" | "hvac_on";
     delaySeconds?: number;
     /**
@@ -141,6 +146,10 @@ export interface StateStore {
   getTimerToken(hvacUnitId: string): Promise<string | null>;
   deleteTimerToken(hvacUnitId: string): Promise<void>;
   getActiveTimerUnitIds(): Promise<string[]>;
+  /** Of these units, the ones marked as turned off this exposure (see handlers/turned-off.ts). */
+  getTurnedOffUnitIds(hvacUnitIds: string[]): Promise<string[]>;
+  markTurnedOff(hvacUnitId: string, ttlSeconds: number): Promise<void>;
+  clearTurnedOff(hvacUnitIds: string[]): Promise<void>;
   getSystemEnabled(): Promise<boolean>;
   setSystemEnabled(enabled: boolean): Promise<void>;
   isCircuitOpen(name: string): Promise<boolean>;

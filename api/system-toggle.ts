@@ -7,6 +7,7 @@ import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
 import { evaluateZoneGraph, computeTimerActions } from "../src/zone-graph/index.js";
 import { getDelayForUnit, TIMER_TOKEN_BUFFER_SECONDS } from "../src/utils/delay.js";
+import { skipUnitsAlreadyOff } from "../src/handlers/turned-off.js";
 
 const TogglePayload = z.object({
   enabled: z.boolean(),
@@ -67,7 +68,14 @@ export async function handleSystemToggle(request: Request, deps?: Dependencies):
 
       const activeTimerUnitIds = await d.stateStore.getActiveTimerUnitIds();
       const previouslyExposed = new Set(activeTimerUnitIds);
-      const { schedule, cancel } = computeTimerActions(previouslyExposed, exposedUnits);
+      const actions = computeTimerActions(previouslyExposed, exposedUnits);
+      const { cancel } = actions;
+      const { schedule } = await skipUnitsAlreadyOff(
+        actions.schedule,
+        d.stateStore,
+        logger,
+        requestId,
+      );
 
       // Parallel across units, same as sensor-event: re-enabling can schedule
       // every unit at once, which serially is a round trip each.
