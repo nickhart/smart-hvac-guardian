@@ -137,8 +137,11 @@ when its turn-off goes through (or is recorded in shadow mode), or when it
 reports `off`; door events, re-enables and re-arms skip marked units and record
 `skipped_already_off`. A reported `on` clears the marker and always schedules a
 fresh turn-off; so does the exposure ending. The marker expires after 30
-minutes — a bounded retry, since Cielo's `on` trigger has been seen to fail. It
-also covers the roadmap's "completed shutoff re-arms" case: a QStash retry of a
+minutes, after which the next door event may schedule a turn-off again — the
+recovery for a unit turned back on behind a lost `on` event, since Cielo's `on`
+trigger has been seen to fail. Nothing fires at the expiry itself: with no
+further door event, such a unit keeps running (as it did before the marker; see
+"Timed retry when the turned-off marker expires" in the roadmap). It also covers the roadmap's "completed shutoff re-arms" case: a QStash retry of a
 turn-off that went through no longer re-arms.
 
 ### CI safety nets
@@ -150,7 +153,7 @@ turn-off that went through no longer re-arms.
 - `src/utils/http.ts` is the only place allowed to call `fetch`, enforced by a test over every file in `src/` and `api/`. A call with no timeout looks exactly like one with a timeout, only shorter.
 - Tinybird definitions, the `.datasource` files and the ingest call sites are checked against each other, including that every deployed resource grants the read-only token. Each of those has drifted in production at least once.
 - 391 unit and integration tests, 7 end-to-end scenarios.
-- Vercel skips the build when a push changes only `docs/` and Markdown, via `scripts/vercel-ignore-build.sh` (`ignoreCommand` in `vercel.json`). So a documentation-only pull request gets no preview URL, by design. Production compares with the last deployed commit, fetching it if it has fallen outside Vercel's shallow clone; previews compare with `main`, since a branch reset after a merge leaves its previous deployment's commit outside the clone — which is why previews used to build every time. Every failure — no base commit, a failed fetch, a git error — means "build anyway", because a redundant build costs seconds and a wrongly skipped one leaves the webhook endpoints on old code.
+- Vercel skips the build when a push changes only `docs/` and Markdown, via `scripts/vercel-ignore-build.sh` (`ignoreCommand` in `vercel.json`). So a documentation-only pull request gets no preview URL, by design. Production compares with the last deployed commit, fetching it if it has fallen outside Vercel's shallow clone; previews compare with `main`, since a branch reset after a merge leaves its previous deployment's commit outside the clone — which is why previews used to build every time. Vercel's checkout has no usable `origin` remote, so the script falls back to fetching from the repository's public GitHub URL. Every failure — no base commit, a failed fetch, a git error — means "build anyway", because a redundant build costs seconds and a wrongly skipped one leaves the webhook endpoints on old code.
 
 ## Not started
 

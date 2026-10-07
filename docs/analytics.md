@@ -265,9 +265,10 @@ re-enables and re-arms skip it — recording `skipped_already_off` instead.
 
 The marker is cleared when the unit reports `on` (which always schedules a fresh
 turn-off) or stops being exposed, and set as well when it reports `off`. It
-expires after 30 minutes (`TURNED_OFF_TTL_SECONDS`), and the expiry is a
-deliberate retry: Cielo's `on` trigger has been seen to fail, and a unit turned
-back on behind a lost event would otherwise never be turned off again.
+expires after 30 minutes (`TURNED_OFF_TTL_SECONDS`), so that a unit turned back
+on behind a lost `on` event — Cielo's trigger has been seen to fail — isn't held
+back for good. The expiry doesn't fire anything: it only lets the **next door
+event** schedule a turn-off again. If no door moves, nothing re-issues.
 
 So `turned_off` counts across 2026-10-07 aren't comparable: before, a long
 exposure produced one per door event; after, at most one per unit per half hour.
@@ -359,7 +360,12 @@ proceeds.
 ### `sensor_state_drift_v2`
 
 What we believe a sensor is doing, next to what the device says when asked
-directly. Written by `GET /api/check-state?verify=yolink`.
+directly. Written two ways, which see different things:
+
+- **before every turn-off**, for the sensors believed _open_ that hold the
+  exposure up — so it only ever finds "believed open, actually closed";
+- **by `GET /api/check-state?verify=yolink`**, for every sensor — the only
+  source of "believed closed, actually open".
 
 | Column           | Meaning                            |
 | ---------------- | ---------------------------------- |
@@ -385,7 +391,49 @@ FROM sensor_state_drift_v2
 GROUP BY sensor_id
 ```
 
-Verification is opt-in because it costs an external round trip per sensor, and
+### Door bounces
+
+A door slammed or caught can send `open` and `close` within the same second.
+Events are applied in the order the requests finish, so a bounce can leave the
+wrong final state. Ordering by IFTTT's `CreatedAt` can't help: it is
+minute-precision at best, and every bounce seen so far had both events in one
+second. How often they happen:
+
+```sql
+WITH ordered AS (
+  SELECT sensor_id, event, timestamp,
+    lagInFrame(timestamp) OVER (PARTITION BY sensor_id ORDER BY timestamp
+      ROWS BETWEEN 1 PRECEDING AND CURRENT ROW) AS prev_ts
+  FROM sensor_events_v2)
+SELECT toDate(timestamp) AS day, count() AS bounce_events
+FROM ordered
+WHERE prev_ts > '2000-01-01' AND dateDiff('second', prev_ts, timestamp) <= 2
+GROUP BY day ORDER BY day
+```
+
+Whether one went wrong shows up as drift, and the direction decides whether it
+matters:
+
+```sql
+SELECT believed_state, actual_state, count() AS n, min(timestamp), max(timestamp)
+FROM sensor_state_drift_v2 WHERE agreed = 0
+GROUP BY believed_state, actual_state
+```
+
+- **Believed open, actually closed** — covered. The check before every turn-off
+  finds it and aborts; it only gets through if YoLink is unreachable at that
+  moment, since the check fails open. All drift through 2026-10-07 (3 rows) was
+  this direction.
+- **Believed closed, actually open** — not covered. No turn-off is scheduled, so
+  the unit runs with the door open until the door closes again. Only the manual
+  `?verify=yolink` check can see it, so run that now and then. **If a row like
+  this ever appears, build the bounce check** described under "Order sensor
+  events by when they happened" in the roadmap.
+
+### Verifying sensors
+
+The manual check (`?verify=yolink`) is opt-in because it costs an external round
+trip per sensor, and
 it is bounded by a total deadline (`VERIFY_DEADLINE_MS`) — YoLink has no timeout
 of its own, and an unbounded call would hang the handler until the function
 times out.

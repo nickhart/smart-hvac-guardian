@@ -88,18 +88,47 @@ Still open from the original concerns:
 
 ### Order sensor events by when they happened
 
-Events are applied in the order they arrive, and the last write wins. On
-2026-09-25 at 21:40:25 a door bounced; its `close` and `open` webhooks arrived
-in the same second and were applied open-last, so the system believed the door
-open while it was shut. The pre-shutoff YoLink check caught it ten minutes later
-and aborted the turn-offs — the safety net working — but the belief was wrong
-until then, and any other decision in that window used it.
+**Deferred — build only when the trigger below is met.**
 
-IFTTT exposes when the trigger fired (the YoLink trigger's `CreatedAt`
-ingredient). Add it to the applet body as an optional `occurredAt`, keep the
-latest time applied per sensor, and ignore anything older. Without the field,
-behave as today, so existing applets keep working. Check the ingredient's format
-and precision first — if it is only to the minute, it can't order a bounce.
+Events are applied in the order the requests finish, and the last write wins.
+On 2026-09-25 at 21:40:25 a door bounced; its `close` and `open` arrived in the
+same second and were applied open-last, so the system believed the door open
+while it was shut. The pre-shutoff YoLink check caught it ten minutes later and
+aborted the turn-offs. Four bounces in the three weeks to 2026-10-07; this was
+the only one that left a wrong state.
+
+**IFTTT's timestamp can't fix it.** The YoLink trigger's `CreatedAt` ingredient
+is minute-precision at best, and every bounce seen had both events in one
+second — ordering them would take milliseconds.
+
+**What would:** settle a bounce by asking YoLink. When an event arrives within a
+few seconds of the previous one for the same sensor, schedule one QStash check
+~10 seconds later; it reads the sensor's state from YoLink and, if it disagrees,
+applies it as a door event would. Handles IFTTT reordering and our own
+concurrent requests alike, and needs no applet changes. Running cost is trivial
+(~0.2 checks a day); the real cost is a second code path that writes sensor
+state and changes timers.
+
+**Why not yet:** the harmful direction — believed open, actually closed — is
+already covered by the check before every turn-off. The uncovered direction —
+believed closed, actually open, a missed shutoff — hasn't been observed.
+**Trigger:** a "believed closed, actually open" drift row (see "Door bounces"
+in analytics.md).
+
+### Timed retry when the turned-off marker expires
+
+The once-per-exposure marker expires after 30 minutes, but nothing fires then:
+the next turn-off is scheduled only by the next door event. So a unit turned
+back on behind a lost `on` event — Cielo's trigger has been seen to fail — keeps
+running while the door stays open and nothing else moves, e.g. a slider propped
+open with nobody home. That gap predates the marker; the marker adds up to 30
+minutes to it when doors are moving.
+
+When the marker is set, also schedule one QStash message for its expiry; if the
+unit is still exposed then, schedule a turn-off. That bounds the case at 30
+minutes plus the delay regardless of door activity. Cost: one more message per
+turn-off, and during a long exposure an "off" every ~40 minutes to a unit that
+is probably already off — a beep in an empty house at most.
 
 ### Flag sensors that go quiet
 
