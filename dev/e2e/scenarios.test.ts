@@ -134,6 +134,41 @@ describe("E2E scenarios", () => {
     await waitForHvacState(server, "ac_living", "off", 5_000);
   });
 
+  // A unit already turned off during an exposure isn't turned off again by
+  // every later door event — until a guest turns it back on, or the exposure
+  // ends and a new one begins.
+  it("turns a unit off once per exposure, not once per door event", async () => {
+    await post(base, "/api/sensor-event", { sensorId: "front_door", event: "open" });
+    await waitForHvacState(server, "ac_living", "off", 5_000);
+
+    // Another door in the same, still-open zone: nothing new to do.
+    const again = await post(base, "/api/sensor-event", {
+      sensorId: "balcony_door",
+      event: "open",
+    });
+    expect((again.json as Record<string, unknown>).scheduled).toEqual([]);
+    expect((again.json as Record<string, unknown>).skippedAlreadyOff).toEqual(["ac_living"]);
+
+    // A guest turns it back on: that always gets a fresh turn-off.
+    server.hvacProvider.setUnitState("ac_living", "on");
+    const on = await post(base, "/api/hvac-event", { hvacId: "ac_living", event: "on" });
+    expect((on.json as Record<string, unknown>).action).toBe("scheduled");
+    await waitForHvacState(server, "ac_living", "off", 5_000);
+
+    // Close everything: the exposure is over and the marker goes with it.
+    await post(base, "/api/sensor-event", { sensorId: "front_door", event: "close" });
+    await post(base, "/api/sensor-event", { sensorId: "balcony_door", event: "close" });
+
+    // So the next exposure is a new one, and gets its turn-off.
+    server.hvacProvider.setUnitState("ac_living", "on");
+    const reopened = await post(base, "/api/sensor-event", {
+      sensorId: "front_door",
+      event: "open",
+    });
+    expect((reopened.json as Record<string, unknown>).scheduled).toEqual(["ac_living"]);
+    await waitForHvacState(server, "ac_living", "off", 5_000);
+  });
+
   // Scenario 5: Rapid duplicate events (dedup)
   it("deduplicates rapid identical sensor events", async () => {
     // Send two rapid open events
