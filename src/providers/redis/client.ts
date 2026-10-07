@@ -168,6 +168,23 @@ export class RedisStateStore implements StateStore {
     await this.redis.del(this.key(`delay:${hvacUnitId}`));
   }
 
+  async getTurnedOffUnitIds(hvacUnitIds: string[]): Promise<string[]> {
+    if (hvacUnitIds.length === 0) return [];
+    const values = await this.redis.mget<(string | null)[]>(
+      ...hvacUnitIds.map((id) => this.key(`off:${id}`)),
+    );
+    return hvacUnitIds.filter((_, i) => values[i] !== null && values[i] !== undefined);
+  }
+
+  async markTurnedOff(hvacUnitId: string, ttlSeconds: number): Promise<void> {
+    await this.redis.set(this.key(`off:${hvacUnitId}`), "1", { ex: ttlSeconds });
+  }
+
+  async clearTurnedOff(hvacUnitIds: string[]): Promise<void> {
+    if (hvacUnitIds.length === 0) return;
+    await this.redis.del(...hvacUnitIds.map((id) => this.key(`off:${id}`)));
+  }
+
   async getActiveTimerUnitIds(): Promise<string[]> {
     const keys: string[] = [];
     let cursor = "0";

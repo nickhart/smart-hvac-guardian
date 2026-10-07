@@ -235,3 +235,43 @@ describe("RedisStateStore circuit breaker", () => {
     expect(mockPing).toHaveBeenCalled();
   });
 });
+
+describe("RedisStateStore turned-off markers", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const store = () =>
+    new RedisStateStore({ url: "https://redis.upstash.io", token: "t", tenantId: "tenant-1" });
+
+  it("marks under the tenant's prefix, with an expiry", async () => {
+    await store().markTurnedOff("ac_living", 1800);
+    expect(mockSet).toHaveBeenCalledWith("tenant-1:off:ac_living", "1", { ex: 1800 });
+  });
+
+  it("returns only the units that carry a marker", async () => {
+    mockMget.mockResolvedValueOnce(["1", null]);
+
+    const result = await store().getTurnedOffUnitIds(["ac_living", "ac_bedroom"]);
+
+    expect(mockMget).toHaveBeenCalledWith("tenant-1:off:ac_living", "tenant-1:off:ac_bedroom");
+    expect(result).toEqual(["ac_living"]);
+  });
+
+  it("clears several markers in one call", async () => {
+    await store().clearTurnedOff(["ac_living", "ac_bedroom"]);
+    expect(mockDel).toHaveBeenCalledWith("tenant-1:off:ac_living", "tenant-1:off:ac_bedroom");
+  });
+
+  it("makes no call for an empty list", async () => {
+    expect(await store().getTurnedOffUnitIds([])).toEqual([]);
+    await store().clearTurnedOff([]);
+    expect(mockMget).not.toHaveBeenCalled();
+    expect(mockDel).not.toHaveBeenCalled();
+  });
+
+  // The marker must never look like a pending timer: sensor events treat a
+  // unit with a timer as already handled and decline to reschedule it.
+  it("lives outside the timer namespace", async () => {
+    await store().markTurnedOff("ac_living", 1800);
+    expect(mockSet.mock.calls[0][0]).not.toContain("timer:");
+  });
+});
