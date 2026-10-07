@@ -88,7 +88,7 @@ Still open from the original concerns:
 
 ### Order sensor events by when they happened
 
-**Deferred — build only when the trigger below is met.**
+**Deferred (decided 2026-10-07) — build only when the trigger below is met.**
 
 Events are applied in the order the requests finish, and the last write wins.
 On 2026-09-25 at 21:40:25 a door bounced; its `close` and `open` arrived in the
@@ -117,6 +117,8 @@ in analytics.md).
 
 ### Timed retry when the turned-off marker expires
 
+**Deferred (decided 2026-10-07) — build only when the trigger below is met.**
+
 The once-per-exposure marker expires after 30 minutes, but nothing fires then:
 the next turn-off is scheduled only by the next door event. So a unit turned
 back on behind a lost `on` event — Cielo's trigger has been seen to fail — keeps
@@ -128,7 +130,21 @@ When the marker is set, also schedule one QStash message for its expiry; if the
 unit is still exposed then, schedule a turn-off. That bounds the case at 30
 minutes plus the delay regardless of door activity. Cost: one more message per
 turn-off, and during a long exposure an "off" every ~40 minutes to a unit that
-is probably already off — a beep in an empty house at most.
+is probably already off — a beep in an empty house at most, but ~36 a day for an
+outside door left open all day, so back off between retries (40, 80, 160
+minutes…) or cap them per exposure. The expiry message needs an ID tied to the
+marker it was scheduled for, so one that arrives after a guest's `on` or a new
+exposure is ignored.
+
+**Why not yet:** it needs three things at once — a guest turning a unit on
+during an exposure, Cielo losing that event, and no door moving afterwards.
+Cielo has lost one event in roughly 25 state events so far; the combination has
+never been seen. It also leaves no trace in our data — a lost `on` shows only in
+IFTTT's run history — so it can't be counted directly.
+
+**Trigger:** more Cielo trigger failures on the "powered on" applets in IFTTT's
+run history, or a unit found running behind an open door on site. Revisit
+before the shutoff applets go live in February either way.
 
 ### Flag sensors that go quiet
 
