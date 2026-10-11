@@ -272,8 +272,32 @@ event** schedule a turn-off again. If no door moves, nothing re-issues.
 
 So `turned_off` counts across 2026-10-07 aren't comparable: before, a long
 exposure produced one per door event; after, at most one per unit per half hour.
-`turned_off + skipped_already_off` after the date is roughly what `turned_off`
-alone measured before.
+
+Don't add the skips back to estimate the old figure. A skip is written for
+every door event while the marker is set, and before the marker most of those
+timers would have been replaced by the next door event inside the delay, not
+turned anything off. In the first four days there were 476 skips and 103
+turn-offs. A skip could only have become a turn-off if nothing else happened to
+that unit within the delay (600 s), which is at most this many:
+
+```sql
+WITH c AS (
+  SELECT action, timestamp,
+    leadInFrame(timestamp) OVER (PARTITION BY hvac_unit_id ORDER BY timestamp
+      ROWS BETWEEN CURRENT ROW AND 1 FOLLOWING) AS next_ts
+  FROM hvac_commands_v2
+  WHERE action IN ('skipped_already_off', 'turned_off', 'cancelled', 'superseded'))
+SELECT toDate(timestamp) AS day, count() AS skips,
+  countIf(next_ts < '2000-01-01' OR dateDiff('second', timestamp, next_ts) >= 600)
+    AS would_have_turned_off
+FROM c WHERE action = 'skipped_already_off'
+GROUP BY day ORDER BY day
+```
+
+It is an upper bound: a door closing inside the delay would have cancelled the
+timer, and a close writes no command row. For those first four days it came to
+about 85, so turn-offs roughly halved — in line with the half that were repeats
+before.
 
 A skip records a timer that was never scheduled, so it isn't an outcome and is
 left out of the count below.
