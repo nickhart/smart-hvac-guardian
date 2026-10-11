@@ -17,10 +17,12 @@ import type { Logger } from "../utils/logger.js";
  *
  * - set when a turn-off goes through (or is recorded in shadow mode), and when
  *   a unit reports "off";
- * - cleared when a unit reports "on", or stops being exposed;
- * - respected only where a turn-off would be *re-issued* — a door event, a
- *   re-enable, a re-arm. A turn-on while exposed always schedules a fresh
- *   timer, marker or not.
+ * - cleared when a unit reports "on", or stops being exposed, and for every
+ *   unit when the system is re-enabled (shadow-mode turn-offs set it without
+ *   switching anything off);
+ * - respected only where a turn-off would be *re-issued* — a door event or a
+ *   re-arm. A turn-on while exposed always schedules a fresh timer, marker or
+ *   not.
  *
  * It expires, and the expiry is the retry. A guest who turns a unit back on
  * while the door is still open, and whose "on" event is lost, would otherwise

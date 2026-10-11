@@ -7,7 +7,7 @@ import { createLogger } from "../src/utils/logger.js";
 import { jsonResponse, errorResponse } from "../src/utils/response.js";
 import { evaluateZoneGraph, computeTimerActions } from "../src/zone-graph/index.js";
 import { getDelayForUnit, TIMER_TOKEN_BUFFER_SECONDS } from "../src/utils/delay.js";
-import { skipUnitsAlreadyOff } from "../src/handlers/turned-off.js";
+import { clearTurnedOff } from "../src/handlers/turned-off.js";
 
 const TogglePayload = z.object({
   enabled: z.boolean(),
@@ -68,14 +68,14 @@ export async function handleSystemToggle(request: Request, deps?: Dependencies):
 
       const activeTimerUnitIds = await d.stateStore.getActiveTimerUnitIds();
       const previouslyExposed = new Set(activeTimerUnitIds);
-      const actions = computeTimerActions(previouslyExposed, exposedUnits);
-      const { cancel } = actions;
-      const { schedule } = await skipUnitsAlreadyOff(
-        actions.schedule,
-        d.stateStore,
-        logger,
-        requestId,
-      );
+      const { schedule, cancel } = computeTimerActions(previouslyExposed, exposedUnits);
+
+      // While disabled, timers still fire in shadow mode and mark their unit as
+      // turned off, though nothing was switched off. Respecting those markers
+      // here would leave an exposed unit running until one expired and another
+      // door moved. So forget them all: a unit that really was turned off
+      // before the disable costs at most one redundant turn-off.
+      await clearTurnedOff(Object.keys(d.config.hvacUnits), d.stateStore, logger, requestId);
 
       // Parallel across units, same as sensor-event: re-enabling can schedule
       // every unit at once, which serially is a round trip each.
