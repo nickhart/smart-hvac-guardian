@@ -134,14 +134,17 @@ A turn-off clears its timer, so the next door event in a still-open zone used to
 schedule another: in the dry run half of all turn-offs came within 30 minutes of
 the previous one for the same unit. Now `src/handlers/turned-off.ts` marks a unit
 when its turn-off goes through (or is recorded in shadow mode), or when it
-reports `off`; door events, re-enables and re-arms skip marked units and record
+reports `off`; door events and re-arms skip marked units and record
 `skipped_already_off`. A reported `on` clears the marker and always schedules a
 fresh turn-off; so does the exposure ending. The marker expires after 30
 minutes, after which the next door event may schedule a turn-off again — the
 recovery for a unit turned back on behind a lost `on` event, since Cielo's `on`
 trigger has been seen to fail. Nothing fires at the expiry itself: with no
 further door event, such a unit keeps running (as it did before the marker; see
-"Timed retry when the turned-off marker expires" in the roadmap). It also covers the roadmap's "completed shutoff re-arms" case: a QStash retry of a
+"Timed retry when the turned-off marker expires" in the roadmap). Re-enabling
+the system clears every marker, because shadow-mode turn-offs set them without
+switching anything off; otherwise a unit left exposed while the system was off
+kept running after it came back on. It also covers the roadmap's "completed shutoff re-arms" case: a QStash retry of a
 turn-off that went through no longer re-arms.
 
 ### CI safety nets

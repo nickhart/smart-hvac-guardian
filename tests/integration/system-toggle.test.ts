@@ -150,12 +150,13 @@ describe("system-toggle without a database", () => {
   });
 });
 
-// Re-enabling re-evaluates every zone; a unit already turned off this exposure
-// shouldn't be scheduled again just because the system came back on.
-describe("system-toggle re-enable with a unit already turned off", () => {
-  it("skips it", async () => {
+// While disabled, timers still fire in shadow mode and mark their unit as turned
+// off, though nothing was switched off. Re-enabling must not trust those marks,
+// or an exposed unit keeps running until a mark expires and another door moves.
+describe("system-toggle re-enable with a unit marked as turned off", () => {
+  function depsWithMarkedUnit() {
     const base = createMockDeps();
-    const deps = createMockDeps({
+    return createMockDeps({
       // The base config is empty; this test needs two exposed units.
       config: {
         ...base.config,
@@ -178,8 +179,10 @@ describe("system-toggle re-enable with a unit already turned off", () => {
         getTurnedOffUnitIds: vi.fn(async (ids: string[]) => ids.filter((id) => id === "ac_living")),
       },
     });
+  }
 
-    const res = await handleSystemToggle(
+  function enable(deps: Dependencies) {
+    return handleSystemToggle(
       new Request("https://example.com/api/system-toggle", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -187,14 +190,35 @@ describe("system-toggle re-enable with a unit already turned off", () => {
       }),
       deps,
     );
-    const body = (await res.json()) as { scheduled: string[] };
+  }
 
-    // The unmarked unit in the same zone is still scheduled.
-    expect(body.scheduled).toEqual(["ac_den"]);
-    expect(deps.scheduler.scheduleUnitTurnOff).not.toHaveBeenCalledWith(
+  it("schedules it anyway", async () => {
+    const deps = depsWithMarkedUnit();
+
+    const body = (await (await enable(deps)).json()) as { scheduled: string[] };
+
+    expect([...body.scheduled].sort()).toEqual(["ac_den", "ac_living"]);
+    expect(deps.scheduler.scheduleUnitTurnOff).toHaveBeenCalledWith(
       "ac_living",
-      expect.anything(),
-      expect.anything(),
+      expect.any(String),
+      90,
     );
+  });
+
+  it("clears every unit's mark, so later door events don't skip it either", async () => {
+    const deps = depsWithMarkedUnit();
+
+    await enable(deps);
+
+    expect(deps.stateStore.clearTurnedOff).toHaveBeenCalledWith(["ac_living", "ac_den"]);
+  });
+
+  it("still schedules if the marks can't be cleared", async () => {
+    const deps = depsWithMarkedUnit();
+    vi.mocked(deps.stateStore.clearTurnedOff).mockRejectedValue(new Error("Redis down"));
+
+    const body = (await (await enable(deps)).json()) as { scheduled: string[] };
+
+    expect([...body.scheduled].sort()).toEqual(["ac_den", "ac_living"]);
   });
 });

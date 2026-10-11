@@ -82,7 +82,8 @@ With one unit's applet enabled:
       should be exposed and turned off.
 - [ ] **System toggle.** Unit on, switch the system off, open a door. After the
       delay a `turned_off` row with `shutoff_enabled = 0`, no IFTTT run, and the
-      unit stays on. Close the door, switch the system back on.
+      unit stays on. Leave the door open and switch the system back on: a new
+      timer starts, and the unit turns off after the delay.
 
 ## 5. Go live
 

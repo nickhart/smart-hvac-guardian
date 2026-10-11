@@ -261,10 +261,12 @@ in a zone that was still open saw an exposed unit with no timer and scheduled
 another: half of all turn-offs in the dry run came within 30 minutes of the
 previous one for the same unit, and one four-hour exposure produced 11 per
 unit. Now a unit turned off during an exposure is marked, and door events,
-re-enables and re-arms skip it — recording `skipped_already_off` instead.
+re-arms skip it — recording `skipped_already_off` instead.
 
 The marker is cleared when the unit reports `on` (which always schedules a fresh
-turn-off) or stops being exposed, and set as well when it reports `off`. It
+turn-off) or stops being exposed, and set as well when it reports `off`.
+Re-enabling the system clears every marker: while disabled, turn-offs are
+recorded and marked without switching anything off. It
 expires after 30 minutes (`TURNED_OFF_TTL_SECONDS`), so that a unit turned back
 on behind a lost `on` event — Cielo's trigger has been seen to fail — isn't held
 back for good. The expiry doesn't fire anything: it only lets the **next door
