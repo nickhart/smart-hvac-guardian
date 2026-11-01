@@ -243,10 +243,18 @@ FROM hvac_commands_v2
 WHERE action = 'rearmed' AND late_by_seconds IS NOT NULL
 ```
 
-Single-digit seconds means `TIMER_TOKEN_BUFFER_SECONDS` is slightly too tight
-and nudging it removes the churn. Minutes means delivery is being delayed and
-the buffer is not the problem. Without this the two are indistinguishable, and
-only the second one warrants an investigation.
+Minutes means delivery is being delayed, and warrants an investigation. Seconds
+means the message was on time and the token went some other way. The buffer
+(`TIMER_TOKEN_BUFFER_SECONDS`, 60 s) can't be the cause of a message a few
+seconds late.
+
+The usual other way is a door bounce (see "Door bounces" below). An `open` and a
+`close` land in the same second: the open sees the timer still there and doesn't
+schedule one, the close deletes it, and the open's state is written last. The
+door is believed open with no timer, so when the message fires it re-arms. Every
+re-arm from 2026-10-24 to 2026-10-31 — 13 rows, 0–5 s late — followed a bounce
+within the delay. So a cluster of re-arms is the bounce rate showing through,
+and the re-arm is what kept that door watched.
 
 `late_by_seconds` is null on messages scheduled before the field existed, and on
 any action other than `rearmed`.
@@ -260,16 +268,16 @@ From 2026-10-07. Before it, a turn-off cleared its timer, so the next door event
 in a zone that was still open saw an exposed unit with no timer and scheduled
 another: half of all turn-offs in the dry run came within 30 minutes of the
 previous one for the same unit, and one four-hour exposure produced 11 per
-unit. Now a unit turned off during an exposure is marked, and door events,
+unit. Now a unit turned off during an exposure is marked, and door events and
 re-arms skip it — recording `skipped_already_off` instead.
 
 The marker is cleared when the unit reports `on` (which always schedules a fresh
 turn-off) or stops being exposed, and set as well when it reports `off`.
 Re-enabling the system clears every marker: while disabled, turn-offs are
-recorded and marked without switching anything off. It
-expires after 30 minutes (`TURNED_OFF_TTL_SECONDS`), so that a unit turned back
-on behind a lost `on` event — Cielo's trigger has been seen to fail — isn't held
-back for good. The expiry doesn't fire anything: it only lets the **next door
+recorded and marked without switching anything off. The marker expires after
+30 minutes (`TURNED_OFF_TTL_SECONDS`), so that a unit turned back on behind a
+lost `on` event — Cielo's trigger has been seen to fail — isn't held back for
+good. The expiry doesn't fire anything: it only lets the **next door
 event** schedule a turn-off again. If no door moves, nothing re-issues.
 
 So `turned_off` counts across 2026-10-07 aren't comparable: before, a long
@@ -308,27 +316,40 @@ left out of the count below.
 
 Every scheduled timer ends in exactly one outcome — `turned_off`, `cancelled`,
 `superseded`, `aborted_stale_state` or `rearmed`. A cancellation still fires and
-still records, so the two counts should match. Timers come from door events and
-from a unit turning on while exposed (`scheduled` rows):
+still records, so the two counts should match. Timers come from door events,
+from a unit turning on while exposed (`scheduled` rows), and from a re-arm,
+which is an outcome for the old timer and starts a new one:
 
 ```sql
 SELECT
     (SELECT sum(length(timers_scheduled)) FROM sensor_events_v2)
-      + (SELECT countIf(action = 'scheduled') FROM hvac_commands_v2) AS scheduled,
-    (SELECT countIf(action IN ('turned_off', 'cancelled', 'superseded',
-                               'aborted_stale_state', 'rearmed'))
+      + (SELECT countIf(action IN ('scheduled', 'rearmed')) FROM hvac_commands_v2)
+      AS scheduled,
+    (SELECT uniqExactIf((request_id, hvac_unit_id),
+                        action IN ('turned_off', 'cancelled', 'superseded',
+                                   'aborted_stale_state', 'rearmed'))
        FROM hvac_commands_v2) AS recorded
 ```
 
-Counted over a window, leave a few minutes off the end: timers still in flight
-are scheduled but not yet recorded.
+Counted over a window, shift it: an outcome records one delay (600 s) after its
+timer was scheduled, so count outcomes from ten minutes after the start to ten
+minutes after the end. Otherwise timers in flight at either edge show as a
+mismatch.
+
+Outcomes are counted by `(request_id, hvac_unit_id)` because rows are
+occasionally written twice: on 2026-10-27 four `cancelled` rows appeared twice
+with the same `request_id`. Each turn-off request handles one unit, so the pair
+is unique to an outcome. Before re-arms were counted as a source, and with
+duplicates counted, the query was off by 2–4 on five days out of three weeks;
+for 2026-10-11 to 2026-10-31 it now matches exactly (3,507 each).
 
 Before 2026-09-19 they did not: 323 scheduled, 213 recorded, 110 lost. The
 deduplication id was built from a wall-clock ten-minute bucket, so a door that
 opened, closed and reopened inside one bucket produced a second QStash message
 with an identical id, which QStash dropped. The recorded count matched the
 number of distinct (unit, bucket) pairs exactly — 213 — which is what confirmed
-the cause.
+the cause. Run over all time, the query above is still short by exactly those
+110 and nothing else (5,127 scheduled, 5,017 recorded as of 2026-11-01).
 
 The symptom was an **absence**: a shutoff that silently never happened, leaving
 no row anywhere. This query is the only thing that shows it, which is why it is
